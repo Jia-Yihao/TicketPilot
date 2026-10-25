@@ -107,6 +107,8 @@ PUT /api/v1/memory/rules/{event_type}
 - 规模读数（本轮全部实跑）：OpenAPI `40 路径 / 43 操作` → **41 / 44**；`tests/test_proactive_rules.py` 21 条，全量 **447 passed / 3 skipped**（收集 450，33 个测试文件）；mypy strict **134** 个文件（本轮不加 `app/` 模块）；ruff 干净；Alembic 无漂移、无新表；`npm run build` 通过；九条门禁全绿；真实 HTTP **52 项断言 0 失败**（`127.0.0.1:8135` + 干净库 `.tmp/t10_live.db`）；浏览器走查在真实 DOM 上验过保存生效、三种拒绝的原文回显、以及客户身份拿不到表单（且**没有发出任何规则请求**）。
 - 新增的 21 条用例**尚未在 PostgreSQL 上复跑**（本机装有 Docker，上一轮的 PostgreSQL 16.15 一次性容器就是用它跑出 `323 passed` 基线的；这一轮收尾时守护进程没有运行，没有再起容器——缺的是执行，不是环境）。这一轮尤其需要它：`409 RULE_ALREADY_EXISTS` 靠的是唯一约束，而 SQLite 与 Postgres 在冲突语义上正是最需要对照的地方。累计待 PG 复跑的是 T2 起新建的 9 个测试文件，当前共 **141 条**（含本轮新增的 21 条）。
 
+> **修订（2026-10-25）**：上面这条「尚未在 PostgreSQL 上复跑」是 2026-10-24 收尾当天的读数。次日已用本机 Docker 起 PostgreSQL 16.15 临时容器补跑全量：**458 passed / 0 skipped（109.92 秒）**，T2 起新建的 10 个测试文件全部覆盖（§107 记的 141 条 + `test_llm_gap.py` 7 条），本轮 21 条中含 `409 RULE_ALREADY_EXISTS` 的用例——唯一约束在 Postgres 上的冲突语义已被真跑验证，不再是待办。同轮在独立 `eval_pg` 库上跑通 11 条迁移（head `c3b8e5a71d29`）与 `alembic check`（无漂移），Golden 40/40、支持集 61/61。§107 的规模读数也随之更新：SQLite 全量 **455 passed / 3 skipped**（收集 458，34 个测试文件，增量来自 T10 之后新增的 `test_llm_gap.py`）；OpenAPI 仍是 41 路径 / 44 操作。**仍未执行**：四通道检索指标脚本（`scripts/retrieval_metrics.py`）的输出本身没有在 PG 上产出过——PG 上跑的是 `test_retrieval_eval.py` 的断言，不是那张指标表。
+
 ## 备选方案
 
 - **只做界面、不改后端（把 `seed.py` 的内容渲染成只读页）**：运营能"看"但不能改，且坏文案照样存得进去。否决——G10 的痛点是"改"。

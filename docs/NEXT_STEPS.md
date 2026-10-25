@@ -682,16 +682,18 @@ mean **2277 ms** / p50 **2267** / min **2074** / max **2563**（CPU）。默认�
 - 校验体积 ≥ 50 KB、XML `<w:p>` 段 ≥ 1000、表格 ≥ 1、所有 XML part 的 `U+FFFD` 计数为 0；
 - 全部通过才 `replace()` 旧 docx，失败时旧文件原样保留并打印哪一项没过。
 
-本轮产物 `docs/TicketPilot项目说明书.docx`：**205,153 字节 / 3,371 个 XML 段（含表格单元格）/
+本轮产物 `docs/TicketPilot项目说明书.docx`：**205,485 字节 / 3,371 个 XML 段（含表格单元格）/
 1,198 个正文段 / 71 张表 / `U+FFFD` 计数 0 / 13 个 XML part**。上一版是 193,256 字节 / 69 表；
 两表的增量来自 §19.2 的新漂移表与 §11.5 的四通道表。抽查关键串命中：
 `458 passed / 0 skipped`(5)、`109.92`(4)、`bge-reranker-v2-m3`(4)、`0.9118`(6)、
-`build_manual.py`(1)、`REPLAY DIFF EMPTY`(9)。
+`build_manual.py`(1)、`REPLAY DIFF EMPTY`(9)。收尾复核时 §19.1 与附录 C 的两处口径又改了两句
+（447/450/33 → 455/458/34、哈希替身读数标注为不可引用），按同一命令再重生成一次：
+字节数 **205,153 → 205,485**，段数 / 表数 / `U+FFFD` 均不变。
 
 **同步面**：README 的检索四行表与重排节、`docs/PROJECT_SPEC.md` §11.4/§11.5/§14.1/§14.2.1/
-§19.2/§19.4 与附录 C、`docs/EVALS.md` 基线节与诚实边界、`docs/AGENT_PLATFORM_PLAN.md`、
-`docs/GOLDEN_SET.md`、`docs/SCOPE.md`、`docs/SECURITY.md`、`CONTRIBUTING.md` 与 ADR-006 的
-2026-10-25 修订。**没有做的**：四通道指标未在 PG 跑；重排没有生产部署、超时预算与并发压测；
+§19.1/§19.2/§19.4 与附录 C、`docs/EVALS.md` 基线节与诚实边界、`docs/AGENT_PLATFORM_PLAN.md`、
+`docs/GOLDEN_SET.md`、`docs/SCOPE.md`、`docs/SECURITY.md`、`CONTRIBUTING.md`、ADR-006 / ADR-019 /
+ADR-020 的 2026-10-25 修订。**没有做的**：四通道指标未在 PG 跑；重排没有生产部署、超时预算与并发压测；
 docx 只校验编码与结构，不做版式 / 分页目视检查（浏览器截图仍未取）。
 
 ---

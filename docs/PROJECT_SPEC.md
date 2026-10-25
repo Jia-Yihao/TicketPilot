@@ -3052,14 +3052,15 @@ VERIFIED_SUCCESS。
 
 ## 19. 当前边界、文档漂移与演进路线
 
-### 19.1 最终状态（2026-10-24 实测）
+### 19.1 最终状态（2026-10-25 实测）
 
 已验证：
 
-- 默认 pytest：447 passed / 3 skipped（收集 450，33 个测试文件），含 T2 的 14 条安全用例、
+- 默认 pytest：455 passed / 3 skipped（收集 458，34 个测试文件），含 T2 的 14 条安全用例、
   T3 的数据集/抽样用例、T4 起、T4b/T7 扩、T8 收口后的 20 条渠道用例、T5 的 21 条记忆/主动服务用例、
   T6 的 20 条稠密检索与融合用例、T7 的 17 条出站投递用例、T9 的 18 条记忆个性化用例、
-  T10 的 21 条规则编辑用例；
+  T10 的 21 条规则编辑用例、「对话入口接通模型」轮的 7 条模型缺口用例（`test_llm_gap.py`，
+  规则模式零调用 / 只在缺口上采纳 / 采纳后仍等审批）；
   Ruff（`app tests scripts evals alembic`）：通过；
 - mypy（`strict = true`）：`app` 134 个文件零错误，已纳入 CI；
   同一份代码在「装了 `pydantic-ai` + SQLAlchemy 2.0.55」与「没装 `pydantic-ai` + SQLAlchemy 2.0.43」
@@ -3096,7 +3097,9 @@ VERIFIED_SUCCESS。
 - 稠密检索护栏（T6）：20 条用例覆盖哈希 embedder 确定性、`store_embeddings` 拒绝第二个向量空间、
   融合与 fail-open；`--channels bm25,hybrid` 实测对比行已进 CI（门槛仍只套 `bm25`）；
   同一份 68 条展开查询上 recall@1 0.7941 → 0.8529、MRR 0.8745 → 0.9020，但 **recall@5 从 0.9706
-  退化到 0.9118**（RRF 把哈希向量抬上来的块推进前五，挤掉原本在第五的相关块）——两列必须逐 k 看，
+  退化到 0.9118**（RRF 把哈希向量抬上来的块推进前五，挤掉原本在第五的相关块）——这是**无 embedding
+  端点时的离线哈希替身**读数，不作为可引用数字；真实 `bge-m3` 端点下 hybrid 是 recall@5 0.9706、
+  recall@1 0.7941，四通道（bm25 / dense / hybrid / rerank）完整读数见 §11.5。两列必须逐 k 看，
   不能合成单一分数；生产 `ENVIRONMENT=prod` + `RETRIEVAL_DENSE_ENABLED=true` 而缺 `EMBEDDING_BASE_URL`/`EMBEDDING_MODEL`
   时启动即被拒；
 - 在线真跑（2026-10-24，服务实启于 `127.0.0.1:8124`）：74 条 HTTP 断言 `total=74 passed=74 failed=0`，
@@ -3979,7 +3982,7 @@ python scripts/outbox_worker.py --once     # 单轮后退出
 
 在声称「完成」之前，逐项确认：
 
-- [ ] `python -m pytest` 通过（默认 447 passed / 3 skipped，跳过的是 PostgreSQL 用例）
+- [ ] `python -m pytest` 通过（默认 455 passed / 3 skipped，跳过的是 PostgreSQL 用例；收集 458、34 个测试文件）
 - [ ] 如改了并发/锁，设置 `TICKETPILOT_TEST_POSTGRES_URL` 在真实 PostgreSQL 上跑全量
 - [ ] `ruff check .` 通过
 - [ ] `python -m mypy app` 通过（`strict = true`，只覆盖 `app`）

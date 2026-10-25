@@ -59,6 +59,8 @@
 - 本轮新增的 3 条用例只有 SQLite 证据，未在 PostgreSQL 上复跑（T2 起新增的 9 个测试文件 141 条 + `test_llm_gap.py` 7 条，共 10 个文件、148 条待 PG 复跑）。
 - 托管模型（Anthropic / OpenAI）依然没有验证过；本轮实测只在本地 LM Studio（`AGENT_MODEL=openai:qwen/qwen3-8b`）上。
 
+> **修订（2026-10-25）**：上面「只有 SQLite 证据」这条是 2026-10-25 收尾当天的读数。当天随后用本机 Docker 起 PostgreSQL 16.15 临时容器补跑全量：**458 passed / 0 skipped（109.92 秒）**，这 10 个文件、148 条全部覆盖，`test_llm_gap.py` 的 7 条在 Postgres 上同样绿；同轮在独立 `eval_pg` 库上跑通 11 条迁移与 `alembic check`，Golden 40/40、支持集 61/61。**仍未执行**：四通道检索指标脚本的输出没有在 PG 上产出过（PG 上跑的是 `test_retrieval_eval.py` 的断言）；托管模型（Anthropic / OpenAI）仍未验证。
+
 ## 备选方案
 
 - **每轮都问模型（不给缺口条件）**：写动作的进门权直接交给模型，`rules` 模式的确定性也只剩一句配置；而且对规则已经读懂的句子重复付费。否决。

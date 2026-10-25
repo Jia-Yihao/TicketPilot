@@ -841,7 +841,7 @@ SpanKind = Literal["guard", "understand", "retrieve", "generate",
 |---|---|---|---|
 | 1 | 静态检查 | `ruff check app tests scripts evals alembic` | ✅（注意范围是这五个目录，不是整仓 `.`） |
 | 2 | 类型检查 | `python -m mypy app`（`strict = true`，134 文件） | ✅ |
-| 3 | 单元与集成 | `python -m pytest` | ✅（455 passed / 3 skipped；跳过的 3 条需要 `TICKETPILOT_TEST_POSTGRES_URL`，CI **没有注入**，所以 Postgres 专项只在一次性容器里手工跑过。T4–T10 新增的用例（含 `test_personalization.py` 18 条、`test_proactive_rules.py` 21 条）与 2026-10-25 新增的 `test_llm_gap.py` 7 条、`test_refunds.py` 1 条都未在 Postgres 上复跑） |
+| 3 | 单元与集成 | `python -m pytest` | ✅（455 passed / 3 skipped；跳过的 3 条需要 `TICKETPILOT_TEST_POSTGRES_URL`，CI **没有注入**，所以 Postgres 专项只在一次性容器里手工跑。2026-10-25 已在 PostgreSQL 16.15 容器上补跑全量：**458 passed / 0 skipped**，T4–T10 新增用例（含 `test_personalization.py` 18 条、`test_proactive_rules.py` 21 条、`test_llm_gap.py` 7 条）与 `test_refunds.py` 1 条全部覆盖） |
 | 4 | 任务路径 | `python evals/run.py` | ✅（40/40，含轨迹断言） |
 | 5 | 只读路径 | `python evals/support_run.py` | ✅（61/61） |
 | 6 | 检索评测 | `python evals/retrieval_metrics.py --channels bm25,hybrid` | ✅（GATE PASSED；门槛只套第一个渠道 `bm25`，`hybrid(hashing)` 行是对比编排） |
