@@ -26,13 +26,21 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
-from app.agent.pydantic_agent import IntentAgent, IntentBrain, IntentOutput
+from app.agent.pydantic_agent import (
+    IntentAgent,
+    IntentBrain,
+    IntentOutput,
+    ModelTrace,
+)
 from app.agent.routing import RoutePlan, classify
+from app.agent.support_agent import SupportIntent, SupportPlan, model_gate
 from app.core.config import Settings
 from app.main import create_app
 from app.models.enums import Intent
+from app.models.llm_usage import LlmUsageRecord
 from app.models.task import Task, TaskEvent
 from app.seed import seed_all
+from scripts.llm_gap_probe import CANDIDATES
 from tests.conftest import ALICE
 
 # A human reads a refund request in every one of these; the rule table does not.
@@ -52,9 +60,11 @@ class StubAgent:
         self.output = output
         self.calls = 0
 
-    def parse(self, request: str, context: dict[str, Any] | None = None) -> IntentOutput:
+    def parse(
+        self, request: str, context: dict[str, Any] | None = None
+    ) -> tuple[IntentOutput, ModelTrace]:
         self.calls += 1
-        return self.output
+        return self.output, ModelTrace(requests=1)
 
 
 class ExplodingAgent:
@@ -79,13 +89,15 @@ class FixedBrain:
         self.model_amount_cents = amount_cents
         self.requests: list[str] = []
 
-    def plan(self, request: str, context: dict[str, Any] | None = None) -> tuple[RoutePlan, str]:
+    def plan(
+        self, request: str, context: dict[str, Any] | None = None
+    ) -> tuple[RoutePlan, str, ModelTrace | None]:
         self.requests.append(request)
         rules = classify(request, context)
         if rules.intent is not Intent.UNKNOWN:
-            return rules, "rules"
+            return rules, "rules", None
         if self.intent == "UNKNOWN":
-            return rules, "pydantic_ai"
+            return rules, "pydantic_ai", ModelTrace(requests=1)
         return (
             RoutePlan(
                 intent=Intent(self.intent),
@@ -97,6 +109,7 @@ class FixedBrain:
                 ),
             ),
             "pydantic_ai",
+            ModelTrace(requests=1),
         )
 
 
@@ -148,7 +161,7 @@ def test_brain_adopts_the_model_only_where_the_rules_left_a_gap() -> None:
     brain = IntentBrain(mode="pydantic_ai", agent=cast("IntentAgent", agent))
 
     # Gap: rules give UNKNOWN, so the model's reading is adopted.
-    recovered, source = brain.plan(REFUND_GAPS[1], {})
+    recovered, source, _trace = brain.plan(REFUND_GAPS[1], {})
     assert recovered.intent.value == "REFUND_REQUEST"
     assert source == "pydantic_ai"
 
@@ -161,7 +174,9 @@ def test_brain_adopts_the_model_only_where_the_rules_left_a_gap() -> None:
         decision_summary="想转人工。",
     )
     stubborn = IntentBrain(mode="pydantic_ai", agent=cast("IntentAgent", StubAgent(quiet)))
-    kept, _ = stubborn.plan(RULE_READABLE_REFUND, {"order_id": "ORD-DEMO-1001"})
+    kept, _source, _trace = stubborn.plan(
+        RULE_READABLE_REFUND, {"order_id": "ORD-DEMO-1001"}
+    )
     assert kept.intent.value == "REFUND_REQUEST"
 
 
@@ -183,6 +198,86 @@ def test_rules_mode_chat_never_asks_a_model(tmp_path: Path) -> None:
         assert response.json()["intent"] == intent
 
     assert _tasks(app) == 0
+
+
+def test_model_gate_names_the_three_levels() -> None:
+    hit = classify(RULE_READABLE_REFUND, {})
+    assert (
+        model_gate(
+            SupportPlan(SupportIntent.REFUND_REQUEST, "ORD-DEMO-1001"),
+            hit,
+            RULE_READABLE_REFUND,
+        )
+        == "rules_hit"
+    )
+
+    question = "运费谁出？"
+    assert (
+        model_gate(SupportPlan(SupportIntent.UNKNOWN), classify(question, {}), question)
+        == "question"
+    )
+
+    gap = REFUND_GAPS[0]
+    assert (
+        model_gate(SupportPlan(SupportIntent.UNKNOWN), classify(gap, {}), gap)
+        == "consult"
+    )
+
+
+def test_questions_never_reach_the_model_and_refunds_still_do(tmp_path: Path) -> None:
+    """The gate removes calls that could buy nothing, not refund recall.
+
+    The two information questions from the eleven labelled gaps would have
+    been read as ``POLICY_QA`` / ``LOGISTICS_QUERY`` by the model — readings
+    the chat path never adopts. The six refund phrasings must still be asked.
+    """
+    questions = [
+        case.text
+        for case in CANDIDATES
+        if case.intent in {"POLICY_QA", "LOGISTICS_QUERY"}
+    ]
+    refunds = [
+        case.text
+        for case in CANDIDATES
+        if case.intent == "REFUND_REQUEST"
+        and classify(case.text, {}).intent is Intent.UNKNOWN
+    ]
+    assert len(questions) == 2
+    # Five of the six refund phrasings are still rule gaps; the sixth contains
+    # the rule vocabulary, so it is level 1 (rules hit) and is not asked either.
+    assert len(refunds) == 5
+
+    brain = FixedBrain("REFUND_REQUEST")
+    app = _app(tmp_path, brain)
+    client = TestClient(app)
+
+    for index, text in enumerate(questions):
+        response = client.post(
+            "/api/v1/support/messages",
+            headers=ALICE,
+            json={"message": text, "conversation_id": f"question-{index}"},
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["intent"] != "REFUND_REQUEST"
+    assert brain.requests == []
+
+    for index, text in enumerate(refunds):
+        response = client.post(
+            "/api/v1/support/messages",
+            headers=ALICE,
+            json={"message": text, "conversation_id": f"refund-{index}"},
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["intent"] == "REFUND_REQUEST"
+    assert brain.requests == refunds
+
+    with app.state.session_factory() as session:
+        rows = list(
+            session.scalars(
+                select(LlmUsageRecord).where(LlmUsageRecord.source == "chat")
+            )
+        )
+    assert len(rows) == len(refunds)
 
 
 def test_chat_asks_the_model_where_the_rules_cannot_read(tmp_path: Path) -> None:

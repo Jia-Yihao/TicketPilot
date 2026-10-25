@@ -18,6 +18,17 @@ class TaskRepository:
     def get(self, task_id: str) -> Task | None:
         return self.session.get(Task, task_id)
 
+    def find_by_idempotency(
+        self, tenant_id: str, user_id: str, idempotency_key: str
+    ) -> Task | None:
+        return self.session.scalar(
+            select(Task).where(
+                Task.tenant_id == tenant_id,
+                Task.user_id == user_id,
+                Task.idempotency_key == idempotency_key,
+            )
+        )
+
     def require(self, task_id: str) -> Task:
         task = self.get(task_id)
         if task is None:
@@ -33,6 +44,8 @@ class TaskRepository:
         request: str,
         context: dict[str, Any],
         trace_id: str | None = None,
+        idempotency_key: str | None = None,
+        request_digest: str | None = None,
     ) -> Task:
         task = Task(
             id=task_id,
@@ -43,6 +56,8 @@ class TaskRepository:
             status=TaskStatus.CREATED,
             version=1,
             trace_id=trace_id,
+            idempotency_key=idempotency_key,
+            request_digest=request_digest,
         )
         self.session.add(task)
         self.session.flush()

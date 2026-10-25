@@ -23,10 +23,18 @@ router = APIRouter(prefix="/api/v1/tasks", tags=["tasks"])
 @router.post("", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
 def create_task(
     body: TaskCreateRequest,
+    idempotency_key: str | None = Header(
+        default=None, alias="Idempotency-Key", max_length=200
+    ),
     identity: Identity = Depends(get_identity),
     runtime: TaskRuntime = Depends(get_runtime),
 ) -> dict[str, Any]:
-    return runtime.create_task(identity, body.request, body.context)
+    return runtime.create_task(
+        identity,
+        body.request,
+        body.context,
+        idempotency_key=idempotency_key,
+    )
 
 
 @router.get("", response_model=TaskListResponse)

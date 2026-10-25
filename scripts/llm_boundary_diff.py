@@ -93,7 +93,7 @@ def main() -> int:
     sources: dict[str, int] = {}
     for text in turns:
         rules = classify(text, {})
-        merged, source = brain.plan(text, {})
+        merged, source, _trace = brain.plan(text, {})
         sources[source] = sources.get(source, 0) + 1
         delta = diff(rules, merged)
         if delta:

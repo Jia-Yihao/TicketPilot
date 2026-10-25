@@ -6,7 +6,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.engine import make_url
 
 from app.core.config import Settings
@@ -123,6 +123,81 @@ def test_concurrent_approvals_produce_exactly_one_refund() -> None:
         assert "UNIQUE" in definition
         assert "PENDING" in definition
         assert "APPROVED" in definition
+    finally:
+        if application is not None:
+            application.state.engine.dispose()
+        with _admin_connection(base, "postgres") as connection:
+            connection.execute(
+                sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(
+                    sql.Identifier(database)
+                )
+            )
+
+
+def test_concurrent_task_creation_with_one_key_returns_one_task() -> None:
+    """The unique index, not the pre-lookup, decides the race."""
+    from psycopg import sql
+
+    from app.models.task import Task
+
+    base = make_url(PG_URL)
+    database = f"ticketpilot_idem_{uuid.uuid4().hex[:10]}"
+    with _admin_connection(base, "postgres") as connection:
+        connection.execute(
+            sql.SQL("CREATE DATABASE {}").format(sql.Identifier(database))
+        )
+    test_url = base.set(database=database).render_as_string(hide_password=False)
+
+    application = None
+    try:
+        application = create_app(
+            Settings(
+                environment="test",
+                database_url=test_url,
+                auto_create_tables=True,
+            )
+        )
+        seed_all(application.state.session_factory)
+        alice = Identity("demo", "alice", frozenset())
+        request = "帮我查询订单 ORD-DEMO-1001"
+        barrier = threading.Barrier(2)
+
+        def create(_index: int):
+            barrier.wait()
+            try:
+                return application.state.runtime.create_task(
+                    alice, request, idempotency_key="race-task-key"
+                )
+            except Exception as exc:  # noqa: BLE001  (returned to the assertion)
+                return exc
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(create, range(2)))
+
+        snapshots = [item for item in results if isinstance(item, dict)]
+        failures = [item for item in results if isinstance(item, Exception)]
+        assert failures == [], failures
+        assert len(snapshots) == 2
+        assert snapshots[0]["task_id"] == snapshots[1]["task_id"]
+        assert sum(1 for item in snapshots if item["idempotent_replay"]) == 1
+
+        with application.state.session_factory() as session:
+            count = session.scalar(
+                select(func.count(Task.id)).where(
+                    Task.tenant_id == "demo", Task.user_id == "alice"
+                )
+            )
+        assert count == 1
+
+        with application.state.engine.connect() as connection:
+            definition = connection.execute(
+                text(
+                    "SELECT indexdef FROM pg_indexes "
+                    "WHERE indexname = 'uq_tasks_idempotency'"
+                )
+            ).scalar()
+        assert definition is not None
+        assert "UNIQUE" in definition
     finally:
         if application is not None:
             application.state.engine.dispose()

@@ -3,7 +3,16 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -14,6 +23,14 @@ from app.models.enums import TaskStatus
 
 class Task(Base):
     __tablename__ = "tasks"
+    __table_args__ = (
+        # A client retry with the same key must find the first task, not a
+        # second one. The key is scoped to its owner: two customers may use
+        # the same opaque string without colliding.
+        UniqueConstraint(
+            "tenant_id", "user_id", "idempotency_key", name="uq_tasks_idempotency"
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(40), primary_key=True)
     tenant_id: Mapped[str] = mapped_column(String(64), index=True)
@@ -27,6 +44,10 @@ class Task(Base):
     context: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     result: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     trace_id: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    # The replay contract: same key + same digest returns the first task;
+    # same key + a different request is a 409, never a silent overwrite.
+    idempotency_key: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    request_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
     version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(

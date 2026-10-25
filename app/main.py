@@ -33,6 +33,7 @@ from app.core.config import Settings, get_settings
 from app.core.errors import install_error_handlers
 from app.core.logging import configure_logging, install_request_id
 from app.core.policy import PolicyEngine
+from app.core.rate_limit import build_rate_limit_store
 from app.db.session import build_engine, build_session_factory, create_all
 from app.services.runtime import TaskRuntime
 from app.sql.service import SqlAnalyticsService
@@ -66,6 +67,7 @@ def build_brain(settings: Settings) -> IntentBrain:
                 model_name=settings.agent_model,
                 request_limit=settings.agent_request_limit,
                 timeout_seconds=settings.agent_timeout_seconds,
+                instrument=settings.agent_otel_instrument,
             ),
         )
     return IntentBrain(mode="rules")
@@ -140,6 +142,18 @@ def create_app(
         ip_per_minute=settings.rate_limit_ip_per_minute,
         enabled=settings.rate_limit_enabled,
         event_writer=edge_events,
+        tenant_limiter=build_rate_limit_store(
+            backend=settings.rate_limit_store,
+            per_minute=settings.rate_limit_tenant_per_minute,
+            redis_url=settings.redis_url,
+            timeout_seconds=settings.redis_timeout_seconds,
+        ),
+        ip_limiter=build_rate_limit_store(
+            backend=settings.rate_limit_store,
+            per_minute=settings.rate_limit_ip_per_minute,
+            redis_url=settings.redis_url,
+            timeout_seconds=settings.redis_timeout_seconds,
+        ),
     )
     app.include_router(health.router)
     app.include_router(tasks.router)

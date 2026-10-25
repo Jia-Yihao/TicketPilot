@@ -9,11 +9,8 @@ a real boundary of the current design, not a hidden one.
 from __future__ import annotations
 
 import logging
-import math
-import threading
 import time
 import uuid
-from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy.orm import Session, sessionmaker
@@ -28,6 +25,7 @@ from app.core.errors import (
     error_envelope,
 )
 from app.core.guard import SecurityAction, SecurityCategory, SecuritySeverity
+from app.core.rate_limit import RateLimitStore, TokenBucket
 from app.services.security_events import SecurityEventService
 
 logger = logging.getLogger(__name__)
@@ -97,57 +95,6 @@ class SecurityEventWriter:
             session.commit()
 
 
-@dataclass
-class _Bucket:
-    tokens: float
-    updated: float
-
-
-class TokenBucket:
-    """One key's budget, refilled continuously at ``per_minute / 60``."""
-
-    def __init__(self, per_minute: int, *, clock: Any = time.monotonic) -> None:
-        self.per_minute = per_minute
-        self.capacity = float(max(1, per_minute))
-        self.rate = per_minute / 60.0
-        self.clock = clock
-        self._buckets: dict[str, _Bucket] = {}
-        self._lock = threading.Lock()
-
-    def consume(self, key: str) -> tuple[bool, int]:
-        if self.per_minute <= 0:
-            return True, 0
-        now = self.clock()
-        with self._lock:
-            bucket = self._buckets.get(key)
-            if bucket is None:
-                bucket = _Bucket(tokens=self.capacity, updated=now)
-                self._buckets[key] = bucket
-            else:
-                elapsed = max(0.0, now - bucket.updated)
-                bucket.tokens = min(
-                    self.capacity, bucket.tokens + elapsed * self.rate
-                )
-                bucket.updated = now
-            if bucket.tokens >= 1.0:
-                bucket.tokens -= 1.0
-                return True, 0
-            retry_after = math.ceil((1.0 - bucket.tokens) / self.rate)
-            self._prune(now)
-            return False, max(1, retry_after)
-
-    def _prune(self, now: float) -> None:
-        if len(self._buckets) < 4096:
-            return
-        stale = [
-            key
-            for key, bucket in self._buckets.items()
-            if now - bucket.updated > 600.0
-        ]
-        for key in stale:
-            self._buckets.pop(key, None)
-
-
 def _request_id(scope: Scope) -> str:
     incoming = Headers(scope=scope).get("x-request-id", "").strip()
     return incoming or f"req-{uuid.uuid4().hex}"
@@ -171,7 +118,12 @@ async def _reject(
 
 
 class RateLimitMiddleware:
-    """Tenant and IP token buckets; either bucket can reject the request."""
+    """Tenant and IP budgets; either store can reject the request.
+
+    The stores are injected so the transport does not decide where a budget
+    lives. The default is process-local; ``app.main`` passes Redis-backed
+    stores when configured, which makes the limit survive across workers.
+    """
 
     def __init__(
         self,
@@ -182,11 +134,13 @@ class RateLimitMiddleware:
         enabled: bool = True,
         event_writer: SecurityEventWriter | None = None,
         event_dedupe_seconds: float = 60.0,
+        tenant_limiter: RateLimitStore | None = None,
+        ip_limiter: RateLimitStore | None = None,
     ) -> None:
         self.app = app
         self.enabled = enabled
-        self.tenant_limiter = TokenBucket(tenant_per_minute)
-        self.ip_limiter = TokenBucket(ip_per_minute)
+        self.tenant_limiter = tenant_limiter or TokenBucket(tenant_per_minute)
+        self.ip_limiter = ip_limiter or TokenBucket(ip_per_minute)
         self.event_writer = event_writer
         self.event_dedupe_seconds = event_dedupe_seconds
         self._last_event: dict[tuple[str, str], float] = {}

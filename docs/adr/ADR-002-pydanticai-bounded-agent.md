@@ -51,3 +51,16 @@
 
 - `tests/test_pydantic_agent.py` 使用 `TestModel` 验证结构化输出、规则优先、UNKNOWN 补齐、失败回退
 - 真实模型调用尚未验证（无 API Key），README 已明确声明
+
+> **修订（2026-10-25）**：上面两行是 2026-10-23 的读数。同日后续两轮把这条 ADR 的两个「隐式行为」变成了可观测对象，并修正了最后一句。
+>
+> **1. 业务校验收进 Agent 合同（原来在模型之外）。** 原来「`order_id` 必须是 `ORD-` 前缀」这类检查在路由层，于是模型给出畸形输出时，路由层只能**整体丢弃**并回退规则。现在它是 `@agent.output_validator`：校验不过就 `raise ModelRetry(...)`，把原因送回模型重问，于是「校验失败 → 重试」不再是一次静默的 `rules_fallback`，而是 Agent 合同里的一等重试。两条规则在 `app/agent/pydantic_agent.py::_ORDER_ID`：`order_id` 要么为 `None`、要么逐字匹配 `ORD-[A-Z0-9]{1,12}(?:-[A-Z0-9]{1,12})*`；`amount_cents` 必须是正整数分。
+>
+> **2. 重试次数成为可观测对象。** `ModelTrace` 现在带 `requests` / `retries`，并写进 `task.routed` 事件的属性（`model_requests` / `model_retries` / `model_input_tokens` / `model_output_tokens` / `model_latency_ms` / `model_status` / `model_instrumented`）与 `llm_usage` 表的一行。派生规则是算出来的不是猜的：`retries = max(0, requests - 1)`（`RunUsage.requests` 是 PydanticAI 自己记的请求数），`requests == 2 && retries == 1` 就是「第一次没过、被问了一次」。
+>
+> **3. OTel 是导出路径，不是依赖。** `opentelemetry-api` 是 `pydantic-ai-slim` 的硬依赖（已在 `.venv/.../pydantic_ai_slim-2.60.0.dist-info/METADATA` 核对），所以启用它**不需要**新装包；SDK 与 exporter 仍然不装，全局 tracer provider 在有 exporter 之前是 no-op。启用后（`AGENT_OTEL_INSTRUMENT=true`，默认开）每个模型请求产生一个 `chat <model>` 的 **CLIENT** span，于是**一次校验重试 = 两个 span**，重试在 trace 里看得见。命名遵循 OTel 语义约定（`chat` 操作名 + `gen_ai.*` 属性），但**没有**硬依赖 Logfire——换任何 OTel backend 都是换一个 tracer provider。`tests/test_model_instrumentation.py` 用一个假 tracer provider 离线断言「重试 → 2 个 `chat ` span、干净运行 → 1 个」，不依赖 SDK。
+>
+> **4. 真实模型调用已验证，但只在本机 LM Studio 上。** `AGENT_MODE=pydantic_ai` + `AGENT_MODEL=openai:qwen/qwen3-8b` + `OPENAI_BASE_URL=http://127.0.0.1:1234/v1` 在本地跑通，对话入口的 11 句规则词表外说法里模型捞回 6 句（详见 [ADR-020](ADR-020-chat-model-gap.md) 与 [ADR-022](ADR-022-model-distribution-and-security-cross.md)）。**托管模型（Anthropic / OpenAI）仍未验证**——本仓库里没有它们的 API Key，也没有为它们写过一行断言。
+>
+> 这次修订没有动本 ADR 的三个核心决策：模型仍然只做受限抽取、仍然无工具无自主循环、规则仍然优先且失败回退规则。变的只是「校验失败」从一次丢弃变成了一次可见的重试。
+

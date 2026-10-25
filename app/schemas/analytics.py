@@ -52,3 +52,40 @@ class AnalyticsQueryListResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class LlmUsageTotals(BaseModel):
+    calls: int
+    failed: int
+    requests: int
+    retries: int
+    input_tokens: int
+    output_tokens: int
+    avg_latency_ms: float
+
+
+class LlmUsageBySource(LlmUsageTotals):
+    source: str
+
+
+class LlmUsageRow(BaseModel):
+    id: str
+    source: str
+    planning_source: str
+    model_name: str | None = None
+    conversation_id: str | None = None
+    task_id: str | None = None
+    requests: int
+    retries: int
+    input_tokens: int
+    output_tokens: int
+    latency_ms: int
+    status: str
+    created_at: str
+
+
+class LlmUsageResponse(BaseModel):
+    window_hours: int
+    totals: LlmUsageTotals
+    by_source: list[LlmUsageBySource] = Field(default_factory=list)
+    recent: list[LlmUsageRow] = Field(default_factory=list)

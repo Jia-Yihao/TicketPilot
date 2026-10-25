@@ -54,3 +54,6 @@ class TaskResponse(BaseModel):
     pending_approval: PendingApproval | None = None
     latest_approval: dict[str, Any] | None = None
     tool_execution: dict[str, Any] | None = None
+    # True when the task was returned by an Idempotency-Key replay rather
+    # than created by this request.
+    idempotent_replay: bool = False

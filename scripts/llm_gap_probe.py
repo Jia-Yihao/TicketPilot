@@ -129,7 +129,7 @@ class Row:
 
 def probe(case: Case, brain: IntentBrain) -> Row:
     rules = classify(case.text, {})
-    merged, source = brain.plan(case.text, {})
+    merged, source, _trace = brain.plan(case.text, {})
     intent_gap = rules.intent.value == "UNKNOWN"
     amount_gap = rules.amount_cents is None and case.amount_cents is not None
     invented = (

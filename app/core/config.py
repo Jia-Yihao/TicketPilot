@@ -77,18 +77,29 @@ class Settings(BaseSettings):
     agent_model: str = "anthropic:claude-sonnet-4-5"
     agent_request_limit: int = 2
     agent_timeout_seconds: float = 20.0
+    # Wrap the model in PydanticAI's OpenTelemetry instrumentation: one
+    # `chat <model>` span per model request, so a validation retry shows up
+    # as a second span. The API ships with pydantic-ai-slim and the global
+    # provider is a no-op until an operator installs an exporter, so this
+    # costs nothing when nobody is listening.
+    agent_otel_instrument: bool = True
 
     mock_refund_mode: RefundMode = "success"
     mock_refund_delay_seconds: float = 0.0
 
     # Request-edge guards. The input guard records what it finds and never
-    # changes eligibility; the token buckets live in this process, so a
-    # multi-worker deployment needs a shared store before the tenant limit
-    # is authoritative. Multipart bodies use the attachment cap.
+    # changes eligibility. The default budget store is process-local; with
+    # several workers each one has its own budget. Set RATE_LIMIT_STORE=redis
+    # and REDIS_URL to make the tenant/IP limits a shared fact.
     security_events_enabled: bool = True
     rate_limit_enabled: bool = True
     rate_limit_tenant_per_minute: int = 600
     rate_limit_ip_per_minute: int = 300
+    rate_limit_store: Literal["memory", "redis"] = "memory"
+    redis_url: str = ""
+    redis_timeout_seconds: float = 0.5
+    # JSON bodies use request_max_bytes; multipart uploads use the stricter
+    # attachment cap.
     request_max_bytes: int = 262_144
     attachment_max_bytes: int = 5_242_880
 

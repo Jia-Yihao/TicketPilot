@@ -6,6 +6,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Any
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.agent.pydantic_agent import IntentBrain
@@ -43,6 +44,7 @@ from app.repositories.traces import TraceRepository
 from app.retrieval.build import build_policy_search
 from app.services.approvals import ApprovalService, canonical_digest, refund_payload
 from app.services.executions import ExecutionService
+from app.services.llm_usage import LlmUsageService
 from app.services.orders import OrderService
 from app.services.outbox import (
     DeliveryReport,
@@ -163,32 +165,96 @@ class TaskRuntime:
         )
 
     def create_task(
-        self, identity: Identity, request: str, context: dict[str, Any] | None = None
+        self,
+        identity: Identity,
+        request: str,
+        context: dict[str, Any] | None = None,
+        *,
+        idempotency_key: str | None = None,
     ) -> dict[str, Any]:
+        """Create and run a task, optionally under a client retry key.
+
+        Same key + same request digest returns the first task and never runs
+        it twice. Same key + a different request is a conflict, because
+        replaying the old result would answer a question the client did not
+        ask. The unique constraint is the arbiter under a race; the lookup
+        here only saves the common sequential retry a write.
+        """
+        key = (idempotency_key or "").strip() or None
+        digest = (
+            canonical_digest({"request": request, "context": context or {}})
+            if key
+            else None
+        )
+        if key is not None:
+            with self.session_factory() as session:
+                existing = TaskRepository(session).find_by_idempotency(
+                    identity.tenant_id, identity.user_id, key
+                )
+                if existing is not None:
+                    existing_id = existing.id
+                    existing_digest = existing.request_digest
+                else:
+                    existing_id = None
+                    existing_digest = None
+            if existing_id is not None:
+                if existing_digest != digest:
+                    raise ConflictError(
+                        "Idempotency-Key was reused with a different request."
+                    )
+                return self._replay(identity, existing_id)
+
         task_id = f"task_{uuid.uuid4().hex[:16]}"
         trace_id = f"trc_{uuid.uuid4().hex[:16]}"
         with self.session_factory() as session:
             services = self._services(session)
-            task = services.tasks.create(
-                task_id=task_id,
-                tenant_id=identity.tenant_id,
-                user_id=identity.user_id,
-                request=request,
-                context=context or {},
-                trace_id=trace_id,
-            )
-            services.tasks.append_event(task.id, "task.created", {"status": task.status.value})
-            AuditRepository(session).record(
-                actor_id=identity.user_id,
-                tenant_id=identity.tenant_id,
-                action="task.create",
-                resource_type="task",
-                resource_id=task.id,
-                outcome="SUCCESS",
-            )
-            session.commit()
+            try:
+                task = services.tasks.create(
+                    task_id=task_id,
+                    tenant_id=identity.tenant_id,
+                    user_id=identity.user_id,
+                    request=request,
+                    context=context or {},
+                    trace_id=trace_id,
+                    idempotency_key=key,
+                    request_digest=digest,
+                )
+                services.tasks.append_event(
+                    task.id, "task.created", {"status": task.status.value}
+                )
+                AuditRepository(session).record(
+                    actor_id=identity.user_id,
+                    tenant_id=identity.tenant_id,
+                    action="task.create",
+                    resource_type="task",
+                    resource_id=task.id,
+                    outcome="SUCCESS",
+                )
+                session.commit()
+            except IntegrityError:
+                # The repository flushes, so the constraint can fire before
+                # commit. Another worker won the same key; the constraint,
+                # not application timing, decides which task survives.
+                session.rollback()
+                existing = TaskRepository(session).find_by_idempotency(
+                    identity.tenant_id, identity.user_id, key or ""
+                )
+                if existing is None:
+                    raise
+                if existing.request_digest != digest:
+                    raise ConflictError(
+                        "Idempotency-Key was reused with a different request."
+                    ) from None
+                return self._replay(identity, existing.id)
         self._run(task_id)
         return self.get_task(identity, task_id)
+
+    def _replay(self, identity: Identity, task_id: str) -> dict[str, Any]:
+        """Return the task a retry already created; resume it if it never ran."""
+        self._run(task_id)
+        snapshot = self.get_task(identity, task_id)
+        snapshot["idempotent_replay"] = True
+        return snapshot
 
     def _run(self, task_id: str) -> None:
         with self.session_factory() as session:
@@ -203,27 +269,42 @@ class TaskRuntime:
             session.commit()
 
             identity = Identity(task.tenant_id, task.user_id, frozenset())
-            plan, planning_source = self.brain.plan(task.request, task.context)
+            plan, planning_source, model_trace = self.brain.plan(
+                task.request, task.context
+            )
             trace = TraceRecorder(tenant_id=task.tenant_id, trace_id=task.trace_id)
-            trace.add(
-                "understand",
-                "task.route",
-                attributes={
-                    "intent": plan.intent.value,
-                    "order_id": plan.order_id,
-                    "amount_cents": plan.amount_cents,
-                    "planning_source": planning_source,
-                },
-            )
-            services.tasks.append_event(
-                task.id,
-                "task.routed",
-                {
-                    "intent": plan.intent.value,
-                    "order_id": plan.order_id,
-                    "planning_source": planning_source,
-                },
-            )
+            route_attributes: dict[str, Any] = {
+                "intent": plan.intent.value,
+                "order_id": plan.order_id,
+                "amount_cents": plan.amount_cents,
+                "planning_source": planning_source,
+            }
+            routed_payload: dict[str, Any] = {
+                "intent": plan.intent.value,
+                "order_id": plan.order_id,
+                "planning_source": planning_source,
+            }
+            if model_trace is not None:
+                route_attributes.update(model_trace.as_dict())
+                routed_payload["model"] = model_trace.as_dict()
+                # Same transaction as task.routed: a task that was planned by
+                # the model and a usage row either both exist or neither does.
+                LlmUsageService(session).record(
+                    tenant_id=task.tenant_id,
+                    user_id=task.user_id,
+                    task_id=task.id,
+                    source="task",
+                    planning_source=planning_source,
+                    model_name=getattr(self.brain, "model_name", None),
+                    requests=model_trace.requests,
+                    retries=model_trace.retries,
+                    input_tokens=model_trace.input_tokens,
+                    output_tokens=model_trace.output_tokens,
+                    latency_ms=model_trace.latency_ms,
+                    status=model_trace.status,
+                )
+            trace.add("understand", "task.route", attributes=route_attributes)
+            services.tasks.append_event(task.id, "task.routed", routed_payload)
             session.commit()
 
             try:
@@ -1167,6 +1248,7 @@ class TaskRuntime:
             "result": task.result,
             "version": task.version,
             "trace_id": task.trace_id,
+            "idempotent_replay": False,
             "created_at": task.created_at.isoformat(),
             "updated_at": task.updated_at.isoformat(),
             "pending_approval": (

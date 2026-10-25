@@ -5,6 +5,7 @@ from app.models.commerce import Logistics, Order, Refund
 from app.models.conversation import Conversation, ConversationMessage
 from app.models.document import Document, DocumentChunk
 from app.models.handoff import AbandonEvent, HandoffEvent
+from app.models.llm_usage import LlmUsageRecord
 from app.models.memory import CustomerProfile, Notification, ProactiveRule
 from app.models.observability import TraceSpan
 from app.models.outbox import OutboxMessage
@@ -25,6 +26,7 @@ __all__ = [
     "Document",
     "DocumentChunk",
     "HandoffEvent",
+    "LlmUsageRecord",
     "Logistics",
     "Notification",
     "Order",

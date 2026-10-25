@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -55,10 +56,14 @@ from app.services.handoff import (
     HandoffService,
     build_bundle,
 )
+from app.services.llm_usage import LlmUsageService
 from app.services.runtime import TaskRuntime
 from app.services.security_events import SecurityEventService
 from app.services.support import SupportContextService
 from app.sql.service import SqlAnalyticsService
+
+if TYPE_CHECKING:
+    from app.agent.pydantic_agent import ModelTrace
 
 __all__ = [
     "SupportAgent",
@@ -67,7 +72,31 @@ __all__ = [
     "Draft",
     "Turn",
     "classify_support",
+    "model_gate",
 ]
+
+logger = logging.getLogger(__name__)
+
+
+def model_gate(plan: SupportPlan, route: RoutePlan, message: str) -> str:
+    """The three-level routing decision, written down before any call.
+
+    ``rules_hit`` — the rules already read the turn; the model has nothing to
+    add and is not asked.
+    ``question`` — the rules are blind, but the message asks for information
+    instead of requesting an action. No model reading could be adopted for a
+    read question, so the call would buy nothing.
+    ``consult`` — a genuine gap: rules blind, action-shaped message. Only here
+    may the model be asked, and only a refund reading is adopted.
+    """
+    gap_readable = plan.intent is SupportIntent.UNKNOWN or (
+        route.intent is Intent.UNKNOWN and plan.intent is SupportIntent.ORDER_QUERY
+    )
+    if not gap_readable:
+        return "rules_hit"
+    if blocks_write_action(message.lower()):
+        return "question"
+    return "consult"
 
 _TOOL_SOURCED_ACTIONS = frozenset(
     {
@@ -223,7 +252,32 @@ class SupportAgent:
                 order_id=resolved_order,
             )
             plan, resumed = self._resume_pending(plan, carried, message)
-            plan, model_gap = self._consult_model(plan, route, message, context)
+            plan, model_gap, model_trace = self._consult_model(
+                plan,
+                route,
+                message,
+                context,
+            )
+            if model_trace is not None:
+                # Written on the turn's own session, before the commit below:
+                # a second connection would wait on this one's write lock on
+                # SQLite. The row is part of the turn it paid for.
+                LlmUsageService(session).record(
+                    tenant_id=identity.tenant_id,
+                    user_id=identity.user_id,
+                    conversation_id=turn.conversation.id,
+                    source="chat",
+                    planning_source="pydantic_ai",
+                    # A test double may not expose the label; the row still
+                    # records the call without inventing a model name.
+                    model_name=getattr(self.runtime.brain, "model_name", None),
+                    requests=model_trace.requests,
+                    retries=model_trace.retries,
+                    input_tokens=model_trace.input_tokens,
+                    output_tokens=model_trace.output_tokens,
+                    latency_ms=model_trace.latency_ms,
+                    status=model_trace.status,
+                )
 
             catalog = get_catalog()
             trace = TraceRecorder(
@@ -946,8 +1000,12 @@ class SupportAgent:
 
     # ------------------------------------------------------------- helpers
     def _consult_model(
-        self, plan: SupportPlan, route: RoutePlan, message: str, context: dict[str, Any]
-    ) -> tuple[SupportPlan, dict[str, Any] | None]:
+        self,
+        plan: SupportPlan,
+        route: RoutePlan,
+        message: str,
+        context: dict[str, Any],
+    ) -> tuple[SupportPlan, dict[str, Any] | None, ModelTrace | None]:
         """The one place a chat turn may reach the model, and what it may buy.
 
         The intent catalog decides first. A turn is a gap when the rule table
@@ -975,25 +1033,38 @@ class SupportAgent:
 
         The returned dict is the trace record of the decision, not a control
         signal: it lands in the ``understand`` span so a replay can show that
-        the turn was asked, what came back, and whether it was adopted.
+        the turn was asked, what came back, and whether it was adopted. The
+        third value is the cost record of that call (``None`` when the model
+        was not asked); the caller writes it to the usage ledger on the
+        turn's own transaction.
         """
-        gap_readable = plan.intent is SupportIntent.UNKNOWN or (
-            route.intent is Intent.UNKNOWN and plan.intent is SupportIntent.ORDER_QUERY
-        )
-        if not gap_readable:
-            return plan, None
+        decision = model_gate(plan, route, message)
+        if decision == "rules_hit":
+            return plan, None, None
         if self.settings.agent_mode != "pydantic_ai":
-            return plan, None
-        if blocks_write_action(message.lower()):
-            return plan, {"source": "rules", "intent": "UNKNOWN", "adopted": False}
-        routed, source = self.runtime.brain.plan(message, context)
+            return plan, None, None
+        if decision == "question":
+            return (
+                plan,
+                {
+                    "source": "rules",
+                    "intent": "UNKNOWN",
+                    "adopted": False,
+                    "gate": "question",
+                },
+                None,
+            )
+        routed, source, model_trace = self.runtime.brain.plan(message, context)
         gap: dict[str, Any] = {
             "source": source,
             "intent": routed.intent.value,
             "adopted": False,
+            "gate": "consult",
         }
+        if model_trace is not None:
+            gap["model"] = model_trace.as_dict()
         if source != "pydantic_ai" or routed.intent is not Intent.REFUND_REQUEST:
-            return plan, gap
+            return plan, gap, model_trace
         gap["adopted"] = True
         return (
             SupportPlan(
@@ -1001,6 +1072,7 @@ class SupportAgent:
                 routed.order_id or plan.order_id,
             ),
             gap,
+            model_trace,
         )
 
     def _resume_pending(

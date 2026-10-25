@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_analytics, get_session
-from app.core.errors import NotFoundError, SqlRefusedError
+from app.core.errors import ForbiddenError, NotFoundError, SqlRefusedError
 from app.core.security import Identity, get_identity
 from app.repositories.sql_queries import SqlQueryRepository
 from app.schemas.analytics import (
@@ -22,11 +22,23 @@ from app.schemas.analytics import (
     AnalyticsQueryRequest,
     AnalyticsQueryResponse,
     AnalyticsQuerySummary,
+    LlmUsageResponse,
 )
+from app.services.llm_usage import MAX_WINDOW_HOURS, LlmUsageService
 from app.sql.errors import SqlRejected
 from app.sql.service import SqlAnalyticsService
 
 router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
+
+_STAFF_ROLES = ("approver", "support")
+
+
+def _require_staff(identity: Identity) -> None:
+    if identity.has_role("admin") or any(
+        identity.has_role(role) for role in _STAFF_ROLES
+    ):
+        return
+    raise ForbiddenError("Staff role required.")
 
 
 @router.post("/query", response_model=AnalyticsQueryResponse)
@@ -61,6 +73,23 @@ def run_query(
         "row_count": answer.row_count,
         "duration_ms": answer.duration_ms,
     }
+
+
+@router.get("/llm-usage", response_model=LlmUsageResponse)
+def llm_usage(
+    identity: Identity = Depends(get_identity),
+    session: Session = Depends(get_session),
+    hours: int = Query(default=24, ge=1, le=MAX_WINDOW_HOURS),
+    limit: int = Query(default=50, ge=1, le=200),
+) -> dict[str, Any]:
+    """The tenant's model spend across every worker, newest first.
+
+    Seat-only: the numbers name task and conversation ids, so a customer
+    must not read them. A rules-only deployment returns an empty ledger
+    rather than a 404 — "no spend" is a fact, not a missing resource.
+    """
+    _require_staff(identity)
+    return LlmUsageService(session).summary(identity.tenant_id, hours=hours, limit=limit)
 
 
 @router.get("/queries", response_model=AnalyticsQueryListResponse)
