@@ -1,0 +1,1 @@
+"""TicketPilot application package."""

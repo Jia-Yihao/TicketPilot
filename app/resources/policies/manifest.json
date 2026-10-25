@@ -1,0 +1,55 @@
+{
+  "documents": [
+    {
+      "policy_id": "POLICY-REFUND",
+      "tenant_id": "demo",
+      "source_uri": "policies/refund-v3.md",
+      "title": "退款政策",
+      "version": "v3",
+      "file": "refund-v3.md",
+      "effective_from": "2025-01-01",
+      "status": "ACTIVE"
+    },
+    {
+      "policy_id": "POLICY-REFUND",
+      "tenant_id": "demo",
+      "source_uri": "policies/refund-v2.md",
+      "title": "退款政策（旧版）",
+      "version": "v2",
+      "file": "refund-v2.md",
+      "effective_from": "2024-01-01",
+      "effective_to": "2024-12-31",
+      "status": "ACTIVE"
+    },
+    {
+      "policy_id": "POLICY-DELAY",
+      "tenant_id": "demo",
+      "source_uri": "policies/delay-v1.md",
+      "title": "延迟配送处理规则",
+      "version": "v1",
+      "file": "delay-v1.md",
+      "effective_from": "2025-01-01",
+      "status": "ACTIVE"
+    },
+    {
+      "policy_id": "POLICY-RETURN",
+      "tenant_id": "demo",
+      "source_uri": "policies/return-v1.md",
+      "title": "退货政策",
+      "version": "v1",
+      "file": "return-v1.md",
+      "effective_from": "2025-01-01",
+      "status": "ACTIVE"
+    },
+    {
+      "policy_id": "POLICY-TICKET",
+      "tenant_id": "demo",
+      "source_uri": "policies/ticket-v1.md",
+      "title": "工单优先级说明",
+      "version": "v1",
+      "file": "ticket-v1.md",
+      "effective_from": "2025-01-01",
+      "status": "ACTIVE"
+    }
+  ]
+}

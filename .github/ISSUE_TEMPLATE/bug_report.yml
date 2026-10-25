@@ -1,0 +1,62 @@
+name: "Bug report"
+description: "报告一个可复现的问题（行为、接口、控制台）"
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请先确认这不是 [SECURITY.md](../../SECURITY.md) 中列出的**刻意设计边界**
+        （开发 Header 身份、无 OIDC、无速率限制、模拟退款渠道）。
+        涉及认证、授权、租户隔离或资金安全的问题请走私有安全报告，不要开公开 Issue。
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 发生了什么
+      description: 实际行为，以及你期望的行为
+      placeholder: |
+        实际：POST /api/v1/support/messages 返回 404
+        期望：返回商品上下文卡片
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      description: 从干净仓库开始，逐步列出命令或页面操作
+      value: |
+        1. `pip install -e ".[dev]"`
+        2. `python scripts/seed.py`
+        3. `uvicorn app.asgi:app --port 8000`
+        4. ...
+    validations:
+      required: true
+  - type: textarea
+    id: identity
+    attributes:
+      label: 身份与配置
+      description: 使用的 X-Tenant-Id / X-User-Id / X-Roles，以及改过的环境变量（不要贴密钥）
+      placeholder: |
+        X-Tenant-Id: demo / X-User-Id: alice / X-Roles:（空）
+        DATABASE_URL 方案：sqlite（默认）
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 证据
+      description: 响应体、`X-Request-ID`、后端日志片段或截图
+      render: shell
+  - type: input
+    id: commit
+    attributes:
+      label: 提交或版本
+      description: "`git rev-parse --short HEAD`"
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已在最新提交上复现，并跑过 `python -m pytest -q`
+          required: true
+        - label: 我确认内容不含真实客户数据、密钥或生产连接串
+          required: true

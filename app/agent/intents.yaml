@@ -1,0 +1,321 @@
+# The intent catalog: one row per capability.
+#
+# This file is the single source of truth for what an intent is, which action
+# serves it, which slots the user must supply, how risky it is, and what
+# happens when there is no basis for an answer. The code reads it; it never
+# repeats these values.
+#
+# Adding a capability means adding a row here plus an action implementation —
+# no change to the routing or dispatch code.
+#
+# Field reference
+#   priority            lower wins; the first matching row decides the intent
+#   cues                substrings that select the intent (lowercase)
+#   match_policy_question  the message asks about a rule rather than an order
+#   match_catalog       a catalog product matched the message
+#   match_order_id      the message carried an order id
+#   match_request_only  the row only matches an explicit request; a question
+#                       about the rule ("什么时候可以转人工") is not a request
+#   match_analytics_question  the message asks for a number about the
+#                       caller's own records; the record set and the
+#                       aggregate must both be named
+#   nature              collaboration rows outrank the write path: asking for
+#                       a human is not asking for a ticket
+#   action              the executable capability; the first one dispatches,
+#                       the rest are the declared escalation path
+#   required_slots      slots the user must supply before the action may run
+#   clarify_prompts     per-slot question asked when a slot is missing
+#   no_evidence         what to answer when there is no basis for an answer
+#   fallback            what to do when the action cannot serve the intent
+
+version: "2026-10-24"
+
+slots:
+  order_id:
+    type: order_id
+    pattern: "^ORD-[A-Za-z0-9-]+$"
+    prompt: "请提供订单号（格式如 ORD-DEMO-1001），我再继续。"
+    examples:
+      - "ORD-DEMO-1001"
+    sensitive: false
+  amount_cents:
+    type: amount_cents
+    prompt: "请提供退款金额，例如 129 元。"
+    invalid_prompt: "退款金额格式不正确，请给出大于 0 且最多两位小数的金额，例如「129 元」。"
+    missing_reason: "MISSING_AMOUNT"
+    examples:
+      - "129 元"
+    sensitive: false
+
+intents:
+  - intent_id: HUMAN_HANDOFF
+    priority: 5
+    nature: collaboration
+    action: handoff.escalate
+    required_slots: []
+    validation: none
+    risk_level: R0
+    no_evidence: none
+    fallback: handoff
+    write_path: false
+    match_request_only: true
+    cues:
+      - "转人工"
+      - "人工客服"
+      - "转接人工"
+      - "人工服务"
+      - "真人"
+      - "找客服"
+      - "客服人员"
+      - "接线员"
+
+  - intent_id: REFUND_REQUEST
+    priority: 10
+    nature: action
+    action: refund.request
+    required_slots:
+      - order_id
+      - amount_cents
+    validation: eligibility_and_approval
+    risk_level: R3
+    no_evidence: none
+    fallback: approval
+    write_path: true
+    clarify_prompts:
+      order_id: "请提供订单号（格式如 ORD-DEMO-1001），退款申请必须绑定具体订单。"
+      amount_cents: "请提供退款金额，例如 129 元。"
+
+  - intent_id: TICKET_CREATE
+    priority: 11
+    nature: action
+    action: ticket.create
+    required_slots: []
+    validation: idempotency
+    risk_level: R2
+    no_evidence: none
+    fallback: create_ticket
+    write_path: true
+
+  - intent_id: REFUND_STATUS
+    priority: 20
+    nature: info
+    action: refund.status
+    required_slots:
+      - order_id
+    validation: ownership
+    risk_level: R0
+    no_evidence: answer_as_not_started
+    fallback: handoff
+    write_path: false
+    cues:
+      - "退款没到账"
+      - "退款未到账"
+      - "退款还没到账"
+      - "退款还没收到"
+      - "退款到账"
+      - "退款进度"
+      - "退款状态"
+      - "退款什么时候"
+      - "退款失败"
+      - "钱没退"
+      - "钱什么时候退"
+      - "退款项"
+      - "还没退"
+      - "没退到"
+      - "没有退到"
+    clarify_prompts:
+      order_id: "请提供订单号（格式如 ORD-DEMO-1001），我再查这笔退款的状态。"
+
+  - intent_id: REFUND_ELIGIBILITY
+    priority: 30
+    nature: info
+    action: refund.eligibility
+    required_slots:
+      - order_id
+    validation: policy_engine
+    risk_level: R0
+    no_evidence: none
+    fallback: clarify
+    write_path: false
+    cues:
+      - "能不能退"
+      - "能不能退款"
+      - "可以退吗"
+      - "可以退款吗"
+      - "能退吗"
+      - "能否退款"
+      - "可不可以退"
+      - "符合退款条件"
+      - "是否符合退款条件"
+      - "还能退吗"
+      - "我能不能退"
+    clarify_prompts:
+      order_id: "请提供订单号（格式如 ORD-DEMO-1001），我按你的订单判断能不能退。"
+
+  - intent_id: POLICY_QA
+    priority: 40
+    nature: info
+    action: retrieval.hybrid
+    required_slots: []
+    validation: citation_required
+    risk_level: R0
+    no_evidence: refuse_without_basis
+    fallback: handoff
+    write_path: false
+    match_policy_question: true
+    cues:
+      - "政策"
+      - "条款"
+      - "规则"
+      - "条件"
+      - "期限"
+      - "规定"
+      - "要求"
+      - "证据"
+      - "依据"
+      - "标准"
+      - "流程"
+      - "规范"
+      - "计算"
+      - "审批"
+      - "区别"
+      - "范围"
+      - "时效"
+      - "定义"
+      - "优先级"
+      - "赔偿"
+      - "售后"
+      - "退货"
+      - "超期"
+      - "过期"
+      - "逾期"
+      - "能退吗"
+      - "可以退吗"
+      - "能不能退款"
+      - "为什么不能退款"
+      - "为什么无法退款"
+
+  - intent_id: DELIVERY_ISSUE
+    priority: 50
+    nature: info_action
+    action:
+      - order.delivery_review
+      - ticket.create
+    required_slots:
+      - order_id
+    validation: dwell_threshold
+    risk_level: R1
+    no_evidence: none
+    fallback: create_ticket
+    write_path: true
+    cues:
+      - "没收到"
+      - "未收到"
+      - "没到货"
+      - "未到货"
+      - "未送达"
+      - "没送达"
+      - "丢件"
+      - "丢失"
+      - "物流异常"
+      - "物流不动"
+      - "物流没更新"
+      - "没有更新"
+      - "迟迟不"
+      - "延迟"
+      - "延误"
+      - "超时"
+      - "破损"
+    clarify_prompts:
+      order_id: "请提供订单号（格式如 ORD-DEMO-1001），我核对物流轨迹和延迟处理规则。"
+
+  - intent_id: LOGISTICS_QUERY
+    priority: 60
+    nature: info
+    action: order.logistics
+    required_slots:
+      - order_id
+    validation: ownership
+    risk_level: R0
+    no_evidence: none
+    fallback: clarify
+    write_path: false
+    cues:
+      - "物流"
+      - "快递"
+      - "运单"
+      - "到哪"
+      - "配送"
+      - "发货"
+    clarify_prompts:
+      order_id: "请提供订单号（格式如 ORD-DEMO-1001），我再查物流轨迹。"
+
+  - intent_id: SELF_ANALYTICS
+    priority: 15
+    nature: info
+    action: analytics.query
+    required_slots: []
+    validation: statement_guard
+    risk_level: R0
+    no_evidence: refuse_without_basis
+    fallback: handoff
+    write_path: false
+    match_analytics_question: true
+
+  - intent_id: PRODUCT_QUERY
+    priority: 70
+    nature: info
+    action: catalog.search
+    required_slots: []
+    validation: none
+    risk_level: R0
+    no_evidence: list_candidates
+    fallback: handoff
+    write_path: false
+    match_catalog: true
+    cues:
+      - "商品"
+      - "产品"
+      - "规格"
+      - "参数"
+      - "材质"
+      - "尺寸"
+      - "承重"
+      - "配件"
+      - "颜色"
+      - "型号"
+      - "sku"
+      - "保修"
+      - "保养"
+      - "安装"
+      - "怎么用"
+      - "怎么清洁"
+
+  - intent_id: ORDER_QUERY
+    priority: 80
+    nature: info
+    action: order.get
+    required_slots:
+      - order_id
+    validation: ownership
+    risk_level: R0
+    no_evidence: none
+    fallback: clarify
+    write_path: false
+    match_order_id: true
+    cues:
+      - "订单"
+      - "order"
+    clarify_prompts:
+      order_id: "请提供订单号（格式如 ORD-DEMO-1001），我再查订单字段与退款资格。"
+
+  - intent_id: UNKNOWN
+    priority: 999
+    nature: none
+    action: none
+    required_slots: []
+    validation: none
+    risk_level: R0
+    no_evidence: none
+    fallback: clarify_then_handoff
+    write_path: false

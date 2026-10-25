@@ -1,0 +1,199 @@
+# The escalation trigger table.
+#
+# Eight signals decide when the agent stops serving and reaches for a human.
+# The table is data so the triggers, the replies and the queue routing can be
+# reviewed and grey-released without touching code; the *numbers* the signals
+# compare against live in the policy engine (``escalation.*``).
+#
+# Field reference
+#   signal_id   stable name of the signal
+#   priority    P0 immediate, P1 after the policy threshold, P2 preventive
+#   reason      the HandoffReason recorded on the escalation
+#   phase       when the signal may be judged
+#                 pre   the message and the conversation state are enough
+#                 post  the outcome of the turn is needed
+#   counter     the conversation counter the signal watches
+#                 failed_intents      turns that did not resolve the intent
+#                 clarification_count times the agent had to ask for a slot
+#                 negative_rounds     turns the user sounded unhappy
+#                 idle_minutes        minutes since the last message
+#   trigger     how the signal fires
+#                 intent       the routed intent is one of ``intents``
+#                 cue          the message contains one of ``cues``
+#                 threshold    a counter reached the policy threshold
+#                 no_evidence  the retrieval came back without usable evidence
+#                 risk_level   the intent carries the given risk level
+#   intents     intents the signal applies to (empty means any)
+#   cues        substrings that fire the signal (lowercase)
+#   threshold   the policy threshold this signal counts against
+#   queue       the seat queue the case is routed to
+#   takeover    true when the agent stops serving the conversation
+#   soothe      the user is angry: acknowledge before handing over
+#   continue_task  keep running the write action instead of dropping it
+#   reply_mode  replace the answer with the handover reply, or append it
+#
+# The table order breaks ties: among signals of the same priority the first
+# one listed wins, so a complaint is routed to the complaint queue even when
+# the same message also carries a frustration cue.
+
+version: "2026-10-24"
+
+signals:
+  - signal_id: user_request
+    priority: P0
+    reason: USER_REQUEST
+    phase: pre
+    trigger: intent
+    intents:
+      - HUMAN_HANDOFF
+    queue: GENERAL
+    takeover: true
+    reply_mode: replace
+    soothe: false
+    reply: "已为你转接人工客服，我会把你已经说过的内容一起交给同事，你不用重复描述。"
+    next_step: "接手会话：先看上下文包，再向用户确认诉求。"
+
+  - signal_id: complaint
+    priority: P0
+    reason: COMPLAINT
+    phase: pre
+    trigger: cue
+    cues:
+      - "投诉"
+      - "举报"
+      - "曝光"
+      - "起诉"
+      - "法院"
+      - "315"
+      - "消协"
+      - "消费者协会"
+      - "市场监管"
+      - "找媒体"
+      - "记者"
+      - "找领导"
+      - "维权"
+      - "黑猫"
+      - "差评"
+    queue: COMPLAINT
+    takeover: true
+    reply_mode: append
+    soothe: false
+    continue_task: true
+    reply: "已转接投诉专席，你不用重复描述；你的诉求和已有记录会一并给到同事。"
+    next_step: "接手会话：投诉专席，用户可能要走流程，按专席规则处理。"
+
+  - signal_id: frustration
+    priority: P0
+    reason: FRUSTRATION
+    phase: pre
+    trigger: cue
+    counter: negative_rounds
+    threshold: frustration_rounds
+    cues:
+      - "太差了"
+      - "什么破"
+      - "垃圾客服"
+      - "无语"
+      - "气死"
+      - "没人管"
+      - "一直没人理"
+      - "投诉到底"
+      - "不满意"
+      - "搞什么"
+      - "别跟我扯"
+      - "浪费我时间"
+    queue: GENERAL
+    takeover: true
+    reply_mode: replace
+    soothe: true
+    reply: "很抱歉让你反复找答案，我现在直接转人工同事接手，不再让你重复描述。"
+    next_step: "接手会话：用户已表达不满，先道歉再解决具体诉求。"
+
+  - signal_id: repeat_failure
+    priority: P0
+    reason: REPEAT_FAILURE
+    phase: post
+    trigger: threshold
+    counter: failed_intents
+    threshold: after_failed_attempts
+    intents:
+      - ORDER_QUERY
+      - LOGISTICS_QUERY
+      - REFUND_ELIGIBILITY
+      - REFUND_STATUS
+      - DELIVERY_ISSUE
+      - POLICY_QA
+      - PRODUCT_QUERY
+      - SELF_ANALYTICS
+    queue: GENERAL
+    takeover: true
+    reply_mode: replace
+    soothe: false
+    reply: "这个问题我这边没能一次解决，已转人工同事继续跟进，不再让你重复提交。"
+    next_step: "接手会话：同一诉求已多次未解决，直接给出结论或人工处理路径。"
+
+  - signal_id: no_evidence
+    priority: P1
+    reason: NO_EVIDENCE
+    phase: post
+    trigger: no_evidence
+    threshold: no_evidence_score
+    intents:
+      - POLICY_QA
+      - SELF_ANALYTICS
+    queue: GENERAL
+    takeover: true
+    soothe: false
+    reply_mode: replace
+    reply: "这条我暂时无法确认依据，已转人工同事核实后回复你。"
+    next_step: "接手会话：检索没有可用依据，或数据查询无法回答，需要人工核对。"
+
+  - signal_id: risk
+    priority: P1
+    reason: RISK
+    phase: pre
+    trigger: risk_level
+    risk_level: R3
+    intents:
+      - REFUND_REQUEST
+    queue: RISK
+    takeover: false
+    reply_mode: append
+    soothe: false
+    reply: "这类高风险操作会进入人工审批环节，审批结果以人工确认为准。"
+    next_step: "复核会话：金额超过审批阈值，确认审批链是否完整。"
+
+  - signal_id: repeated_clarification
+    priority: P1
+    reason: NO_UNDERSTANDING
+    phase: post
+    trigger: threshold
+    counter: clarification_count
+    threshold: frustration_rounds
+    intents:
+      - ORDER_QUERY
+      - LOGISTICS_QUERY
+      - REFUND_ELIGIBILITY
+      - REFUND_STATUS
+      - DELIVERY_ISSUE
+      - REFUND_REQUEST
+    queue: GENERAL
+    takeover: true
+    reply_mode: replace
+    soothe: false
+    reply: "我还没听明白你要问哪一单，已转人工同事接手，你把订单号告诉同事即可。"
+    next_step: "接手会话：需要人工确认用户意图与订单。"
+
+  - signal_id: idle_timeout
+    priority: P2
+    reason: IDLE_TIMEOUT
+    phase: pre
+    trigger: threshold
+    counter: idle_minutes
+    threshold: session_idle_minutes
+    queue: GENERAL
+    takeover: false
+    reply_mode: append
+    soothe: false
+    reply: "这个问题还在吗？需要的话我可以直接转人工同事接着处理。"
+    next_step: "确认会话：长时间未闭环，确认用户是否还需要自助。"

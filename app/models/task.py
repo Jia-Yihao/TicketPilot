@@ -1,0 +1,47 @@
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any
+
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Enum as SAEnum
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.core.time import utcnow
+from app.db.base import Base
+from app.models.enums import TaskStatus
+
+
+class Task(Base):
+    __tablename__ = "tasks"
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(64), index=True)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    status: Mapped[TaskStatus] = mapped_column(
+        SAEnum(TaskStatus, native_enum=False, length=32, validate_strings=True),
+        default=TaskStatus.CREATED,
+        index=True,
+    )
+    request: Mapped[str] = mapped_column(Text)
+    context: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    result: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    trace_id: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=utcnow, onupdate=utcnow, nullable=False
+    )
+
+
+class TaskEvent(Base):
+    __tablename__ = "task_events"
+    __table_args__ = (Index("ix_task_events_task_created", "task_id", "created_at"),)
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    task_id: Mapped[str] = mapped_column(
+        String(40), ForeignKey("tasks.id", ondelete="CASCADE"), index=True
+    )
+    event_type: Mapped[str] = mapped_column(String(64), index=True)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)

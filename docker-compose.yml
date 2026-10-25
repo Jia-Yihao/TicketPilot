@@ -1,0 +1,32 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ticketpilot
+      POSTGRES_USER: ticketpilot
+      # Local demo credential only. Use a secret manager outside this compose file.
+      POSTGRES_PASSWORD: ticketpilot-dev-only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ticketpilot -d ticketpilot"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - ticketpilot_pgdata:/var/lib/postgresql/data
+
+  app:
+    build: .
+    environment:
+      ENVIRONMENT: dev
+      DATABASE_URL: postgresql+psycopg://ticketpilot:ticketpilot-dev-only@db:5432/ticketpilot
+      AUTO_CREATE_TABLES: "false"
+      MOCK_REFUND_MODE: success
+      AGENT_MODE: rules
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  ticketpilot_pgdata:
