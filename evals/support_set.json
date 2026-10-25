@@ -1,0 +1,1712 @@
+{
+  "version": 2,
+  "description": "客服只读路径与多轮对话评测集。每条用例给出自然语言提问与期望意图；带 policy_id 的用例同时参与检索指标。turns 描述一轮或多轮对话，expect 断言回复、澄清、任务、转人工与轨迹。",
+  "k_values": [1, 3, 5],
+  "thresholds": {
+    "recall@1": 0.7,
+    "recall@3": 0.85,
+    "recall@5": 0.9,
+    "mrr": 0.8,
+    "ndcg@5": 0.8,
+    "intent_accuracy": 0.55,
+    "stale_hits": 0,
+    "cross_tenant_hits": 0
+  },
+  "cases": [
+    {
+      "id": "refund-scope",
+      "query": "退款政策规定哪些订单可以退款",
+      "intent": "POLICY_QA",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "policy_id": "POLICY-REFUND",
+      "sections": ["适用范围"],
+      "turns": [
+        {
+          "message": "退款政策规定哪些订单可以退款",
+          "expect": {
+            "intent": "POLICY_QA",
+            "reply_contains": ["《退款政策》"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "spans": ["understand/support.classify", "retrieve/policy.search", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "refund-window",
+      "query": "签收以后多少天内可以申请退款",
+      "intent": "POLICY_QA",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "policy_id": "POLICY-REFUND",
+      "sections": ["退款条件"],
+      "turns": [
+        {
+          "message": "签收以后多少天内可以申请退款",
+          "expect": {
+            "intent": "POLICY_QA",
+            "reply_contains": ["《退款政策》"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "spans": ["understand/support.classify", "retrieve/policy.search", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "refund-amount",
+      "query": "退款金额应该怎么计算",
+      "intent": "POLICY_QA",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "policy_id": "POLICY-REFUND",
+      "sections": ["退款金额"],
+      "turns": [
+        {
+          "message": "退款金额应该怎么计算",
+          "expect": {
+            "intent": "POLICY_QA",
+            "reply_contains": ["《退款政策》"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "spans": ["understand/support.classify", "retrieve/policy.search", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "refund-approval",
+      "query": "退款申请需要谁审批",
+      "intent": "POLICY_QA",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "policy_id": "POLICY-REFUND",
+      "sections": ["审批要求"],
+      "turns": [
+        {
+          "message": "退款申请需要谁审批",
+          "expect": {
+            "intent": "POLICY_QA",
+            "reply_contains": ["《退款政策》"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "spans": ["understand/support.classify", "retrieve/policy.search", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "refund-confirmation",
+      "query": "退款接口返回成功是不是就代表钱到账了",
+      "intent": "POLICY_QA",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "policy_id": "POLICY-REFUND",
+      "sections": ["结果确认"],
+      "turns": [
+        {
+          "message": "退款接口返回成功是不是就代表钱到账了",
+          "expect": {
+            "intent": "POLICY_QA",
+            "reply_contains": ["《退款政策》"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "spans": ["understand/support.classify", "retrieve/policy.search", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "refund-retry",
+      "query": "退款调用超时能不能直接再提交一次",
+      "intent": "POLICY_QA",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "policy_id": "POLICY-REFUND",
+      "sections": ["结果确认"],
+      "turns": [
+        {
+          "message": "退款调用超时能不能直接再提交一次",
+          "expect": {
+            "intent": "POLICY_QA",
+            "reply_contains": ["《退款政策》"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "spans": ["understand/support.classify", "retrieve/policy.search", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "delay-detection",
+      "query": "物流轨迹停在同一个节点多久要联系承运商",
+      "intent": "LOGISTICS_QUERY",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "policy_id": "POLICY-DELAY",
+      "sections": ["延迟判定"],
+      "turns": [
+        {
+          "message": "物流轨迹停在同一个节点多久要联系承运商",
+          "expect": {
+            "intent": "LOGISTICS_QUERY",
+            "reply_contains": ["请提供订单号"],
+            "clarification": {
+              "reason": "MISSING_ORDER_ID",
+              "expected_slot": "order_id",
+              "resumable_intent": "LOGISTICS_QUERY"
+            },
+            "task": null,
+            "handoff": null,
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "delay-handling",
+      "query": "包裹严重延迟应该怎么处理",
+      "intent": "DELIVERY_ISSUE",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "policy_id": "POLICY-DELAY",
+      "sections": ["处理方式"],
+      "turns": [
+        {
+          "message": "包裹严重延迟应该怎么处理",
+          "expect": {
+            "intent": "DELIVERY_ISSUE",
+            "reply_contains": ["请提供订单号"],
+            "clarification": {
+              "reason": "MISSING_ORDER_ID",
+              "expected_slot": "order_id",
+              "resumable_intent": "DELIVERY_ISSUE"
+            },
+            "task": null,
+            "handoff": null,
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "delay-compensation",
+      "query": "延迟配送的赔偿规则是什么",
+      "intent": "POLICY_QA",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "policy_id": "POLICY-DELAY",
+      "sections": ["处理方式"],
+      "turns": [
+        {
+          "message": "延迟配送的赔偿规则是什么",
+          "expect": {
+            "intent": "POLICY_QA",
+            "reply_contains": ["《延迟配送处理规则》"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "spans": ["understand/support.classify", "retrieve/policy.search", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "delay-evidence",
+      "query": "回答物流问题需要哪些证据要求",
+      "intent": "POLICY_QA",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "policy_id": "POLICY-DELAY",
+      "sections": ["证据要求"],
+      "turns": [
+        {
+          "message": "回答物流问题需要哪些证据要求",
+          "expect": {
+            "intent": "POLICY_QA",
+            "reply_contains": ["《延迟配送处理规则》"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "spans": ["understand/support.classify", "retrieve/policy.search", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "return-window",
+      "query": "七天无理由退货的期限是多久",
+      "intent": "POLICY_QA",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "policy_id": "POLICY-RETURN",
+      "sections": ["七天无理由退货"],
+      "turns": [
+        {
+          "message": "七天无理由退货的期限是多久",
+          "expect": {
+            "intent": "POLICY_QA",
+            "reply_contains": ["《退货政策》"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "spans": ["understand/support.classify", "retrieve/policy.search", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "return-vs-refund",
+      "query": "退货和退款到底有什么区别",
+      "intent": "POLICY_QA",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "policy_id": "POLICY-RETURN",
+      "sections": ["退货与退款的区别"],
+      "turns": [
+        {
+          "message": "退货和退款到底有什么区别",
+          "expect": {
+            "intent": "POLICY_QA",
+            "reply_contains": ["《退货政策》"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "spans": ["understand/support.classify", "retrieve/policy.search", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "return-excluded",
+      "query": "哪些商品是不能申请退货的",
+      "intent": "POLICY_QA",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "policy_id": "POLICY-RETURN",
+      "sections": ["不予退货的情形"],
+      "turns": [
+        {
+          "message": "哪些商品是不能申请退货的",
+          "expect": {
+            "intent": "POLICY_QA",
+            "reply_contains": ["《退货政策》"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "spans": ["understand/support.classify", "retrieve/policy.search", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "return-wording",
+      "query": "已经同意退货能不能告诉用户已经退款了",
+      "intent": "POLICY_QA",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "policy_id": "POLICY-RETURN",
+      "sections": ["操作要求"],
+      "turns": [
+        {
+          "message": "已经同意退货能不能告诉用户已经退款了",
+          "expect": {
+            "intent": "POLICY_QA",
+            "reply_contains": ["《退货政策》"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "spans": ["understand/support.classify", "retrieve/policy.search", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "ticket-priority",
+      "query": "什么情况下要创建最高优先级的工单",
+      "intent": "POLICY_QA",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "policy_id": "POLICY-TICKET",
+      "sections": ["优先级定义"],
+      "turns": [
+        {
+          "message": "什么情况下要创建最高优先级的工单",
+          "expect": {
+            "intent": "POLICY_QA",
+            "reply_contains": ["《工单优先级说明》"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "spans": ["understand/support.classify", "retrieve/policy.search", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "ticket-idempotency",
+      "query": "重复提交工单会生成好几张工单",
+      "intent": "POLICY_QA",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "policy_id": "POLICY-TICKET",
+      "sections": ["创建规则"],
+      "turns": [
+        {
+          "message": "重复提交工单会生成好几张工单",
+          "expect": {
+            "intent": "POLICY_QA",
+            "reply_contains": ["《工单优先级说明》"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "spans": ["understand/support.classify", "retrieve/policy.search", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "ticket-handoff",
+      "query": "什么时候应该转人工处理",
+      "intent": "POLICY_QA",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "policy_id": "POLICY-TICKET",
+      "sections": ["转人工"],
+      "turns": [
+        {
+          "message": "什么时候应该转人工处理",
+          "expect": {
+            "intent": "POLICY_QA",
+            "reply_contains": ["《工单优先级说明》"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "spans": ["understand/support.classify", "retrieve/policy.search", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "intent-refund-status",
+      "query": "我的退款还没到账",
+      "intent": "REFUND_STATUS",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "我的退款还没到账",
+          "expect": {
+            "intent": "REFUND_STATUS",
+            "reply_contains": ["请提供订单号"],
+            "clarification": {
+              "reason": "MISSING_ORDER_ID",
+              "expected_slot": "order_id",
+              "resumable_intent": "REFUND_STATUS"
+            },
+            "task": null,
+            "handoff": null,
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "intent-delivery-issue",
+      "query": "包裹一直没收到",
+      "intent": "DELIVERY_ISSUE",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "包裹一直没收到",
+          "expect": {
+            "intent": "DELIVERY_ISSUE",
+            "reply_contains": ["请提供订单号"],
+            "clarification": {
+              "reason": "MISSING_ORDER_ID",
+              "expected_slot": "order_id",
+              "resumable_intent": "DELIVERY_ISSUE"
+            },
+            "task": null,
+            "handoff": null,
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "intent-logistics",
+      "query": "帮我看看订单 ORD-DEMO-1002 的物流到哪了",
+      "intent": "LOGISTICS_QUERY",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "帮我看看订单 ORD-DEMO-1002 的物流到哪了",
+          "expect": {
+            "intent": "LOGISTICS_QUERY",
+            "reply_contains": ["物流摘要", "DemoExpress"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "slots": {"order_id": "ORD-DEMO-1002"},
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "intent-eligibility",
+      "query": "订单 ORD-DEMO-1001 这单能退吗",
+      "intent": "REFUND_ELIGIBILITY",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "订单 ORD-DEMO-1001 这单能退吗",
+          "expect": {
+            "intent": "REFUND_ELIGIBILITY",
+            "reply_contains": ["退款资格", "可退 129.00 CNY"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "slots": {"order_id": "ORD-DEMO-1001"},
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "intent-product",
+      "query": "AeroDesk 电动升降桌的承重是多少",
+      "intent": "PRODUCT_QUERY",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "AeroDesk 电动升降桌的承重是多少",
+          "expect": {
+            "intent": "PRODUCT_QUERY",
+            "reply_contains": ["找到 2 款相关商品", "AeroDesk"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "slots": {"product_id": null},
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "intent-handoff",
+      "query": "我要转人工",
+      "intent": "HUMAN_HANDOFF",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "我要转人工",
+          "expect": {
+            "intent": "HUMAN_HANDOFF",
+            "reply_contains": ["转接人工客服"],
+            "clarification": null,
+            "task": null,
+            "handoff": {"status": "HANDOFF_PENDING", "reason": "USER_REQUEST"},
+            "spans": ["understand/support.classify", "handoff/handoff.escalate", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "order-own",
+      "query": "查询订单 ORD-DEMO-1001",
+      "intent": "ORDER_QUERY",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "查询订单 ORD-DEMO-1001",
+          "expect": {
+            "intent": "ORDER_QUERY",
+            "reply_contains": ["DELIVERED", "129.00"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "slots": {
+              "order_id": "ORD-DEMO-1001",
+              "product_id": "PROD-AD-1001",
+              "resolved": true
+            },
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "order-zero",
+      "query": "ORD-EVAL-4014 这个订单怎么样",
+      "intent": "ORDER_QUERY",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "ORD-EVAL-4014 这个订单怎么样",
+          "expect": {
+            "intent": "ORDER_QUERY",
+            "reply_contains": ["0.00"],
+            "reply_not_contains": ["可退 0.00 CNY"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "slots": {"order_id": "ORD-EVAL-4014"},
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "order-not-found",
+      "query": "查询订单 ORD-NOPE-9999",
+      "intent": "ORDER_QUERY",
+      "kind": "failure",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "查询订单 ORD-NOPE-9999",
+          "expect": {
+            "intent": "ORDER_QUERY",
+            "reply_contains": ["没有找到这个订单"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "slots": {
+              "order_id": "ORD-NOPE-9999",
+              "resolved": false,
+              "failed_intents": {"ORDER_QUERY": 1}
+            },
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "order-cross-tenant",
+      "query": "看一下订单 ORD-OTHER-3001",
+      "intent": "ORDER_QUERY",
+      "kind": "failure",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "看一下订单 ORD-OTHER-3001",
+          "expect": {
+            "intent": "ORDER_QUERY",
+            "reply_contains": ["没有找到这个订单"],
+            "reply_not_contains": ["4004", "bob", "acme"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "slots": {
+              "order_id": "ORD-OTHER-3001",
+              "resolved": false,
+              "failed_intents": {"ORDER_QUERY": 1}
+            },
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "order-missing",
+      "query": "帮我查一下订单",
+      "intent": "ORDER_QUERY",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "帮我查一下订单",
+          "expect": {
+            "intent": "ORDER_QUERY",
+            "reply_contains": ["请提供订单号"],
+            "clarification": {
+              "reason": "MISSING_ORDER_ID",
+              "expected_slot": "order_id",
+              "resumable_intent": "ORDER_QUERY"
+            },
+            "task": null,
+            "handoff": null,
+            "slots": {"order_id": null, "clarification_count": 1},
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        },
+        {
+          "message": "ORD-DEMO-1002",
+          "expect": {
+            "intent": "ORDER_QUERY",
+            "reply_contains": ["SHIPPED", "80.00"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "slots": {"order_id": "ORD-DEMO-1002", "resolved": true},
+            "span_attrs": {"support.classify": {"resumed": true}},
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "order-idle-timeout",
+      "query": "查询订单 ORD-DEMO-1001",
+      "intent": "ORDER_QUERY",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "查询订单 ORD-DEMO-1001",
+          "expect": {
+            "intent": "ORDER_QUERY",
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "slots": {"order_id": "ORD-DEMO-1001"},
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        },
+        {
+          "message": "ORD-DEMO-1002",
+          "expect": {
+            "intent": "ORDER_QUERY",
+            "reply_contains": ["SHIPPED", "这个问题还在吗"],
+            "clarification": null,
+            "task": null,
+            "handoff": {"status": "NOTED", "reason": "IDLE_TIMEOUT"},
+            "slots": {"order_id": "ORD-DEMO-1002"},
+            "spans": ["understand/support.classify", "handoff/handoff.escalate", "generate/support.reply"]
+          }
+        }
+      ],
+      "task_ops": [
+        {"action": "rewind_idle", "minutes": 120, "after_turn": 0}
+      ]
+    },
+    {
+      "id": "logistics-none",
+      "query": "订单 ORD-EVAL-4013 的物流到哪了",
+      "intent": "LOGISTICS_QUERY",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "订单 ORD-EVAL-4013 的物流到哪了",
+          "expect": {
+            "intent": "LOGISTICS_QUERY",
+            "reply_contains": ["暂无物流记录"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "slots": {"order_id": "ORD-EVAL-4013"},
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "logistics-missing",
+      "query": "帮我看看物流",
+      "intent": "LOGISTICS_QUERY",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "帮我看看物流",
+          "expect": {
+            "intent": "LOGISTICS_QUERY",
+            "reply_contains": ["请提供订单号"],
+            "clarification": {
+              "reason": "MISSING_ORDER_ID",
+              "expected_slot": "order_id",
+              "resumable_intent": "LOGISTICS_QUERY"
+            },
+            "task": null,
+            "handoff": null,
+            "slots": {"order_id": null},
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        },
+        {
+          "message": "ORD-DEMO-1002",
+          "expect": {
+            "intent": "LOGISTICS_QUERY",
+            "reply_contains": ["物流摘要", "DemoExpress"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "slots": {"order_id": "ORD-DEMO-1002", "resolved": true},
+            "span_attrs": {"support.classify": {"resumed": true}},
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "delivery-stuck",
+      "query": "订单 ORD-DEMO-1002 一直没收到",
+      "intent": "DELIVERY_ISSUE",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "订单 ORD-DEMO-1002 一直没收到",
+          "expect": {
+            "intent": "DELIVERY_ISSUE",
+            "reply_contains": ["承运商", "不能直接判定丢件"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "slots": {"order_id": "ORD-DEMO-1002"},
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "status-succeeded",
+      "query": "我的退款还没到账，订单 ORD-EVAL-4008",
+      "intent": "REFUND_STATUS",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "我的退款还没到账，订单 ORD-EVAL-4008",
+          "expect": {
+            "intent": "REFUND_STATUS",
+            "reply_contains": ["SUCCEEDED", "退款已成功到账"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "slots": {"order_id": "ORD-EVAL-4008"},
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "status-requested",
+      "query": "订单 ORD-EVAL-4009 退款到账了吗",
+      "intent": "REFUND_STATUS",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "订单 ORD-EVAL-4009 退款到账了吗",
+          "expect": {
+            "intent": "REFUND_STATUS",
+            "reply_contains": ["REQUESTED", "退款还在处理链路里"],
+            "reply_not_contains": ["已成功到账"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "slots": {"order_id": "ORD-EVAL-4009"},
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "status-unknown",
+      "query": "订单 ORD-EVAL-4010 退款状态",
+      "intent": "REFUND_STATUS",
+      "kind": "failure",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "订单 ORD-EVAL-4010 退款状态",
+          "expect": {
+            "intent": "REFUND_STATUS",
+            "reply_contains": ["UNKNOWN", "对账"],
+            "reply_not_contains": ["退款已成功到账"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "slots": {"order_id": "ORD-EVAL-4010"},
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "status-missing",
+      "query": "我的退款状态",
+      "intent": "REFUND_STATUS",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "我的退款状态",
+          "expect": {
+            "intent": "REFUND_STATUS",
+            "reply_contains": ["请提供订单号"],
+            "clarification": {
+              "reason": "MISSING_ORDER_ID",
+              "expected_slot": "order_id",
+              "resumable_intent": "REFUND_STATUS"
+            },
+            "task": null,
+            "handoff": null,
+            "slots": {"order_id": null},
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        },
+        {
+          "message": "ORD-EVAL-4008",
+          "expect": {
+            "intent": "REFUND_STATUS",
+            "reply_contains": ["SUCCEEDED"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "slots": {"order_id": "ORD-EVAL-4008", "resolved": true},
+            "span_attrs": {"support.classify": {"resumed": true}},
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "elig-window",
+      "query": "订单 ORD-EVAL-4006 还能退吗",
+      "intent": "REFUND_ELIGIBILITY",
+      "kind": "failure",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "订单 ORD-EVAL-4006 还能退吗",
+          "expect": {
+            "intent": "REFUND_ELIGIBILITY",
+            "reply_contains": ["超过 30 天"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "slots": {"order_id": "ORD-EVAL-4006"},
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "elig-balance",
+      "query": "ORD-EVAL-4007 符合退款条件吗",
+      "intent": "REFUND_ELIGIBILITY",
+      "kind": "failure",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "ORD-EVAL-4007 符合退款条件吗",
+          "expect": {
+            "intent": "REFUND_ELIGIBILITY",
+            "reply_contains": ["没有可退余额"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "slots": {"order_id": "ORD-EVAL-4007"},
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "elig-missing",
+      "query": "这单能退吗",
+      "intent": "REFUND_ELIGIBILITY",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "这单能退吗",
+          "expect": {
+            "intent": "REFUND_ELIGIBILITY",
+            "reply_contains": ["请提供订单号"],
+            "clarification": {
+              "reason": "MISSING_ORDER_ID",
+              "expected_slot": "order_id",
+              "resumable_intent": "REFUND_ELIGIBILITY"
+            },
+            "task": null,
+            "handoff": null,
+            "slots": {"order_id": null},
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        },
+        {
+          "message": "ORD-DEMO-1001",
+          "expect": {
+            "intent": "REFUND_ELIGIBILITY",
+            "reply_contains": ["可退 129.00 CNY"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "slots": {"order_id": "ORD-DEMO-1001", "resolved": true},
+            "span_attrs": {"support.classify": {"resumed": true}},
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "product-warranty",
+      "query": "TrailLite 通勤背包 22L 的质保是多久",
+      "intent": "PRODUCT_QUERY",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "TrailLite 通勤背包 22L 的质保是多久",
+          "expect": {
+            "intent": "PRODUCT_QUERY",
+            "reply_contains": ["TrailLite", "质保"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "slots": {"product_id": "PROD-TL-2002"},
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "handoff-connect",
+      "query": "请帮我转接人工客服",
+      "intent": "HUMAN_HANDOFF",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "请帮我转接人工客服",
+          "expect": {
+            "intent": "HUMAN_HANDOFF",
+            "reply_contains": ["转接人工客服"],
+            "clarification": null,
+            "task": null,
+            "handoff": {"status": "HANDOFF_PENDING", "reason": "USER_REQUEST"},
+            "spans": ["understand/support.classify", "handoff/handoff.escalate", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "handoff-after-clarify",
+      "query": "我要退款",
+      "intent": "REFUND_REQUEST",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "我要退款",
+          "expect": {
+            "intent": "REFUND_REQUEST",
+            "clarification": {
+              "reason": "MISSING_ORDER_ID",
+              "expected_slot": "order_id",
+              "resumable_intent": "REFUND_REQUEST"
+            },
+            "task": null,
+            "handoff": null,
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        },
+        {
+          "message": "转人工",
+          "expect": {
+            "intent": "HUMAN_HANDOFF",
+            "reply_contains": ["转接人工客服"],
+            "clarification": null,
+            "task": null,
+            "handoff": {"status": "HANDOFF_PENDING", "reason": "USER_REQUEST"},
+            "slots": {"pending_intent": null, "pending_request": null},
+            "spans": ["understand/support.classify", "handoff/handoff.escalate", "generate/support.reply"]
+          }
+        },
+        {
+          "message": "还在吗",
+          "expect": {
+            "intent": "UNKNOWN",
+            "agent_silent": true,
+            "clarification": null,
+            "task": null,
+            "handoff": {"status": "HANDOFF_PENDING", "reason": "USER_REQUEST"},
+            "spans": ["handoff/agent.silent"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "frustration",
+      "query": "你们的服务太差了，一直没人理",
+      "intent": "UNKNOWN",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "你们的服务太差了，一直没人理",
+          "expect": {
+            "intent": "UNKNOWN",
+            "reply_contains": ["抱歉", "转人工同事接手"],
+            "clarification": null,
+            "task": null,
+            "handoff": {"status": "HANDOFF_PENDING", "reason": "FRUSTRATION"},
+            "slots": {"negative_rounds": 1},
+            "spans": ["understand/support.classify", "handoff/handoff.escalate", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "repeat-failure",
+      "query": "查询订单 ORD-NOPE-9999",
+      "intent": "ORDER_QUERY",
+      "kind": "failure",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "查询订单 ORD-NOPE-9999",
+          "expect": {
+            "intent": "ORDER_QUERY",
+            "reply_contains": ["没有找到这个订单"],
+            "handoff": null,
+            "slots": {"failed_intents": {"ORDER_QUERY": 1}},
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        },
+        {
+          "message": "查询订单 ORD-NOPE-8888",
+          "expect": {
+            "intent": "ORDER_QUERY",
+            "reply_contains": ["没能一次解决", "转人工同事继续跟进"],
+            "handoff": {"status": "HANDOFF_PENDING", "reason": "REPEAT_FAILURE"},
+            "slots": {"failed_intents": {"ORDER_QUERY": 2}},
+            "spans": ["understand/support.classify", "handoff/handoff.escalate", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "ticket-create",
+      "query": "帮我创建一个工单",
+      "intent": "TICKET_CREATE",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "帮我创建一个工单",
+          "expect": {
+            "intent": "TICKET_CREATE",
+            "reply_contains": ["已创建工单"],
+            "clarification": null,
+            "task": {
+              "status": "SUCCEEDED",
+              "outcome": "VERIFIED_SUCCESS",
+              "contains": ["ticket_created", "OTHER", "NORMAL"]
+            },
+            "handoff": null,
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "ticket-refund",
+      "query": "我的退款一直没到账，帮我建个工单",
+      "intent": "TICKET_CREATE",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "我的退款一直没到账，帮我建个工单",
+          "expect": {
+            "intent": "TICKET_CREATE",
+            "reply_contains": ["已创建工单", "分类 REFUND"],
+            "clarification": null,
+            "task": {
+              "status": "SUCCEEDED",
+              "outcome": "VERIFIED_SUCCESS",
+              "contains": ["ticket_created"]
+            },
+            "handoff": null,
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "ticket-complaint",
+      "query": "这次投诉请给我一个工单编号",
+      "intent": "TICKET_CREATE",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "这次投诉请给我一个工单编号",
+          "expect": {
+            "intent": "TICKET_CREATE",
+            "reply_contains": ["已创建工单", "优先级 HIGH", "投诉专席"],
+            "clarification": null,
+            "task": {
+              "status": "SUCCEEDED",
+              "outcome": "VERIFIED_SUCCESS",
+              "contains": ["ticket_created"]
+            },
+            "handoff": {"status": "HANDOFF_PENDING", "reason": "COMPLAINT"},
+            "spans": ["understand/support.classify", "handoff/handoff.escalate", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "refund-3turn",
+      "query": "我要申请退款",
+      "intent": "REFUND_REQUEST",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "我要申请退款",
+          "expect": {
+            "intent": "REFUND_REQUEST",
+            "reply_contains": ["请提供订单号"],
+            "clarification": {
+              "reason": "MISSING_ORDER_ID",
+              "expected_slot": "order_id",
+              "resumable_intent": "REFUND_REQUEST"
+            },
+            "task": null,
+            "handoff": null,
+            "slots": {"clarification_count": 1},
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        },
+        {
+          "message": "ORD-DEMO-1002",
+          "expect": {
+            "intent": "REFUND_REQUEST",
+            "reply_contains": ["已转人工同事接手"],
+            "clarification": {
+              "reason": "MISSING_AMOUNT",
+              "expected_slot": "amount_cents",
+              "resumable_intent": "REFUND_REQUEST"
+            },
+            "task": null,
+            "handoff": {"status": "HANDOFF_PENDING", "reason": "NO_UNDERSTANDING"},
+            "slots": {"order_id": "ORD-DEMO-1002", "clarification_count": 2},
+            "span_attrs": {"support.classify": {"resumed": true}},
+            "spans": ["understand/support.classify", "handoff/handoff.escalate", "generate/support.reply"]
+          }
+        },
+        {
+          "message": "80 元",
+          "expect": {
+            "intent": "UNKNOWN",
+            "agent_silent": true,
+            "clarification": null,
+            "task": null,
+            "handoff": {"status": "HANDOFF_PENDING", "reason": "NO_UNDERSTANDING"},
+            "spans": ["handoff/agent.silent"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "refund-one-clarify",
+      "query": "我要申请退款",
+      "intent": "REFUND_REQUEST",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "我要申请退款",
+          "expect": {
+            "intent": "REFUND_REQUEST",
+            "reply_contains": ["请提供订单号"],
+            "clarification": {
+              "reason": "MISSING_ORDER_ID",
+              "expected_slot": "order_id",
+              "resumable_intent": "REFUND_REQUEST"
+            },
+            "task": null,
+            "handoff": null,
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        },
+        {
+          "message": "ORD-EVAL-4016 10 元",
+          "expect": {
+            "intent": "REFUND_REQUEST",
+            "reply_contains": ["等待人工审批", "10.00 CNY"],
+            "clarification": null,
+            "task": {
+              "status": "WAITING_APPROVAL",
+              "outcome": "WAITING_APPROVAL",
+              "pending_amount_cents": 1000
+            },
+            "handoff": {"status": "NOTED", "reason": "RISK"},
+            "slots": {"order_id": "ORD-EVAL-4016", "amount_cents": 1000},
+            "span_attrs": {"support.classify": {"resumed": true}},
+            "spans": ["understand/support.classify", "handoff/handoff.escalate", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "refund-invalid-fixed",
+      "query": "我要申请退款，订单 ORD-EVAL-4013，金额 0 元",
+      "intent": "REFUND_REQUEST",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "我要申请退款，订单 ORD-EVAL-4013，金额 0 元",
+          "expect": {
+            "intent": "REFUND_REQUEST",
+            "reply_contains": ["格式不正确", "订单号 ORD-EVAL-4013 我已经记住了"],
+            "clarification": {
+              "reason": "INVALID_AMOUNT",
+              "expected_slot": "amount_cents",
+              "resumable_intent": "REFUND_REQUEST"
+            },
+            "task": null,
+            "handoff": null,
+            "slots": {"order_id": "ORD-EVAL-4013", "amount_cents": null},
+            "slot_not_contains": {"pending_request": "0 元"},
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        },
+        {
+          "message": "10 元",
+          "expect": {
+            "intent": "REFUND_REQUEST",
+            "reply_contains": ["等待人工审批", "10.00 CNY"],
+            "clarification": null,
+            "task": {
+              "status": "WAITING_APPROVAL",
+              "outcome": "WAITING_APPROVAL",
+              "pending_amount_cents": 1000
+            },
+            "handoff": {"status": "NOTED", "reason": "RISK"},
+            "slots": {"order_id": "ORD-EVAL-4013", "amount_cents": 1000},
+            "inherited_slots": ["order_id"],
+            "span_attrs": {"support.classify": {"resumed": true}},
+            "spans": ["understand/support.classify", "handoff/handoff.escalate", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "refund-amount-first",
+      "query": "我要退款 80 元",
+      "intent": "REFUND_REQUEST",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "我要退款 80 元",
+          "expect": {
+            "intent": "REFUND_REQUEST",
+            "reply_contains": ["请提供订单号", "高风险操作"],
+            "clarification": {
+              "reason": "MISSING_ORDER_ID",
+              "expected_slot": "order_id",
+              "resumable_intent": "REFUND_REQUEST"
+            },
+            "task": null,
+            "handoff": {"status": "NOTED", "reason": "RISK"},
+            "slots": {"amount_cents": 8000},
+            "spans": ["understand/support.classify", "handoff/handoff.escalate", "generate/support.reply"]
+          }
+        },
+        {
+          "message": "ORD-EVAL-4015",
+          "expect": {
+            "intent": "REFUND_REQUEST",
+            "reply_contains": ["AMOUNT_EXCEEDS_REFUNDABLE"],
+            "clarification": null,
+            "task": {"status": "SUCCEEDED", "outcome": "FAILED"},
+            "handoff": {"status": "NOTED", "reason": "RISK"},
+            "slots": {"order_id": "ORD-EVAL-4015", "amount_cents": 8000},
+            "inherited_slots": ["amount_cents"],
+            "span_attrs": {"support.classify": {"resumed": true}},
+            "spans": ["understand/support.classify", "handoff/handoff.escalate", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "refund-order-first",
+      "query": "我要退款，订单 ORD-DEMO-1001",
+      "intent": "REFUND_REQUEST",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "我要退款，订单 ORD-DEMO-1001",
+          "expect": {
+            "intent": "REFUND_REQUEST",
+            "reply_contains": ["请提供退款金额", "我已经记住了"],
+            "clarification": {
+              "reason": "MISSING_AMOUNT",
+              "expected_slot": "amount_cents",
+              "resumable_intent": "REFUND_REQUEST"
+            },
+            "task": null,
+            "handoff": null,
+            "slots": {"order_id": "ORD-DEMO-1001"},
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        },
+        {
+          "message": "20 元",
+          "expect": {
+            "intent": "REFUND_REQUEST",
+            "reply_contains": ["等待人工审批", "20.00 CNY"],
+            "clarification": null,
+            "task": {
+              "status": "WAITING_APPROVAL",
+              "outcome": "WAITING_APPROVAL",
+              "pending_amount_cents": 2000
+            },
+            "handoff": {"status": "NOTED", "reason": "RISK"},
+            "slots": {"order_id": "ORD-DEMO-1001", "amount_cents": 2000},
+            "inherited_slots": ["order_id"],
+            "span_attrs": {"support.classify": {"resumed": true}},
+            "spans": ["understand/support.classify", "handoff/handoff.escalate", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "refund-cancel",
+      "query": "我要申请退款，订单 ORD-EVAL-4003，金额 90 元",
+      "intent": "REFUND_REQUEST",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "我要申请退款，订单 ORD-EVAL-4003，金额 90 元",
+          "expect": {
+            "intent": "REFUND_REQUEST",
+            "reply_contains": ["等待人工审批"],
+            "clarification": null,
+            "task": {
+              "status": "WAITING_APPROVAL",
+              "outcome": "WAITING_APPROVAL",
+              "pending_amount_cents": 9000
+            },
+            "handoff": {"status": "NOTED", "reason": "RISK"},
+            "slots": {"order_id": "ORD-EVAL-4003", "amount_cents": 9000},
+            "spans": ["understand/support.classify", "handoff/handoff.escalate", "generate/support.reply"]
+          }
+        }
+      ],
+      "task_ops": [
+        {
+          "action": "cancel",
+          "after_turn": 0,
+          "expect": {"http_status": 200, "task_status": "CANCELLED"}
+        },
+        {
+          "action": "get_task",
+          "after_turn": 0,
+          "expect": {
+            "task_status": "CANCELLED",
+            "outcome": "FAILED",
+            "contains": ["任务已取消"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "refund-expire",
+      "query": "我要申请退款，订单 ORD-EVAL-4004，金额 70 元",
+      "intent": "REFUND_REQUEST",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "我要申请退款，订单 ORD-EVAL-4004，金额 70 元",
+          "expect": {
+            "intent": "REFUND_REQUEST",
+            "reply_contains": ["等待人工审批"],
+            "clarification": null,
+            "task": {
+              "status": "WAITING_APPROVAL",
+              "outcome": "WAITING_APPROVAL",
+              "pending_amount_cents": 7000
+            },
+            "handoff": {"status": "NOTED", "reason": "RISK"},
+            "slots": {"order_id": "ORD-EVAL-4004", "amount_cents": 7000},
+            "spans": ["understand/support.classify", "handoff/handoff.escalate", "generate/support.reply"]
+          }
+        }
+      ],
+      "task_ops": [
+        {
+          "action": "expire_approval",
+          "after_turn": 0,
+          "expect": {"expired_min": 1}
+        },
+        {
+          "action": "approve",
+          "after_turn": 0,
+          "actor": {"tenant": "demo", "user": "reviewer", "roles": "approver"},
+          "expect": {"http_status": 409, "error_code": "APPROVAL_EXPIRED"}
+        },
+        {
+          "action": "get_task",
+          "after_turn": 0,
+          "expect": {
+            "task_status": "EXPIRED",
+            "outcome": "NEEDS_HUMAN_REVIEW",
+            "contains": ["审批已过期"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "refund-approve",
+      "query": "我要申请退款，订单 ORD-EVAL-4001，金额 200 元",
+      "intent": "REFUND_REQUEST",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "我要申请退款，订单 ORD-EVAL-4001，金额 200 元",
+          "expect": {
+            "intent": "REFUND_REQUEST",
+            "reply_contains": ["等待人工审批"],
+            "clarification": null,
+            "task": {
+              "status": "WAITING_APPROVAL",
+              "outcome": "WAITING_APPROVAL",
+              "pending_amount_cents": 20000
+            },
+            "handoff": {"status": "NOTED", "reason": "RISK"},
+            "slots": {"order_id": "ORD-EVAL-4001", "amount_cents": 20000},
+            "spans": ["understand/support.classify", "handoff/handoff.escalate", "generate/support.reply"]
+          }
+        }
+      ],
+      "task_ops": [
+        {
+          "action": "approve",
+          "after_turn": 0,
+          "actor": {"tenant": "demo", "user": "reviewer", "roles": "approver"},
+          "expect": {
+            "http_status": 200,
+            "task_status": "SUCCEEDED",
+            "outcome": "VERIFIED_SUCCESS",
+            "contains": ["refund_record_exists"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "analytics-order-count",
+      "query": "我有多少订单",
+      "intent": "SELF_ANALYTICS",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "我有多少订单",
+          "expect": {
+            "intent": "SELF_ANALYTICS",
+            "reply_contains": ["18 单"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "spans": ["understand/support.classify", "tool/analytics.query", "generate/support.reply"],
+            "span_attrs": {
+              "analytics.query": {"dataset": "orders", "metric": "count", "group_by": null}
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "analytics-order-status",
+      "query": "我有多少订单，按状态分布",
+      "intent": "SELF_ANALYTICS",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "我有多少订单，按状态分布",
+          "expect": {
+            "intent": "SELF_ANALYTICS",
+            "reply_contains": ["已签收 12 单", "已发货 4 单"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "spans": ["understand/support.classify", "tool/analytics.query", "generate/support.reply"],
+            "span_attrs": {
+              "analytics.query": {"dataset": "orders", "metric": "count", "group_by": "status"}
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "analytics-spend",
+      "query": "我一共花了多少钱",
+      "intent": "SELF_ANALYTICS",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "我一共花了多少钱",
+          "expect": {
+            "intent": "SELF_ANALYTICS",
+            "reply_contains": ["61209.00"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "spans": ["understand/support.classify", "tool/analytics.query", "generate/support.reply"],
+            "span_attrs": {
+              "analytics.query": {"dataset": "orders", "metric": "sum", "group_by": null}
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "analytics-refund-empty",
+      "query": "我退了几笔",
+      "intent": "SELF_ANALYTICS",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "bob",
+      "turns": [
+        {
+          "message": "我退了几笔",
+          "expect": {
+            "intent": "SELF_ANALYTICS",
+            "reply_contains": ["0 笔退款记录"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "spans": ["understand/support.classify", "tool/analytics.query", "generate/support.reply"],
+            "span_attrs": {
+              "analytics.query": {"dataset": "refunds", "metric": "count", "group_by": null}
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "unknown-hello",
+      "query": "你好",
+      "intent": "UNKNOWN",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "你好",
+          "expect": {
+            "intent": "UNKNOWN",
+            "reply_contains": ["我可以帮你查商品信息"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "unknown-weather",
+      "query": "今天天气怎么样",
+      "intent": "UNKNOWN",
+      "kind": "failure",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "今天天气怎么样",
+          "expect": {
+            "intent": "UNKNOWN",
+            "reply_contains": ["请补充商品名"],
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        }
+      ]
+    }
+  ]
+}

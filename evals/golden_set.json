@@ -1,0 +1,879 @@
+{
+  "version": 2,
+  "description": "离线 Golden Set：40 条任务路径用例，覆盖任务运行时支持的 6 个意图（ORDER_QUERY / LOGISTICS_QUERY / POLICY_QA / TICKET_CREATE / REFUND_REQUEST / UNKNOWN）的正常、边界与失败形态。只读路径的 12 意图覆盖见 evals/support_set.json。每条用例都带 expected_outcome 与 expected_tool，并断言 trace 中的工具名、参数、降级步骤与回执字段来源。",
+  "coverage": {
+    "task_intents": [
+      "ORDER_QUERY",
+      "LOGISTICS_QUERY",
+      "POLICY_QA",
+      "TICKET_CREATE",
+      "REFUND_REQUEST",
+      "UNKNOWN"
+    ],
+    "support_only_intents": [
+      "HUMAN_HANDOFF",
+      "REFUND_STATUS",
+      "REFUND_ELIGIBILITY",
+      "DELIVERY_ISSUE",
+      "SELF_ANALYTICS",
+      "PRODUCT_QUERY"
+    ],
+    "note": "UNKNOWN 没有 normal 形态：无法归类的问题本身就是失败形态。12 个意图的并集由 tests/test_eval_datasets.py 校验。"
+  },
+  "cases": [
+    {
+      "id": "order-query-own",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "帮我查询订单 ORD-DEMO-1001",
+      "expected_intent": "ORDER_QUERY",
+      "expected_outcome": "VERIFIED_SUCCESS",
+      "expected_tool": "get_order",
+      "expect": {
+        "http_status": 201,
+        "task_status": "SUCCEEDED",
+        "contains": ["ORD-DEMO-1001", "可退余额"],
+        "not_contains": ["ORD-OTHER-3001"],
+        "tool_params": {"get_order": {"order_id": "ORD-DEMO-1001"}},
+        "receipt_from": "get_order",
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "order-query-zero-balance",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "帮我查询订单 ORD-EVAL-4014",
+      "expected_intent": "ORDER_QUERY",
+      "expected_outcome": "VERIFIED_SUCCESS",
+      "expected_tool": "get_order",
+      "expect": {
+        "http_status": 201,
+        "task_status": "SUCCEEDED",
+        "contains": ["ORD-EVAL-4014", "可退余额 0.00 CNY"],
+        "tool_params": {"get_order": {"order_id": "ORD-EVAL-4014"}},
+        "receipt_from": "get_order",
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "order-query-not-found",
+      "kind": "failure",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "帮我查询订单 ORD-DEMO-9999",
+      "expected_intent": "ORDER_QUERY",
+      "expected_outcome": "FAILED",
+      "expected_tool": "get_order",
+      "expect": {
+        "http_status": 201,
+        "task_status": "FAILED",
+        "contains": ["Order not found"],
+        "tool_params": {"get_order": {"order_id": "ORD-DEMO-9999"}},
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "order-query-cross-tenant",
+      "kind": "failure",
+      "tenant": "demo",
+      "user": "bob",
+      "request": "查询订单 ORD-DEMO-1001",
+      "expected_intent": "ORDER_QUERY",
+      "expected_outcome": "FAILED",
+      "expected_tool": "get_order",
+      "expect": {
+        "http_status": 201,
+        "task_status": "FAILED",
+        "contains": ["Order not found"],
+        "not_contains": ["12900", "alice"],
+        "tool_params": {"get_order": {"order_id": "ORD-DEMO-1001"}},
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "order-query-missing-slot",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "帮我查一下我的订单",
+      "expected_intent": "ORDER_QUERY",
+      "expected_outcome": "NEEDS_HUMAN_REVIEW",
+      "expected_tool": null,
+      "expect": {
+        "http_status": 201,
+        "task_status": "SUCCEEDED",
+        "contains": ["请提供订单号"],
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "order-query-malformed-context",
+      "kind": "failure",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "帮我查一下订单状态",
+      "context": {"order_id": "BAD-ID"},
+      "expected_intent": "ORDER_QUERY",
+      "expected_outcome": "NEEDS_HUMAN_REVIEW",
+      "expected_tool": "get_order",
+      "expect": {
+        "http_status": 201,
+        "task_status": "SUCCEEDED",
+        "contains": ["订单号格式不对"],
+        "tool_params": {"get_order": {"order_id": "BAD-ID"}},
+        "degradation": "ask_user",
+        "degradation_status": "ERROR"
+      }
+    },
+    {
+      "id": "logistics-query",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "订单 ORD-DEMO-1002 的物流到哪了？",
+      "expected_intent": "LOGISTICS_QUERY",
+      "expected_outcome": "VERIFIED_SUCCESS",
+      "expected_tool": "get_logistics",
+      "expect": {
+        "http_status": 201,
+        "task_status": "SUCCEEDED",
+        "contains": ["DE10020002", "IN_TRANSIT"],
+        "tool_params": {"get_logistics": {"order_id": "ORD-DEMO-1002"}},
+        "receipt_from": "get_logistics",
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "logistics-no-record",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "订单 ORD-EVAL-4013 的物流呢？",
+      "expected_intent": "LOGISTICS_QUERY",
+      "expected_outcome": "NEEDS_HUMAN_REVIEW",
+      "expected_tool": "get_logistics",
+      "expect": {
+        "http_status": 201,
+        "task_status": "SUCCEEDED",
+        "contains": ["暂无物流记录"],
+        "tool_params": {"get_logistics": {"order_id": "ORD-EVAL-4013"}},
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "logistics-missing-slot",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "我的物流到哪了",
+      "expected_intent": "LOGISTICS_QUERY",
+      "expected_outcome": "NEEDS_HUMAN_REVIEW",
+      "expected_tool": null,
+      "expect": {
+        "http_status": 201,
+        "task_status": "SUCCEEDED",
+        "contains": ["请提供订单号"],
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "logistics-cross-tenant",
+      "kind": "failure",
+      "tenant": "demo",
+      "user": "bob",
+      "request": "订单 ORD-DEMO-1001 的物流到哪了？",
+      "expected_intent": "LOGISTICS_QUERY",
+      "expected_outcome": "FAILED",
+      "expected_tool": "get_logistics",
+      "expect": {
+        "http_status": 201,
+        "task_status": "FAILED",
+        "contains": ["转接人工"],
+        "not_contains": ["DE10010001", "12900"],
+        "tool_params": {"get_logistics": {"order_id": "ORD-DEMO-1001"}},
+        "degradation": "handoff",
+        "degradation_status": "ERROR"
+      }
+    },
+    {
+      "id": "policy-active-v3-only",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "退款条件是什么？",
+      "expected_intent": "POLICY_QA",
+      "expected_outcome": "VERIFIED_SUCCESS",
+      "expected_tool": "search_policy",
+      "expect": {
+        "http_status": 201,
+        "task_status": "SUCCEEDED",
+        "contains": ["30 天"],
+        "not_contains": ["15 天"],
+        "evidence_versions_exclude": ["v2"],
+        "tool_params": {"search_policy": {"query": "退款条件是什么？"}},
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "policy-delay",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "退款政策对延迟发货怎么规定？",
+      "expected_intent": "POLICY_QA",
+      "expected_outcome": "VERIFIED_SUCCESS",
+      "expected_tool": "search_policy",
+      "expect": {
+        "http_status": 201,
+        "task_status": "SUCCEEDED",
+        "contains": ["7 天", "48 小时"],
+        "tool_params": {"search_policy": {"query": "退款政策对延迟发货怎么规定？"}},
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "policy-return",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "退货流程是什么？",
+      "expected_intent": "POLICY_QA",
+      "expected_outcome": "VERIFIED_SUCCESS",
+      "expected_tool": "search_policy",
+      "expect": {
+        "http_status": 201,
+        "task_status": "SUCCEEDED",
+        "contains": ["退货是先把商品寄回"],
+        "tool_params": {"search_policy": {"query": "退货流程是什么？"}},
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "policy-ticket-handling",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "工单是怎么处理的？",
+      "expected_intent": "POLICY_QA",
+      "expected_outcome": "VERIFIED_SUCCESS",
+      "expected_tool": "search_policy",
+      "expect": {
+        "http_status": 201,
+        "task_status": "SUCCEEDED",
+        "contains": ["高优先级工单"],
+        "tool_params": {"search_policy": {"query": "工单是怎么处理的？"}},
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "policy-tenant-isolation",
+      "kind": "boundary",
+      "tenant": "acme",
+      "user": "carol",
+      "request": "退款条件是什么？",
+      "expected_intent": "POLICY_QA",
+      "expected_outcome": "NEEDS_HUMAN_REVIEW",
+      "expected_tool": "search_policy",
+      "expect": {
+        "http_status": 201,
+        "task_status": "SUCCEEDED",
+        "contains": ["未检索到适用的有效政策"],
+        "tool_params": {"search_policy": {"query": "退款条件是什么？"}},
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "unknown-request-clarified",
+      "kind": "failure",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "今天天气怎么样？",
+      "expected_intent": "UNKNOWN",
+      "expected_outcome": "NEEDS_HUMAN_REVIEW",
+      "expected_tool": null,
+      "expect": {
+        "http_status": 201,
+        "task_status": "SUCCEEDED",
+        "contains": ["无法判断这个请求属于售后范围"],
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "unknown-with-order-id",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "你好，关于 ORD-DEMO-1001",
+      "expected_intent": "UNKNOWN",
+      "expected_outcome": "NEEDS_HUMAN_REVIEW",
+      "expected_tool": null,
+      "expect": {
+        "http_status": 201,
+        "task_status": "SUCCEEDED",
+        "contains": ["无法判断这个请求属于售后范围"],
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "ticket-create",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "帮我创建一个工单，投诉物流一直不更新",
+      "expected_intent": "TICKET_CREATE",
+      "expected_outcome": "VERIFIED_SUCCESS",
+      "expected_tool": "create_ticket",
+      "expect": {
+        "http_status": 201,
+        "task_status": "SUCCEEDED",
+        "contains": ["TCK-", "HIGH"],
+        "tool_params": {"create_ticket": {"category": "OTHER", "priority": "HIGH"}},
+        "receipt_from": "create_ticket",
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "ticket-refund-category",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "帮我创建一个退款工单，退款一直不到账",
+      "expected_intent": "TICKET_CREATE",
+      "expected_outcome": "VERIFIED_SUCCESS",
+      "expected_tool": "create_ticket",
+      "expect": {
+        "http_status": 201,
+        "task_status": "SUCCEEDED",
+        "contains": ["TCK-", "分类 REFUND", "NORMAL"],
+        "tool_params": {"create_ticket": {"category": "REFUND", "priority": "NORMAL"}},
+        "receipt_from": "create_ticket",
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "ticket-question-blocked",
+      "kind": "failure",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "退款工单需要哪些材料？",
+      "expected_intent": "POLICY_QA",
+      "expected_outcome": "VERIFIED_SUCCESS",
+      "expected_tool": "search_policy",
+      "expect": {
+        "http_status": 201,
+        "task_status": "SUCCEEDED",
+        "not_contains": ["TCK-"],
+        "tool_params": {"search_policy": {"query": "退款工单需要哪些材料？"}},
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "refund-waits-for-approval",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "我要申请退款，订单 ORD-DEMO-1002，金额 80 元",
+      "expected_intent": "REFUND_REQUEST",
+      "expected_outcome": "WAITING_APPROVAL",
+      "expected_tool": "check_refund_eligibility",
+      "expect": {
+        "http_status": 201,
+        "task_status": "WAITING_APPROVAL",
+        "contains": ["WAITING_APPROVAL", "requires_approval"],
+        "pending_amount_cents": 8000,
+        "latest_approval_status": "PENDING",
+        "tool_params": {
+          "check_refund_eligibility": {
+            "order_id": "ORD-DEMO-1002",
+            "amount_cents": 8000
+          }
+        },
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "refund-approved-and-verified",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "我要申请退款，订单 ORD-DEMO-1001，金额 129 元",
+      "expected_intent": "REFUND_REQUEST",
+      "expected_outcome": "VERIFIED_SUCCESS",
+      "expected_tool": "check_refund_eligibility",
+      "steps": [
+        {
+          "action": "approve",
+          "tenant": "demo",
+          "user": "reviewer",
+          "roles": "approver",
+          "expect": {"http_status": 200}
+        }
+      ],
+      "expect": {
+        "http_status": 200,
+        "task_status": "SUCCEEDED",
+        "contains": ["已由权威退款记录确认"],
+        "order_refundable_cents": 0,
+        "latest_approval_status": "CONSUMED",
+        "tool_params": {
+          "check_refund_eligibility": {
+            "order_id": "ORD-DEMO-1001",
+            "amount_cents": 12900
+          }
+        },
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "refund-rejected",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "我要申请退款，订单 ORD-EVAL-4002，金额 180 元",
+      "expected_intent": "REFUND_REQUEST",
+      "expected_outcome": "FAILED",
+      "expected_tool": "check_refund_eligibility",
+      "steps": [
+        {
+          "action": "reject",
+          "tenant": "demo",
+          "user": "reviewer",
+          "roles": "approver",
+          "reason": "不符合退款条件",
+          "expect": {"http_status": 200}
+        }
+      ],
+      "expect": {
+        "http_status": 200,
+        "task_status": "REJECTED",
+        "contains": ["审批未通过"],
+        "latest_approval_status": "REJECTED",
+        "tool_params": {
+          "check_refund_eligibility": {
+            "order_id": "ORD-EVAL-4002",
+            "amount_cents": 18000
+          }
+        },
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "refund-cancelled",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "我要申请退款，订单 ORD-EVAL-4003，金额 90 元",
+      "expected_intent": "REFUND_REQUEST",
+      "expected_outcome": "FAILED",
+      "expected_tool": "check_refund_eligibility",
+      "steps": [
+        {
+          "action": "cancel",
+          "tenant": "demo",
+          "user": "alice",
+          "expect": {"http_status": 200}
+        }
+      ],
+      "expect": {
+        "http_status": 200,
+        "task_status": "CANCELLED",
+        "contains": ["任务已取消"],
+        "latest_approval_status": "CANCELLED",
+        "tool_params": {
+          "check_refund_eligibility": {
+            "order_id": "ORD-EVAL-4003",
+            "amount_cents": 9000
+          }
+        },
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "refund-expired",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "我要申请退款，订单 ORD-EVAL-4004，金额 70 元",
+      "expected_intent": "REFUND_REQUEST",
+      "expected_outcome": "NEEDS_HUMAN_REVIEW",
+      "expected_tool": "check_refund_eligibility",
+      "steps": [
+        {"action": "expire_approval"},
+        {
+          "action": "approve",
+          "tenant": "demo",
+          "user": "reviewer",
+          "roles": "approver",
+          "expect": {"http_status": 409, "contains": ["APPROVAL_EXPIRED"]}
+        },
+        {
+          "action": "get_task",
+          "tenant": "demo",
+          "user": "alice",
+          "expect": {"http_status": 200}
+        }
+      ],
+      "expect": {
+        "http_status": 200,
+        "task_status": "EXPIRED",
+        "contains": ["审批已过期"],
+        "latest_approval_status": "EXPIRED",
+        "tool_params": {
+          "check_refund_eligibility": {
+            "order_id": "ORD-EVAL-4004",
+            "amount_cents": 7000
+          }
+        },
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "refund-self-approval-blocked",
+      "kind": "failure",
+      "tenant": "demo",
+      "user": "bob",
+      "request": "我要申请退款，订单 ORD-DEMO-2001，金额 50 元",
+      "expected_intent": "REFUND_REQUEST",
+      "expected_outcome": "WAITING_APPROVAL",
+      "expected_tool": "check_refund_eligibility",
+      "steps": [
+        {
+          "action": "approve",
+          "tenant": "demo",
+          "user": "bob",
+          "roles": "approver",
+          "expect": {"http_status": 403, "contains": ["Self-approval"]}
+        },
+        {
+          "action": "get_task",
+          "tenant": "demo",
+          "user": "bob",
+          "expect": {"http_status": 200}
+        }
+      ],
+      "expect": {
+        "http_status": 200,
+        "task_status": "WAITING_APPROVAL",
+        "pending_amount_cents": 5000,
+        "latest_approval_status": "PENDING",
+        "tool_params": {
+          "check_refund_eligibility": {
+            "order_id": "ORD-DEMO-2001",
+            "amount_cents": 5000
+          }
+        },
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "refund-cross-tenant-approver",
+      "kind": "failure",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "我要申请退款，订单 ORD-EVAL-4016，金额 10 元",
+      "expected_intent": "REFUND_REQUEST",
+      "expected_outcome": "WAITING_APPROVAL",
+      "expected_tool": "check_refund_eligibility",
+      "steps": [
+        {
+          "action": "approve",
+          "tenant": "acme",
+          "user": "reviewer",
+          "roles": "approver",
+          "expect": {"http_status": 404, "contains": ["Task not found"]}
+        },
+        {
+          "action": "get_task",
+          "tenant": "demo",
+          "user": "alice",
+          "expect": {"http_status": 200}
+        }
+      ],
+      "expect": {
+        "http_status": 200,
+        "task_status": "WAITING_APPROVAL",
+        "pending_amount_cents": 1000,
+        "latest_approval_status": "PENDING",
+        "tool_params": {
+          "check_refund_eligibility": {
+            "order_id": "ORD-EVAL-4016",
+            "amount_cents": 1000
+          }
+        },
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "refund-missing-order",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "我要申请退款，金额 40 元",
+      "expected_intent": "REFUND_REQUEST",
+      "expected_outcome": "NEEDS_HUMAN_REVIEW",
+      "expected_tool": null,
+      "expect": {
+        "http_status": 201,
+        "task_status": "SUCCEEDED",
+        "contains": ["申请退款需要订单号"],
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "refund-missing-amount",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "我要申请退款，订单 ORD-EVAL-4016",
+      "expected_intent": "REFUND_REQUEST",
+      "expected_outcome": "NEEDS_HUMAN_REVIEW",
+      "expected_tool": null,
+      "expect": {
+        "http_status": 201,
+        "task_status": "SUCCEEDED",
+        "contains": ["申请退款需要退款金额"],
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "refund-invalid-amount",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "我要申请退款，订单 ORD-EVAL-4016，金额 0 元",
+      "expected_intent": "REFUND_REQUEST",
+      "expected_outcome": "NEEDS_HUMAN_REVIEW",
+      "expected_tool": null,
+      "expect": {
+        "http_status": 201,
+        "task_status": "SUCCEEDED",
+        "contains": ["退款金额格式不正确"],
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "refund-cross-tenant-order",
+      "kind": "failure",
+      "tenant": "demo",
+      "user": "bob",
+      "request": "我要申请退款，订单 ORD-DEMO-1001，金额 50 元",
+      "expected_intent": "REFUND_REQUEST",
+      "expected_outcome": "FAILED",
+      "expected_tool": "check_refund_eligibility",
+      "expect": {
+        "http_status": 201,
+        "task_status": "FAILED",
+        "contains": ["Order not found"],
+        "not_contains": ["12900"],
+        "tool_params": {
+          "check_refund_eligibility": {
+            "order_id": "ORD-DEMO-1001",
+            "amount_cents": 5000
+          }
+        },
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "refund-cancelled-order",
+      "kind": "failure",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "我要申请退款，订单 ORD-EVAL-4005，金额 40 元",
+      "expected_intent": "REFUND_REQUEST",
+      "expected_outcome": "FAILED",
+      "expected_tool": "check_refund_eligibility",
+      "expect": {
+        "http_status": 201,
+        "task_status": "SUCCEEDED",
+        "contains": ["ORDER_CANCELLED"],
+        "tool_params": {
+          "check_refund_eligibility": {
+            "order_id": "ORD-EVAL-4005",
+            "amount_cents": 4000
+          }
+        },
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "refund-window-expired",
+      "kind": "failure",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "我要申请退款，订单 ORD-EVAL-4006，金额 60 元",
+      "expected_intent": "REFUND_REQUEST",
+      "expected_outcome": "FAILED",
+      "expected_tool": "check_refund_eligibility",
+      "expect": {
+        "http_status": 201,
+        "task_status": "SUCCEEDED",
+        "contains": ["RETURN_WINDOW_EXPIRED"],
+        "tool_params": {
+          "check_refund_eligibility": {
+            "order_id": "ORD-EVAL-4006",
+            "amount_cents": 6000
+          }
+        },
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "refund-no-balance",
+      "kind": "failure",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "我要申请退款，订单 ORD-EVAL-4007，金额 10 元",
+      "expected_intent": "REFUND_REQUEST",
+      "expected_outcome": "FAILED",
+      "expected_tool": "check_refund_eligibility",
+      "expect": {
+        "http_status": 201,
+        "task_status": "SUCCEEDED",
+        "contains": ["NO_REFUNDABLE_BALANCE"],
+        "tool_params": {
+          "check_refund_eligibility": {
+            "order_id": "ORD-EVAL-4007",
+            "amount_cents": 1000
+          }
+        },
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "refund-already-refunded",
+      "kind": "failure",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "我要申请退款，订单 ORD-EVAL-4008，金额 10 元",
+      "expected_intent": "REFUND_REQUEST",
+      "expected_outcome": "FAILED",
+      "expected_tool": "check_refund_eligibility",
+      "expect": {
+        "http_status": 201,
+        "task_status": "SUCCEEDED",
+        "contains": ["ALREADY_REFUNDED"],
+        "tool_params": {
+          "check_refund_eligibility": {
+            "order_id": "ORD-EVAL-4008",
+            "amount_cents": 1000
+          }
+        },
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "refund-already-requested",
+      "kind": "failure",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "我要申请退款，订单 ORD-EVAL-4009，金额 10 元",
+      "expected_intent": "REFUND_REQUEST",
+      "expected_outcome": "FAILED",
+      "expected_tool": "check_refund_eligibility",
+      "expect": {
+        "http_status": 201,
+        "task_status": "SUCCEEDED",
+        "contains": ["REFUND_ALREADY_REQUESTED"],
+        "tool_params": {
+          "check_refund_eligibility": {
+            "order_id": "ORD-EVAL-4009",
+            "amount_cents": 1000
+          }
+        },
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "refund-status-unknown",
+      "kind": "failure",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "我要申请退款，订单 ORD-EVAL-4010，金额 10 元",
+      "expected_intent": "REFUND_REQUEST",
+      "expected_outcome": "FAILED",
+      "expected_tool": "check_refund_eligibility",
+      "expect": {
+        "http_status": 201,
+        "task_status": "SUCCEEDED",
+        "contains": ["REFUND_STATUS_UNKNOWN"],
+        "tool_params": {
+          "check_refund_eligibility": {
+            "order_id": "ORD-EVAL-4010",
+            "amount_cents": 1000
+          }
+        },
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "refund-not-refundable-status",
+      "kind": "failure",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "我要申请退款，订单 ORD-EVAL-4011，金额 10 元",
+      "expected_intent": "REFUND_REQUEST",
+      "expected_outcome": "FAILED",
+      "expected_tool": "check_refund_eligibility",
+      "expect": {
+        "http_status": 201,
+        "task_status": "SUCCEEDED",
+        "contains": ["ORDER_STATUS_NOT_REFUNDABLE"],
+        "tool_params": {
+          "check_refund_eligibility": {
+            "order_id": "ORD-EVAL-4011",
+            "amount_cents": 1000
+          }
+        },
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "refund-exceeds-balance",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "我要申请退款，订单 ORD-EVAL-4015，金额 60 元",
+      "expected_intent": "REFUND_REQUEST",
+      "expected_outcome": "FAILED",
+      "expected_tool": "check_refund_eligibility",
+      "expect": {
+        "http_status": 201,
+        "task_status": "SUCCEEDED",
+        "contains": ["AMOUNT_EXCEEDS_REFUNDABLE"],
+        "tool_params": {
+          "check_refund_eligibility": {
+            "order_id": "ORD-EVAL-4015",
+            "amount_cents": 6000
+          }
+        },
+        "no_degradation": true
+      }
+    },
+    {
+      "id": "refund-exceeds-cap",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "request": "我要申请退款，订单 ORD-EVAL-4012，金额 51000 元",
+      "expected_intent": "REFUND_REQUEST",
+      "expected_outcome": "FAILED",
+      "expected_tool": "check_refund_eligibility",
+      "expect": {
+        "http_status": 201,
+        "task_status": "SUCCEEDED",
+        "contains": ["AMOUNT_EXCEEDS_POLICY_CAP"],
+        "tool_params": {
+          "check_refund_eligibility": {
+            "order_id": "ORD-EVAL-4012",
+            "amount_cents": 5100000
+          }
+        },
+        "no_degradation": true
+      }
+    }
+  ]
+}

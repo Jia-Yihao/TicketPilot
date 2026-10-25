@@ -1,0 +1,207 @@
+{
+  "version": 1,
+  "description": "评测专用演示数据。只由 evals/ 下的 runner 通过 evals.fixtures.apply 写入，不进入 app/seed.py，避免改变本地演示和业务测试的固定数据。日期字段用相对天数表示，保证任何时候运行都落在相同的政策窗口内。",
+  "orders": [
+    {
+      "id": "ORD-EVAL-4001",
+      "tenant_id": "demo",
+      "user_id": "alice",
+      "status": "DELIVERED",
+      "total_cents": 20000,
+      "refundable_cents": 20000,
+      "paid_days_ago": 8,
+      "delivered_days_ago": 2,
+      "note": "审批通过后退款成功"
+    },
+    {
+      "id": "ORD-EVAL-4002",
+      "tenant_id": "demo",
+      "user_id": "alice",
+      "status": "DELIVERED",
+      "total_cents": 18000,
+      "refundable_cents": 18000,
+      "paid_days_ago": 8,
+      "delivered_days_ago": 2,
+      "note": "审批拒绝"
+    },
+    {
+      "id": "ORD-EVAL-4003",
+      "tenant_id": "demo",
+      "user_id": "alice",
+      "status": "SHIPPED",
+      "total_cents": 9000,
+      "refundable_cents": 9000,
+      "paid_days_ago": 3,
+      "note": "审批等待中取消"
+    },
+    {
+      "id": "ORD-EVAL-4004",
+      "tenant_id": "demo",
+      "user_id": "alice",
+      "status": "SHIPPED",
+      "total_cents": 7000,
+      "refundable_cents": 7000,
+      "paid_days_ago": 3,
+      "note": "审批过期"
+    },
+    {
+      "id": "ORD-EVAL-4005",
+      "tenant_id": "demo",
+      "user_id": "alice",
+      "status": "CANCELLED",
+      "total_cents": 4000,
+      "refundable_cents": 4000,
+      "paid_days_ago": 4,
+      "note": "ORDER_CANCELLED"
+    },
+    {
+      "id": "ORD-EVAL-4006",
+      "tenant_id": "demo",
+      "user_id": "alice",
+      "status": "DELIVERED",
+      "total_cents": 6000,
+      "refundable_cents": 6000,
+      "paid_days_ago": 45,
+      "delivered_days_ago": 40,
+      "note": "RETURN_WINDOW_EXPIRED（政策窗口 30 天）"
+    },
+    {
+      "id": "ORD-EVAL-4007",
+      "tenant_id": "demo",
+      "user_id": "alice",
+      "status": "DELIVERED",
+      "total_cents": 5000,
+      "refundable_cents": 0,
+      "paid_days_ago": 8,
+      "delivered_days_ago": 2,
+      "note": "NO_REFUNDABLE_BALANCE"
+    },
+    {
+      "id": "ORD-EVAL-4008",
+      "tenant_id": "demo",
+      "user_id": "alice",
+      "status": "DELIVERED",
+      "total_cents": 5000,
+      "refundable_cents": 5000,
+      "paid_days_ago": 8,
+      "delivered_days_ago": 2,
+      "note": "已有成功退款记录：ALREADY_REFUNDED；也用于退款状态查询"
+    },
+    {
+      "id": "ORD-EVAL-4009",
+      "tenant_id": "demo",
+      "user_id": "alice",
+      "status": "DELIVERED",
+      "total_cents": 5000,
+      "refundable_cents": 5000,
+      "paid_days_ago": 8,
+      "delivered_days_ago": 2,
+      "note": "已有处理中退款记录：REFUND_ALREADY_REQUESTED"
+    },
+    {
+      "id": "ORD-EVAL-4010",
+      "tenant_id": "demo",
+      "user_id": "alice",
+      "status": "DELIVERED",
+      "total_cents": 5000,
+      "refundable_cents": 5000,
+      "paid_days_ago": 8,
+      "delivered_days_ago": 2,
+      "note": "已有未知状态退款记录：REFUND_STATUS_UNKNOWN"
+    },
+    {
+      "id": "ORD-EVAL-4011",
+      "tenant_id": "demo",
+      "user_id": "alice",
+      "status": "PLACED",
+      "total_cents": 3000,
+      "refundable_cents": 3000,
+      "paid_days_ago": 1,
+      "note": "ORDER_STATUS_NOT_REFUNDABLE"
+    },
+    {
+      "id": "ORD-EVAL-4012",
+      "tenant_id": "demo",
+      "user_id": "alice",
+      "status": "DELIVERED",
+      "total_cents": 6000000,
+      "refundable_cents": 6000000,
+      "paid_days_ago": 8,
+      "delivered_days_ago": 2,
+      "note": "超过单笔退款上限（50,000 元）：AMOUNT_EXCEEDS_POLICY_CAP"
+    },
+    {
+      "id": "ORD-EVAL-4013",
+      "tenant_id": "demo",
+      "user_id": "alice",
+      "status": "DELIVERED",
+      "total_cents": 3000,
+      "refundable_cents": 3000,
+      "paid_days_ago": 8,
+      "delivered_days_ago": 2,
+      "note": "没有物流记录"
+    },
+    {
+      "id": "ORD-EVAL-4014",
+      "tenant_id": "demo",
+      "user_id": "alice",
+      "status": "DELIVERED",
+      "total_cents": 0,
+      "refundable_cents": 0,
+      "paid_days_ago": 8,
+      "delivered_days_ago": 2,
+      "note": "零金额订单，订单查询边界"
+    },
+    {
+      "id": "ORD-EVAL-4015",
+      "tenant_id": "demo",
+      "user_id": "alice",
+      "status": "SHIPPED",
+      "total_cents": 5000,
+      "refundable_cents": 5000,
+      "paid_days_ago": 3,
+      "note": "金额超过可退余额；也用于乱序补槽"
+    },
+    {
+      "id": "ORD-EVAL-4016",
+      "tenant_id": "demo",
+      "user_id": "alice",
+      "status": "DELIVERED",
+      "total_cents": 5000,
+      "refundable_cents": 5000,
+      "paid_days_ago": 8,
+      "delivered_days_ago": 2,
+      "note": "缺金额 / 非法金额"
+    }
+  ],
+  "refunds": [
+    {
+      "id": "rfd_eval_succeeded_4008",
+      "order_id": "ORD-EVAL-4008",
+      "tenant_id": "demo",
+      "user_id": "alice",
+      "amount_cents": 2000,
+      "status": "SUCCEEDED",
+      "external_refund_id": "ext_eval_succeeded_4008",
+      "idempotency_key": "eval:refund:4008"
+    },
+    {
+      "id": "rfd_eval_requested_4009",
+      "order_id": "ORD-EVAL-4009",
+      "tenant_id": "demo",
+      "user_id": "alice",
+      "amount_cents": 2000,
+      "status": "REQUESTED",
+      "idempotency_key": "eval:refund:4009"
+    },
+    {
+      "id": "rfd_eval_unknown_4010",
+      "order_id": "ORD-EVAL-4010",
+      "tenant_id": "demo",
+      "user_id": "alice",
+      "amount_cents": 2000,
+      "status": "UNKNOWN",
+      "idempotency_key": "eval:refund:4010"
+    }
+  ]
+}
