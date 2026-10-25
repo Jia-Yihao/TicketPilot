@@ -34,7 +34,7 @@
 
 **2026-10-25 更新（第三条）**：「两库复跑 + 重排证据 + 说明书生成脚本」轮已完成，`app/` 一行没动。三件事：**PostgreSQL** 16.15 一次性容器（`ticketpilot-pg`，`127.0.0.1:55432`）上带 `TICKETPILOT_TEST_POSTGRES_URL` 跑全量 **458 passed / 0 skipped（109.92 s）**，3 条 PG-only 用例全部执行；同一容器上 Golden **40/40**、支持集 **61/61**，11 条迁移（head `c3b8e5a71d29`）+ `alembic check` 无漂移。T2 起 10 个文件（148 条）与四张新表第一次有 PG 证据。**重排**：LM Studio 不提供 `/rerank`，改用本机 Docker 的 Infinity（`michaelf34/infinity:latest-cpu`，`127.0.0.1:7998`，缓存挂 `E:/My-Agentix/reranker-cache`）服务 `bge-reranker-v2-m3`；17 条标注 / 68 条查询上 recall@1 **0.794 → 0.912**、MRR **0.875 → 0.956**、nDCG@5 **0.882 → 0.944**，但 recall@3 **0.971 → 0.912**、recall@5 不变；61 条查询 × 17 候选块、0 失败、mean 2277 ms / p50 2267 / max 2563，默认仍关闭。**说明书**：新增 `scripts/build_manual.py`（`make manual`），渲染后校验 `U+FFFD`=0、段落 / 表格 / 体积，失败不替换旧文件；docx 已重生成。门禁同轮复跑：ruff 全绿、mypy 134 文件零错误、**455 passed / 3 skipped（收集 458、97.95 s）**、Golden 40/40、支持集 61/61、检索 `GATE PASSED`、回放 `REPLAY DIFF EMPTY`、`alembic check` 无漂移、`npm run build` 通过。**没有做的**：四通道检索指标脚本未在 PG 上跑；重排只在 CPU 上、无生产部署与延迟预算；docx 只做编码 / 结构校验，不做排版对照；浏览器截图仍未取。
 
-**2026-10-25 更新（第四条）**：「五通道两库 + 重排延迟预算 + 说明书版面实看」轮已完成，**代码只动了一处**。三件事：**① 检索指标脚本在 PostgreSQL 上真跑了**——`evals/retrieval_metrics.py --channels bm25,dense,hybrid,gated,rerank` 在独立的 `tp_eval` 库上跑出**五行读数，与 SQLite 逐位一致**（recall@1 0.794 / 0.853 / 0.794 / 0.794 / 0.912，gated 的 `dense_trigger_rate` 0.2941）。能一致的前提是**修掉了一个真实的可复现性缺陷**：`PolicySearchService.visible_chunks()` 原本没有 `ORDER BY`，行序随数据库而变 → BM25 同分行的次序变 → 重排拿到的候选集变 → 同一份语料在两个库上排出不同名次。现在它按块 ID 排序（`app/retrieval/search.py`，本轮唯一的行为改动），两库逐位一致。**② 重排延迟有了可执行的预算判定**——新增 `evals/rerank_latency.py`，把计时探针插进**生产**的 `HybridPolicySearch`（量的是线上那条融合后的候选集，15 条），实测 60 次计时、0 失败、0 空候选：mean 2300 / p50 2281 / **p95 2602** / min 2081 / max 2689 ms，对 300 ms 的交互预算判 **OVER BUDGET**（`--enforce` 退出码 1）。结论从「没测」变成「测了，超预算」——这台纯 CPU 机器上重排不能进请求路径。**③ 说明书 docx 做了版面目视检查**：docx → PDF（Gotenberg 8 容器内 LibreOffice）→ PNG（容器内 `pdftoppm`）→ 逐页看标题页 / 正文 / 表格 / 复选框；复选框里的空心方块是**真实的 U+2610 球票框**（`pdftotext` 字节级核对），不是豆腐块，U+FFFD 计数 0、无 `w:sym` / 私用区字符。门禁同轮复跑：SQLite 基线 **496 passed / 6 skipped**（收集 502、43 个测试文件、118.54 s），**PostgreSQL + Redis 两个容器同时指上是 502 passed / 0 skipped（119.71 s）**，13 条迁移（head `b4e8d2f6a1c9`）+ `alembic check` 无漂移，Golden 40/40、支持集 61/61、检索 `GATE PASSED`、回放 `REPLAY DIFF EMPTY`、ruff 全绿、mypy strict **137** 文件零错误、`npm run build` 通过。**没有做的**：生产托管 embedding / rerank 的接入与压测；服务商侧投递；浏览器截图仍未取（应用内浏览器当时没有可见视口）。
+**2026-10-25 更新（第四条）**：「五通道两库 + 重排延迟预算 + 说明书版面实看」轮已完成，**代码只动了一处**。三件事：**① 检索指标脚本在 PostgreSQL 上真跑了**——`evals/retrieval_metrics.py --channels bm25,dense,hybrid,gated,rerank` 在独立的 `tp_eval` 库上跑出**五行读数，与 SQLite 逐位一致**（recall@1 0.794 / 0.853 / 0.794 / 0.794 / 0.912，gated 的 `dense_trigger_rate` 0.2941）。能一致的前提是**修掉了一个真实的可复现性缺陷**：`PolicySearchService.visible_chunks()` 原本没有 `ORDER BY`，行序随数据库而变 → BM25 同分行的次序变 → 重排拿到的候选集变 → 同一份语料在两个库上排出不同名次。现在它按块 ID 排序（`app/retrieval/search.py`，本轮唯一的行为改动），两库逐位一致。**② 重排延迟有了可执行的预算判定**——新增 `evals/rerank_latency.py`，把计时探针插进**生产**的 `HybridPolicySearch`（量的是线上那条融合后的候选集，15 条），实测 60 次计时、0 失败、0 空候选：mean 2300 / p50 2281 / **p95 2602** / min 2081 / max 2689 ms，对 300 ms 的交互预算判 **OVER BUDGET**（`--enforce` 退出码 1；收尾复跑一次 p95 2497 ms，判定不变）。结论从「没测」变成「测了，超预算」——这台纯 CPU 机器上重排不能进请求路径。**③ 说明书 docx 做了版面目视检查**：docx → PDF（Gotenberg 8 容器内 LibreOffice）→ PNG（容器内 `pdftoppm`）→ 逐页看标题页 / 正文 / 表格 / 复选框；复选框里的空心方块是**真实的 U+2610 球票框**（`pdftotext` 字节级核对），不是豆腐块，U+FFFD 计数 0、无 `w:sym` / 私用区字符。门禁同轮复跑：SQLite 基线 **496 passed / 6 skipped**（收集 502、43 个测试文件、118.54 s），**PostgreSQL + Redis 两个容器同时指上是 502 passed / 0 skipped（119.71 s）**，13 条迁移（head `b4e8d2f6a1c9`）+ `alembic check` 无漂移，Golden 40/40、支持集 61/61、检索 `GATE PASSED`、回放 `REPLAY DIFF EMPTY`、ruff 全绿、mypy strict **137** 文件零错误、`npm run build` 通过。**没有做的**：生产托管 embedding / rerank 的接入与压测；服务商侧投递；浏览器截图仍未取（应用内浏览器当时没有可见视口）。
 
 下一步的价值不在「再加一个后端能力」，而在五件事：
 1. **把出站投递接到真实服务商上**——`OutboundTransport` 现在只有拒绝发送的默认实现与写本地文件的演示实现，`SENT` 的含义止于"离开本应用"；真协议还需要送达回执，那是另一个状态，不能复用 `SENT`（G7 余项）；
@@ -757,6 +757,13 @@ python evals/rerank_latency.py --rerank-url http://127.0.0.1:7997/rerank --enfor
 默认仍关闭，但理由从猜测换成了数字。诚实的边界：p95 是这台机器上的一次读数，
 300 ms 是我们定的决策值，两者的边界是「这台 CPU 机器 + 这份交互目标」，不是通用结论。
 
+**收尾复跑**（提交前在同一台机器上又跑了一次同一脚本）：mean 2326 / p50 2308 / **p95 2497** /
+min 2139 / max 2646 ms，判定仍是 **OVER BUDGET**——百分位随机器负载浮动，判定不动
+（p95 始终是预算的 8～10 倍）。复跑有一个前提：候选集是稀疏 + 稠密**融合后**的 15 条，
+所以要带上稠密端点（`EMBEDDING_BASE_URL` / `EMBEDDING_MODEL`）；只配重排端点时融合集退化成
+纯稀疏，候选数掉到 `min 1`，量的是另一条口径。这条前提已同步进 README 的重排节与
+`docs/EVALS.md` 的「重排的延迟预算」节，免得复现的人踩空。
+
 **③ 说明书 docx 做了版面目视检查**
 
 上一轮只做了结构与编码校验（`U+FFFD` = 0）。这一轮把 docx 真的渲染成图看：
@@ -780,6 +787,21 @@ docker run --rm -v /d/Code/TicketPilot/docs:/work gotenberg/gotenberg:8 \
 抽查本轮关键串全部命中：`OVER BUDGET`(6) · `visible_chunks`(5) · `ORDER BY`(4) · `502 passed / 0 skipped`(6) ·
 `119.71`(6) · `tp_eval`(7) · `rerank_latency.py`(4) · `b4e8d2f6a1c9`(5) · `0.2941`(3) · `2602`(3)。
 重生成用的是 `docs/PROJECT_SPEC.md` 这一个来源文件，所以文档改完就重跑一次 `make manual` 即可回灌。
+
+**提交前的收尾复跑又改了规格两次**（补上「复跑一次 p95 2497 ms，判定不变」与「复跑要带稠密端点，
+否则候选数掉到 `min 1`」两条，并修 §11.5 那张表的版式），说明书**又重生成了一轮**，最终：
+**220,284 字节 / 3,552 个 XML 段 / 76 张表 / `U+FFFD` 计数 0 / 13 个 XML part**。
+关键串复测：`OVER BUDGET`(9) · `visible_chunks`(5) · `ORDER BY`(4) · `502 passed / 0 skipped`(7) ·
+`119.71`(6) · `tp_eval`(7) · `rerank_latency.py`(4) · `b4e8d2f6a1c9`(6) · `0.2941`(4) · `2602`(4) ·
+`2497`(2) · `min 1`(1) · `U+2610`(3) · `134.07`(1)。
+`w:sym` 的命中是**正文里提到的那三个字**（`VerbatimChar` 样式的一段文字），
+真实的 `<w:sym>` 元素 **0** 个、私用区字符 0 个。
+
+**重生成时顺手修掉一个版式缺陷**：§11.5 那张七列的延迟表在 PDF 里把 `OVER BUDGET`
+挤成了三行（`OVER` / `BUDGE` / `T`）。改成三列（指标 / 记录读数 / 复跑读数）后判定单元格一行放下，
+两次读数并排可比。**改的是 markdown 源表，不是对 docx 动的手**——重生成后第 81 页重新渲染看过：
+表头、表格线、加粗判定、空心方块都正常，PDF 仍是 **219 页**（页数没变，只是内容更清楚）。
+渲染后的 PDF 文本里仍有 **26 个真 U+2610 空心方块**与 2 个 U+2713 对勾（`pdftotext` 逐字符统计），不是豆腐块。
 
 **目视检查在最终版 docx 上又做了一遍**（不是上一版的）：219 页的 PDF 里抽了 5 页看——
 第 1 页（标题页与事实基线）、第 79 页（§11.5 的两库一致性）、第 108 页（§14.2.1 与一张表）、
