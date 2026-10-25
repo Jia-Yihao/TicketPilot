@@ -108,6 +108,11 @@ PUT /api/v1/memory/rules/{event_type}
 - 新增的 21 条用例**尚未在 PostgreSQL 上复跑**（本机装有 Docker，上一轮的 PostgreSQL 16.15 一次性容器就是用它跑出 `323 passed` 基线的；这一轮收尾时守护进程没有运行，没有再起容器——缺的是执行，不是环境）。这一轮尤其需要它：`409 RULE_ALREADY_EXISTS` 靠的是唯一约束，而 SQLite 与 Postgres 在冲突语义上正是最需要对照的地方。累计待 PG 复跑的是 T2 起新建的 9 个测试文件，当前共 **141 条**（含本轮新增的 21 条）。
 
 > **修订（2026-10-25）**：上面这条「尚未在 PostgreSQL 上复跑」是 2026-10-24 收尾当天的读数。次日已用本机 Docker 起 PostgreSQL 16.15 临时容器补跑全量：**458 passed / 0 skipped（109.92 秒）**，T2 起新建的 10 个测试文件全部覆盖（§107 记的 141 条 + `test_llm_gap.py` 7 条），本轮 21 条中含 `409 RULE_ALREADY_EXISTS` 的用例——唯一约束在 Postgres 上的冲突语义已被真跑验证，不再是待办。同轮在独立 `eval_pg` 库上跑通 11 条迁移（head `c3b8e5a71d29`）与 `alembic check`（无漂移），Golden 40/40、支持集 61/61。§107 的规模读数也随之更新：SQLite 全量 **455 passed / 3 skipped**（收集 458，34 个测试文件，增量来自 T10 之后新增的 `test_llm_gap.py`）；OpenAPI 仍是 41 路径 / 44 操作。**仍未执行**：四通道检索指标脚本（`scripts/retrieval_metrics.py`）的输出本身没有在 PG 上产出过——PG 上跑的是 `test_retrieval_eval.py` 的断言，不是那张指标表。
+>
+> **修订（2026-10-25，第二次）**：上面两条都已过时，本 ADR 的规则写面**在 PostgreSQL 上有实测**。
+> 检索指标脚本 `evals/retrieval_metrics.py --channels bm25,dense,hybrid,gated,rerank` 在 `tp_eval` 库上跑出**五行读数，与 SQLite 逐位一致**；前提是修掉 `visible_chunks()` 缺 `ORDER BY` 导致的行序不确定（`app/retrieval/search.py`）。
+> 同时指上 Redis 容器后，全量是 **502 passed / 0 skipped（119.71 s）**，迁移链 **13 条**、head `b4e8d2f6a1c9`，`alembic check` 无漂移。
+> §107 与本修订里那组「41 路径 / 44 操作」「447 passed / 3 skipped」是 T10 当天的读数，现已更新为 **42 路径 / 45 操作**与 SQLite 基线 **496 passed / 6 skipped**（收集 502、43 个测试文件）、mypy strict **137** 个文件。
 
 ## 备选方案
 

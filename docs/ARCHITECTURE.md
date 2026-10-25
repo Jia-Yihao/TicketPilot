@@ -27,8 +27,8 @@ flowchart TD
 - `agent/intents.yaml`：统一意图目录（数据，不是代码）；`agent/intent_catalog.py` 读它并路由
 - `agent/routing.py`：确定性规则
 - `agent/escalation.yaml` + `agent/escalation.py`：升级触发表与判定
-- `agent/pydantic_agent.py`：只做结构化抽取；失败自动回退规则
-- `agent/support_agent.py`：只读客服 Agent（本地规则，不调用模型）
+- `agent/pydantic_agent.py`：只做结构化抽取；失败自动回退规则。业务校验（`order_id` 形状、金额为正）在 `@agent.output_validator` 里，不合格就 `ModelRetry` 让模型重问；`ModelTrace` 带请求 / 重试 / token / 耗时计数
+- `agent/support_agent.py`：只读客服 Agent；本地规则分类 + 会话槽位，**在规则读不懂且不是问句时**才问模型（见「模型调用的三级门控」）
 - `agent/actions.py`：意图到动作的注册表，写动作与只读动作在这里分开
 - `services/support.py` + `services/catalog.py`：上下文卡片与商品目录，渐进式披露的正文来源
 - `services/handoff.py` + `agent/handoff.py`：上下文移交包与接管状态机
@@ -271,12 +271,14 @@ sequenceDiagram
 | `trace_spans` | 一次对话或任务的 span 树 |
 | `sql_queries` | 自助统计台账（成功与拒绝都记） |
 | `outbox_messages` | 待投递的状态同步消息（与业务事实同事务写入） |
+| `llm_usage` | 模型用量账本：每次模型运行一行（请求 / 重试 / token / 耗时 / 状态 / 来源） |
 
 关键约束：
 
 - `tool_executions(task_id, idempotency_key)` 唯一
 - `refunds.idempotency_key` 唯一
 - `tickets(tenant_id, idempotency_key)` 唯一
+- `tasks(tenant_id, user_id, idempotency_key)` 唯一（`uq_tasks_idempotency`，任务创建幂等键）
 - `outbox_messages(dedupe_key)` 唯一（同一事实只排一条消息）
 - 同一任务最多一个 `PENDING` 审批（部分唯一索引，SQLite/PostgreSQL 均支持）
 - 同一订单同一动作最多一个 `PENDING`/`APPROVED` 审批（`uq_approvals_open_per_resource`）
@@ -340,12 +342,58 @@ PENDING → APPROVED → CONSUMED
 - 过滤：租户、`ACTIVE`、`effective_from <= today <= effective_to`
 - 稀疏通道：BM25 + 标题/小节命中加权
 - 稠密通道（可选）：`HashingEmbedder` 离线可用；配置真实嵌入服务时走 `OpenAICompatibleEmbedder`
+- **稠密门控**：稠密不是「开关一开就每次都问 embedding」。`DenseGate` 在调用 embedding **之前**判一次——BM25 top-1 分数低于 5.0（`weak_sparse`），或 top-1 块的**词覆盖率** ≤ 0.35（`low_coverage`），才放行稠密；否则跳过（`sparse_confident`）。理由是实测出来的：17 条标注里 3 条 rank-1 没命中，它们的 BM25 分数是 12.96 / 20.64 / 25.31——**BM25 错得很自信**，所以分数门槛在这三条上永远不会响，而它们的覆盖率恰好是最低的三条。门控后的指标与无条件稠密同级，embedding 调用从 17 次降到 5 次（标定过程见 [ADR-021](adr/ADR-021-dense-channel-gate.md)）
 - 融合：两路结果用 RRF（reciprocal rank fusion）合并，只有单路命中的片段也有机会进前列
 - 重排（可选）：对融合后的候选重排，**失败即放开**——重排服务不可达时检索链路照常工作
 - 回答：抽取式引用，明确标注文档标题、版本、小节
 - 默认部署只开稀疏通道：没有稠密服务与已存向量时自动降级，不影响功能
 
 > 稠密、重排与融合实现在 `app/retrieval/dense.py`、`fusion.py`、`rerank.py`、`hybrid.py`，统一保持「可选、失败可退化」的性质，没有把外部服务变成硬依赖。
+
+## 模型调用的三级门控
+
+对话入口（`_consult_model`）是**唯一**能碰模型的地方，它前面有一道写下来的判定（`app/agent/support_agent.py::model_gate`）：
+
+```mermaid
+flowchart LR
+    A["一轮对话"] --> B{"规则读懂了吗?"}
+    B -->|读懂| R["rules_hit<br/>不问"]
+    B -->|读不懂| C{"是问句吗?"}
+    C -->|是| Q["question<br/>不问"]
+    C -->|否| D{"AGENT_MODE<br/>= pydantic_ai?"}
+    D -->|否| R2["rules<br/>不问"]
+    D -->|是| M["consult<br/>问模型"]
+    M --> N{"读出的是退款意图?"}
+    N -->|是| AD["采纳意图<br/>金额不采纳"]
+    N -->|否| NO["不采纳"]
+```
+
+三档的含义：
+
+| 档 | 条件 | 动作 |
+|---|---|---|
+| `rules_hit` | 意图目录读懂了这一轮（`UNKNOWN` 除外；只因带订单号命中 `ORDER_QUERY` 也算读不懂） | 不问 |
+| `question` | 规则读不懂，但这句是问句（`blocks_write_action`） | 不问——问句没有能采纳的写意图，问了也白花钱 |
+| `consult` | 规则读不懂 + 不是问句 | 问；**只采纳 `REFUND_REQUEST`**，金额不采纳 |
+
+判定结果写进 `understand` span 的 `model_gap.gate`，**只用于观测**，没有任何分支读它来决定下一步。`AGENT_MODE=rules` 在碰模型前就返回，确定性路径一行未改。
+
+理由与实测见 [ADR-024](adr/ADR-024-three-level-model-gate.md)。
+
+## 模型用量的落库
+
+每次模型运行写一行 `llm_usage`（`app/services/llm_usage.py`）：请求数、重试数、输入 / 输出 token、墙钟耗时、状态、来源（`task` / `chat`）、规划来源、模型名，以及归属的 `task_id` / `conversation_id`。
+
+- **任务路径**与 `task.routed` 事件在**同一个事务**里写入——要么都有，要么都没有；
+- **对话路径**写在**这一轮自己的 session** 上（另开连接会在 SQLite 上等这一轮的写锁），失败时放过：记账不该变成可用性依赖；
+- 读取接口 `GET /api/v1/analytics/llm-usage` 给租户级汇总（总量、按来源拆分、最近若干行）。
+
+进程内的 `IntentAgent.usage` 计数仍然存在，但**它不是账本**——进程一重启就归零。跨 worker 的口径以 `llm_usage` 表为准（见 [ADR-023](adr/ADR-023-cross-process-seams.md)）。
+
+## 限流与幂等的两条接缝
+
+- **限流**：`RateLimitStore` 有两个实现。默认 `TokenBucket` 是进程内的，N 个 worker 就是 N 倍预算；`RATE_LIMIT_STORE=redis` + `REDIS_URL` 换成 `RedisFixedWindow`（`INCR` + `EXPIRE`，一分钟一个窗口），配额变成**跨进程的一个事实**。窗口粗，租户可以在分钟边界前后花掉两个窗口；Redis 挂掉时**退回本地桶**，不放行全部流量。
+- **任务幂等**：`POST /api/v1/tasks` 接受 `Idempotency-Key` 头。同键 + 同请求摘要 → 回放已有任务（返回体带 `idempotent_replay: true`），同键 + 不同摘要 → 409。仲裁者是唯一索引 `uq_tasks_idempotency`（`(tenant_id, user_id, idempotency_key)`），**不是应用层的时序**；应用层先查后建只是省掉常见的顺序重试。
 
 ## 身份
 

@@ -25,15 +25,19 @@
 - 工具执行器：失败形态分类、超时预算、退避重试、熔断、降级链；副作用与「结果未知」绝不重试
 - 回执模板：金额与单号由工具返回值渲染，模型不书写
 - 事务性 Outbox：消息与业务事实同事务写入，worker 认领后投递，退避耗尽进死信
-- 政策 BM25 检索、有效期与租户过滤、引用；可选的稠密通道、RRF 融合与重排（失败可退化）
+- 政策 BM25 检索、有效期与租户过滤、引用；可选的稠密通道、RRF 融合与重排（失败可退化）；稠密通道按 **BM25 的盲区触发**（覆盖率 + 分数两个信号，出厂 `0.35` / `5.0`），门控只省 embedding 调用、不提准确率
 - 客服会话状态：按「租户 + 用户」的槽位承接、缺槽位追问一次并自动续跑
+- 模型调用的三级门控：规则读懂不问、问句不问、只有「规则读不懂且是动作句」才问；判定写进 span 但不参与决策
+- 模型业务校验收在 Agent 合同内（`output_validator` + `ModelRetry`），重试次数由用量派生并进 `ModelTrace` / span / 用量账本
 - 转人工一等公民：上下文移交包、接管状态机、坐席侧队列/接手/交还/结案 API 与接管指标
 - 受控 Text-to-SQL 自助统计：计划 → AST → 守卫 → 只读执行 → 台账，问不出来就拒绝
 - 任务状态机、事件流回放
 - 链路追踪（span 树、span 健康度指标）与日志/trace 的 PII 脱敏
 - 输入护栏：注入 / 规则绕过 / 敏感内容识别，命中写 `security_events`，不改变业务判定
 - 输出护栏：金额、时效、百分比与承诺类断言无工具/卡片/任务来源时替换为「需确认」
-- 滥用防护：租户 + IP 双维度令牌桶（429 + `Retry-After`）、JSON 请求体与 multipart 体积上限（413）
+- 滥用防护：租户 + IP 双维度令牌桶（429 + `Retry-After`）、JSON 请求体与 multipart 体积上限（413）；`RATE_LIMIT_STORE=redis` 时配额跨 worker 共享（固定窗口，Redis 挂了退回进程内桶）
+- 任务创建的 `Idempotency-Key`：同键同摘要重放返回同一任务，同键异摘要 409，由数据库唯一索引裁决
+- 模型用量账本 `llm_usage`：请求 / 重试 / token / 耗时跨 worker 可查（`GET /api/v1/analytics/llm-usage`）
 - 安全事件查询 API 与运营看板卡（按类别分列拦截 / 改写 / 留痕）
 - 渠道抽象：`ChannelAdapter` 能力矩阵（8 个渠道声明）+ 签名入站（Web / 邮件 / 微信 / 企业微信）+ 数据库级投递幂等 + 按渠道形状渲染；加渠道不改 `app/agent/` 与 `app/services/`
 - 渠道溯源：入站渠道写进移交包与放弃事件，只做溯源，不参与路由与资格判定
@@ -56,6 +60,10 @@
 - 真实服务商的主动推送：Outbox 的两种消息（`refund.pending_confirmation`、`proactive.confirmed`）现在都有消费者，`proactive.confirmed` 会把渲染结果交给配置的出站传输并把通知推到 `SENT`。但传输只有两个演示实现——`none`（拒绝一切）与 `local_file`（写本地文件），**没有 SMTP / 微信 / 企业微信的真实协议**，所以 `SENT` 的含义止于"已离开本应用"，不等于客户收到。接服务商是 `OutboundTransport` 的第四个实现，不改队列
 - 真实平台协议对接：渠道验签是本仓库自定的 HMAC 方案，微信 / 企业微信 / 邮件服务商的真实签名、回调登记与消息格式一个都没接
 - 退款 reserve/settle 两段式执行段（当前为单段执行 + 对账）
+- 跨 worker 共享的限流配额**默认不开**（`RATE_LIMIT_STORE` 出厂是 `memory`，多 worker 部署时每个进程各有一份预算）
+- 按会话 / 按用户的**模型预算**：用量账本能记账，不能在下一次调用前把它拦下来
+- 稠密门控的**在线评估**：只有离线阈值扫描，没有「门控放行了但稠密没捞回来」与「门控本该放行」的区分
+- 重排的**在线部署与延迟预算**：本机 CPU 端点每次约 2.3 秒，超过交互预算（默认 300 ms），所以默认关闭；预算判定写成可执行脚本（`evals/rerank_latency.py`），但没有生产级部署
 
 ## 为什么不全交给 Agent
 
@@ -79,8 +87,8 @@ LLM 输出只能作为**建议或槽位来源**；任何写操作都必须经过
 
 ## 验收口径
 
-- 455 个默认 pytest 用例通过（收集 458、34 个测试文件，3 个 PostgreSQL 专项默认跳过）；**PostgreSQL 16.15 同轮全量 458 passed / 0 skipped（109.92 s）**，T2 起新增的 10 个文件（148 条，含并发与 Outbox 认领竞态）与四张新表（T4 的 `channel_messages` + T5 的档案/规则/通知）全部覆盖；Golden 40/40、支持集 61/61 也在 PG 上跑过。仍未在 PG 上跑的是四通道检索指标脚本本身
-- `ruff check .` 与 `mypy app`（strict，134 个文件）零告警
+- 496 个默认 pytest 用例通过（收集 502、43 个测试文件，6 个 PostgreSQL / Redis 专项默认跳过）；**PostgreSQL 16.15 同轮全量 500 passed / 2 skipped（134.77 s）**（跳过的 2 条是 Redis 用例，指向本机 Redis 容器后 2 passed；两个容器同时指上则是 **502 passed / 0 skipped**，119.71 s），T2 起新增的文件与四张新表（T4 的 `channel_messages` + T5 的档案/规则/通知）全部覆盖；Golden 40/40、支持集 61/61 也在 PG 上跑过。**五通道检索指标脚本本身也在 PG 上跑过**（`--channels bm25,dense,hybrid,gated,rerank`，读数与 SQLite 逐位一致，见 [PROJECT_SPEC](PROJECT_SPEC.md) §11.5）
+- `ruff check .` 与 `mypy app`（strict，137 个文件）零告警
 - 任务路径 Golden Set 40 条全过（SQLite；上一轮 10 条在 SQLite 与 PostgreSQL 16 均实测）
 - 只读路径支持集 61 条全过（12 意图 × 正常/边界/失败，含多轮澄清与续跑）
 - 回放自检 diff 为空；分层抽样可产出按渠道×意图封顶的 bad case JSONL
@@ -95,7 +103,7 @@ LLM 输出只能作为**建议或槽位来源**；任何写操作都必须经过
 - T9 记忆个性化在线真跑（2026-10-24，`127.0.0.1:8131` 开、`8132` 用 `MEMORY_PERSONALIZATION_ENABLED=false` 关，`.tmp/t9_live.db` 由 Alembic 建库 + seed）：59 条 HTTP 断言全过（`59 checks, 0 failures`）——无档案时回复里没有称呼且响应不带 `personalization`、**问答路径不建档案行也不写 `memory.*` 审计**（整个会话里只有客户自己的 3 次 `PUT` 留下审计）、`tone=concise` 把追问裁到两条、档案里的 `王经理 / 周五下午三点 / <script>alert(1)</script>` 一类自由文本一个字都没进回复、重复兴趣只产一条追问、第二轮不再重复称呼、Trace 里 `generate / memory.personalize` 排在输出护栏之前且只带效果码与字段名（不带档案值、不带档案行 ID）、答案轮不碰 `updated_at`、渠道 `/channels/web/messages` 入口同样个性化且重投读回的回复逐字不变、关掉开关后回复与建议与「写档案之前」逐字相同、`DELETE` 后回到基线且档案行归零。浏览器侧：售后对话页在个性化那一轮只出现一条 `<p class="support-inherit">本轮按你的档案调整过：…</p>`。随后在**另一个干净库**上以 `8133`（开）/ `8134`（关）复跑仍是 `59 checks, 0 failures`——第一次那轮跑完再原地重跑会假失败 2 条，因为脚本里「答案路径不写 `memory.*` 审计」「审计里只有客户自己的 3 次 `PUT`」这两条数的是**整张 `audit_events` 表**，换干净库才归零
 - 主动规则可编辑面（T10）：21 条用例锁住写时校验的拒绝形状（未知 context 键 / 花括号不配对 / 位置参数 `{}` / 带属性或下标的占位符 / 超长 / 空模板 / 空请求体 / 请求体带 `requires_confirmation` / 冷却越界）、未知事件类型 422、并发写同一条 409、停用后 `emit` 抑制 `NO_RULE` 再启用恢复、冷却 60 → 0 后同一事件立即可再发、改动**不回溯**已落库的通知、审计里只有 `template_sha256`（断言模板原文不在 detail 序列化结果里）、跨租户既看不见也改不到、`GET /rules` 的 `required_context` 列出模板字段
 - T10 规则可编辑面在线真跑（2026-10-24，`127.0.0.1:8135`，`.tmp/t10_live.db` 由 Alembic 建库 + seed）：52 条 HTTP 断言全过（`52 checks, 0 failures`）——读三条种子规则 → 改退款模板 → `POST /memory/events` 看到新文案逐字生效 → 停用 → `NO_RULE` → 恢复 → 冷却改 0 立即重发 → 审计 9 行里只有 sha256 → 客户身份 403。浏览器侧：坐席在「通知规则」页改文案保存后刷新仍在（`updated_at` 变了）、三种坏模板把服务端的 422 原文回显在页面上、停用 / 启用后摘要计数在 3/3 ↔ 2/3 之间变、客户身份进页面看到拒绝面板且**一个规则请求都不发**
-- Alembic `upgrade head` 在 SQLite 与 PostgreSQL 实跑，`alembic check` 无漂移（11 条迁移、23 张表，head `c3b8e5a71d29`）
+- Alembic `upgrade head` 在 SQLite 与 PostgreSQL 实跑，`alembic check` 无漂移（13 条迁移、24 张表，head `b4e8d2f6a1c9`）
 - Docker Compose 镜像构建、非 root 容器启动、迁移与业务链路实测通过
 - 控制台在浏览器中实测：审批通过/驳回、对话发起退款、跨页面复核跳转、接管/交还/结案、运营指标与时段切换、Trace 展开、任务事件时间线与 1440px/390px 布局；客户身份访问坐席/运营页被拒绝
 - P0 已修复：审批越权/自批、订单级并发双退款、生产配置 fail-closed

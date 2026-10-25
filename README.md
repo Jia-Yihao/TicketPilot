@@ -366,11 +366,78 @@ LOGISTICS_QUERY  UNKNOWN          -> UNKNOWN
 
 **为什么是两次调用**：对话入口的结论不会被递给任务台账。`create_task` 进 `_run` 之后，`brain.plan` 用同一份请求和槽位**重新**算一次，`task.routed` 记的是这一次的 `planning_source`。一次对话退款因此问两次模型（上一条实测正是 `calls=2`、20.3 秒）。这是故意的：台账不接受调用方递进来的结论，入口那道门写错时，最坏情况是多追问一轮，而不是一条被入口指定了意图的退款单。
 
-`AGENT_MODE=rules` 的确定性用一条更硬的断言钉住：测试里把 `IntentAgent` 换成一个"被调用就失败"的桩，整段规则模式对话跑完，桩一次没响。`tests/test_llm_gap.py` 现在 7 条（离线、不依赖模型服务）：规则读不懂这些句子、`IntentBrain` 只在缺口上采纳模型、`rules` 模式一次不问、问了但模型也读不懂时不建任务、问句不花调用、采纳退款后任务仍等人工审批且台账来源是 `pydantic_ai`、直接调任务接口会问一次。全量 **455 passed / 3 skipped**。
+`AGENT_MODE=rules` 的确定性用一条更硬的断言钉住：测试里把 `IntentAgent` 换成一个"被调用就失败"的桩，整段规则模式对话跑完，桩一次没响。`tests/test_llm_gap.py` 现在 9 条（离线、不依赖模型服务）：规则读不懂这些句子、`IntentBrain` 只在缺口上采纳模型、`rules` 模式一次不问、问了但模型也读不懂时不建任务、问句不花调用、采纳退款后任务仍等人工审批且台账来源是 `pydantic_ai`、直接调任务接口会问一次。全量 **496 passed / 6 skipped**（收集 502、43 个测试文件；6 条是 PostgreSQL / Redis 专项）。
 
 我没有采纳读意图，也没有设置信度阈值：`IntentOutput` 里虽然带 `confidence`，但没有一份真实工单语料能告诉我阈值该是多少，拍一个数只是把"我选的"伪装成"算出来的"。这两个缺口和"11 句是我写的、不是真实工单"一起，写在 [ADR-020](docs/adr/ADR-020-chat-model-gap.md) 的后果段里。
 
 标签是我自己打的：这 11 句证明"词表外的说法确实存在、模型确实能捞回一部分、接上对话入口后能把它送进待审队列"，**不**证明这类说法在真实队列里有多常见。真实工单语料仍然是缺口。
+
+### 模型什么时候被问：一道三级门控，以及"校验失败→重试"变成看得见的数
+
+上面两节都是"模型被问了之后发生了什么"。这一轮补的是它前面那一段：**什么时候根本不问**，以及**问了之后模型给错形状时会怎样**。
+
+**第一件事：业务校验搬进 Agent 合同。** 原来"订单号必须像 `ORD-` 开头"是路由层要防的事——模型给个 `ORDER-123` 出来，缺陷在下游。现在它挂在 `@agent.output_validator` 上，抛 `ModelRetry` 把理由送回模型：
+
+```python
+@self._agent.output_validator
+def _business_rules(output: IntentOutput) -> IntentOutput:
+    if output.order_id is not None and not _ORDER_ID.fullmatch(output.order_id):
+        raise ModelRetry("order_id 必须是 ORD- 开头的订单号，且只能逐字复制；没有订单号时给 null。")
+    if output.amount_cents is not None and output.amount_cents <= 0:
+        raise ModelRetry("amount_cents 必须是正整数分；未给金额时给 null。")
+    return output
+```
+
+区别在归属：重试发生在 **Agent 合同内部**，路由层不再需要为畸形输出写防御分支；模型被告知"你哪里错了"，它自己改一次，而不是被静默降级成规则结果。
+
+**第二件事：重试次数是一等观测对象。** `IntentAgent.parse` 现在返回 `(IntentOutput, ModelTrace)`，重试次数由用量**派生**而不是猜：`retries = max(0, requests - 1)`——一次运行用了两个请求，说明第一次输出没通过校验。同一个数有三个落点：
+
+| 落点 | 形式 | 用途 |
+|---|---|---|
+| `ModelTrace` | `retries` 字段 | 进程内立即可读 |
+| `task.routed` span 属性 | `model_retries` | 回放时看得出"这一单问了几次" |
+| `llm_usage` 表 | `requests` / `retries` 列 | 跨 worker 的账本 |
+
+**第三件事：OTel 是导出路径，不是依赖。** `opentelemetry-api` 是 `pydantic-ai-slim` 的硬依赖（已在 `pydantic_ai_slim-2.60.0.dist-info/METADATA` 里核对），但 OTel SDK **不在**依赖里，所以全局 provider 是一个 no-op——没人装 exporter 就不花钱。开了 `AGENT_OTEL_INSTRUMENT` 后走 PydanticAI 自己的 `InstrumentedModel`，**每次模型请求一个 `chat <model>` CLIENT span**，所以一次校验重试会看到两个 span。`tests/test_model_instrumentation.py` 用假 tracer provider 把这条钉死（5 条用例），不需要真模型。
+
+**第四件事：三级门控，问句不进模型。** `app/agent/support_agent.py::model_gate(plan, route, message)` 在**调用之前**写下这一轮要不要问模型：
+
+| 档 | 条件 | 后果 |
+|---|---|---|
+| `rules_hit` | 规则已经读懂这一轮 | 不问模型 |
+| `question` | 规则读不懂，但消息是问句（`blocks_write_action`） | 走读路径，不问模型 |
+| `consult` | 规则读不懂且是动作句 | 问模型，且**只采纳退款意图** |
+
+判定结果写进 `understand` span 的 `model_gap.gate` 属性，是**观测项而不是控制信号**——它记录"这一轮为什么没问模型"，但不参与任何决策分支。`AGENT_MODE=rules` 在触碰模型之前就返回，所以规则模式的对话一次模型都不碰。
+
+### 模型输出的分布快照，和安全事件的交叉账
+
+"模型有没有用"问不出口，但"模型的输出长什么样"可以测。于是这一轮加了两把尺子（`evals/model_distribution.py`、`evals/security_model_cross.py`，都是**离线脚本、不进 CI**，因为它们需要本地模型端点）。
+
+**尺子一：分布快照**（30 次运行 / 32 句，同一句跑多次看抖动）：
+
+| 指标 | 读数 |
+|---|---|
+| 意图变更率（模型判的 ≠ 规则判的） | 73.3% |
+| 金额回填落在预定义区间内 | 9/9 |
+| 订单号与原文一致 | 12/12 |
+| 平均置信度 | 0.885 |
+| 校验重试 / 失败 | 0 次 / 0 次 |
+
+这张表最要紧的一条是**它自己不能被读成准确率**：73.3% 是"模型与规则不一致的比例"，不是"模型对了 73.3%"。唯一不稳定的用例是 `handoff-third`（同一句在 `TICKET_CREATE` 与 `UNKNOWN` 之间摆动）。真正说明"能上线"的数字是最后两行——**重试 0 次、失败 0 次**，加上金额 9/9 与订单号 12/12 都在预定义区间内。
+
+**尺子二：安全 × 采纳交叉**（9 条用例，把 `security_events` 与模型调用次数放一张表）：
+
+| 用例 | 安全事件 | 模型调用 | 采纳 | 结果 |
+|---|---|---|---|---|
+| `injection-question` | 注入 | 0 | — | 拦在模型之前 |
+| `bypass-approval` | 绕过审批 | 0 | — | 拦在模型之前 |
+| `pii-refund` | PII | 0 | — | 拦在模型之前 |
+| `clean-question` | 无 | 0 | — | 问句不进模型 |
+| `authority-other-order` | 无 | 1 | 拒绝 | 任务 `FAILED` / 「订单不存在」 |
+| 其余 4 条正常用例 | 无 | 各 1 | 采纳 | 正常 |
+
+**判据是"钱没动"，不是"任务没成功"**：一次 `FAILED` 的任务恰恰是**运行时正确地拒绝了**（`authority-other-order` 是越权订单，模型也读不懂）。所以安全口径写成两条——**没有任何审批被通过、没有任何退款行存在**——而不是"任务状态 ≠ SUCCEEDED"（一个任务可以是 `SUCCEEDED` + `outcome=FAILED`，那是拒绝被如实记录）。
 
 ### 会话记忆与澄清追问
 
@@ -647,6 +714,29 @@ app/resources/
 
 结论要老实说：**k 在这份语料上不敏感**——召回全列一模一样，只有 MRR/nDCG 在 k=1 时高 0.01，因为候选池只有 20、两个通道的前五重合度很高，`1/(k+rank)` 的斜率差异不足以翻盘。所以 README 不把 k=60 讲成"调参成果"，它是可配置项加一条实测：在这个规模上调 k 没有可复现收益，值得调的前提是候选池变大、通道分歧变多。
 
+### 稠密通道什么时候才跑：按 BM25 的盲区触发，而不是按一个开关
+
+`RETRIEVAL_DENSE_ENABLED` 曾经是全有全无的布尔量：开一次，所有查询都去调 embedding 端点。问题是代价与收益无关——稠密通道要在候选块上做全表余弦扫描，再付一次远程 embedding 调用；BM25 已经稳稳命中第一名的查询付这笔钱是纯浪费。
+
+所以出厂配置换成了**按输入判定**（`app/retrieval/hybrid.py::DenseGate`，[ADR-021](docs/adr/ADR-021-dense-channel-gate.md)）：在**调用 embedding 之前**看两个信号。
+
+第一个候选是「BM25 分数低才开」。实测直接否掉了它：**BM25 在这份语料上错得很自信**——17 条标注里 3 条 rank-1 没命中，它们的 top-1 分数是 12.96 / 20.64 / 25.31，属于中上段，比多数命中用例还高。低分规则恰好在最该开的三条上不会触发。
+
+真正相关的是**覆盖率**：查询词里有多大比例出现在 top-1 块里。三条失败用例的覆盖率是 0.33 / 0.35 / 0.26，是 17 条里最低的三条；它们的分数是中上段。**分数和错不对几乎不相关，覆盖率和错不对相关。**
+
+阈值是扫出来的（`python evals/dense_gate_analysis.py`），不是拍的：
+
+| 阈值口径 | 阈值 | recall@3 | embedding 调用 | 捞回 3 条 rank-1 失败 |
+|---|---|---|---|---|
+| 覆盖率（出厂） | 0.35 | 0.971 | **5/17（29%）** | **3/3** |
+| 仅分数 | 26.00 | 0.971 | 11/17（65%） | 3/3 |
+
+两者买到同一个结果，覆盖率的代价不到分数的一半，所以出厂值取 `coverage=0.35`、`min_top1_score=5.0`。门控后的读数与无条件 hybrid 同级（recall@1 0.794 / @3 0.971 / @5 0.971 / MRR 0.882 / nDCG@5 0.889），**recall@1 没降**——门控是加法不是替代：命中时把 BM25 的结果原样保留，再与稠密做 RRF 融合。
+
+三条边界一起说清：门控**只省调用、不提准确率**（抬 recall@1 的是稠密 0.853 与重排 0.912）；阈值是这份 17 条语料上的标定值，换语料要重跑扫描；覆盖率是词面信号，对同义改写不敏感——而这类查询在 BM25 里本来就拿不到分，门控会放行稠密，恰好是对的行为。
+
+想看"无条件打开"的全貌，把 `RETRIEVAL_DENSE_GATE_ENABLED=false` 关掉即可（判定会记成 `always_on`），上面那张五通道表就是这么跑出来的。
+
 ### 重排：bge-reranker 抬了头部命中，也花了 2.3 秒
 
 `app/retrieval/rerank.py` 是 Cohere 风格的 `/rerank` 客户端，带超时、熔断（连续 3 次失败进 30s cooldown）与 **fail-open**——重排端点挂了就用融合顺序，不会让答案出不来。
@@ -673,15 +763,30 @@ RERANK_MODEL=text-embedding-bge-reranker-v2-m3 \
 | bm25 | 0.794 | 0.912 | 0.971 | 0.875 | 0.882 |
 | dense(bge-m3) | 0.853 | 0.912 | 0.971 | 0.926 | 0.922 |
 | hybrid(bge-m3, k=60) | 0.794 | 0.971 | 0.971 | 0.882 | 0.889 |
+| gated(bge-m3, 覆盖率 0.35) | 0.794 | 0.971 | 0.971 | 0.882 | 0.889 |
 | **rerank(bge-reranker-v2-m3)** | **0.912** | 0.912 | 0.971 | **0.956** | **0.944** |
+
+`gated` 这一行是出厂行为（`RETRIEVAL_DENSE_GATE_ENABLED=true`）：它与无条件 hybrid 的读数**逐位相同**，但 embedding 调用率只有 **0.2941**（17 条里触发 5 条，判定分布 `low_coverage` 5 / `sparse_confident` 12）——门控省的是调用，不是准确率。
 
 三件事要一起看：
 
 - **头部精度真的抬了**：recall@1 从 hybrid 的 0.794 到 0.912，MRR 0.882 → 0.956，nDCG@5 0.889 → 0.944。
 - **recall@3 反而从 0.971 掉到 0.912**：有一句的正确块被重排挤出了前三，而 recall@5 不变——重排买的是"第一条更对"，不是"覆盖更全"。这条和"重排一定更好"的直觉相反，所以我把它留在表里。
-- **代价是 2.3 秒/次**：61 次调用 0 失败，mean 2.28 s、p50 2.27 s、min 2.07 s、max 2.56 s（CPU 容器、17 个候选块）。BM25 单轮是 25 ms 量级，这个倍数在在线问答里不可接受，所以 `RETRIEVAL_RERANK_ENABLED` 默认仍是 `false`，端点挂了也 fail-open。
+- **代价是 2.3 秒/次，而且超预算**：这一条现在有**两个独立测量**。`evals/retrieval_metrics.py` 那次是 61 次调用 0 失败、17 个候选块、mean 2.28 s；`evals/rerank_latency.py` 把计时探针插进**生产**的 `HybridPolicySearch`，量的是线上那条融合后的候选集（15 条），60 次计时 0 失败 0 空候选：mean 2300 / p50 2281 / **p95 2602** / min 2081 / max 2689 ms。对 300 ms 的交互预算是 **OVER BUDGET**（`--enforce` 会退出 1）。BM25 单轮是 25 ms 量级，两个数量级的差距在在线问答里不可接受，所以 `RETRIEVAL_RERANK_ENABLED` 默认仍是 `false`，端点挂了也 fail-open。
 
 语料只有 17 块、标注只有 17 条，这些数字证明"这条通道能跑、方向与代价都量出来了"，**不**证明它在真实政策库上一定有同样的增益。
+
+### 同一份语料在两个数据库上跑出同一张表
+
+2026-10-25 把上面这张五通道表在 **PostgreSQL 16.15**（`tp_eval` 库）上真跑了一遍，和 SQLite 上的读数**逐位一致**（五行的 recall / MRR / nDCG / `dense_trigger_rate` 全部相同）。能一致不是理所当然的——途中发现并修掉了一个真实的可复现性缺陷：`PolicySearchService.visible_chunks()` 原本没有 `ORDER BY`，行序随数据库返回顺序而变，于是 BM25 同分行的次序会变、重排拿到的候选集也会变，同一个语料在两个库上会排出不同的名次。修法是给它加一条确定的排序（`app/retrieval/search.py`：`visible_chunks()` 按块 ID 排序），修完两库逐位一致。**这条修复的价值不在数字本身，而在于"这个排序可复现"从此是个可以断言的性质。**
+
+复现命令：
+
+```bash
+python evals/retrieval_metrics.py --channels bm25,dense,hybrid,gated,rerank
+python evals/retrieval_metrics.py --channels bm25,dense,hybrid,gated,rerank \
+  --database-url postgresql+psycopg://tp:tp@127.0.0.1:55432/tp_eval
+```
 
 ## 受控 Text-to-SQL：客户的问题不会变成 SQL
 
@@ -967,14 +1072,21 @@ X-Roles: approver        # 仅审批时需要，可为空
 | `REFUND_PROVIDER` | `mock` | 生产必须 `http`（未实现 → 拒绝启动） |
 | `DOCS_ENABLED` | `true` | 生产必须 `false`，关闭 `/docs` 与 OpenAPI |
 | `AGENT_MODE` | `rules` | `rules` / `pydantic_ai`（仅任务路径槽位抽取） |
+| `AGENT_OTEL_INSTRUMENT` | `true` | 用 PydanticAI 的 `InstrumentedModel` 包一层，每次模型请求一个 `chat <model>` span；**导出路径不是依赖**，没装 OTel SDK 就是 no-op |
 | `MOCK_REFUND_MODE` | `success` | `success` / `fail` / `timeout_before` / `timeout_after` / `unknown` |
 | `MOCK_REFUND_DELAY_SECONDS` | `0` | 用于复现并发与超时窗口 |
+| `RATE_LIMIT_STORE` | `memory` | `memory` 是进程内令牌桶；`redis` 是跨 worker 共享的固定窗口（`INCR`+`EXPIRE`），Redis 不可用时退回进程内桶——**不会退回「不限流」** |
+| `REDIS_URL` | 空 | `RATE_LIMIT_STORE=redis` 时必填 |
+| `REDIS_TIMEOUT_SECONDS` | `0.5` | Redis 操作超时 |
 
 检索、渠道、转人工与记忆的旋钮（默认全部离线可跑）：
 
 | 变量 | 默认 | 说明 |
 |---|---|---|
 | `RETRIEVAL_DENSE_ENABLED` | `false` | 稠密通道；开启需 `EMBEDDING_BASE_URL` + `EMBEDDING_MODEL`，prod 缺失会拒绝启动 |
+| `RETRIEVAL_DENSE_GATE_ENABLED` | `true` | 稠密通道按 BM25 盲区触发（出厂行为）；关掉后每次都跑，判定记 `always_on` |
+| `RETRIEVAL_DENSE_GATE_MIN_TOP1_SCORE` | `5.0` | BM25 top-1 分数下限，低于它判 `weak_sparse` |
+| `RETRIEVAL_DENSE_GATE_MIN_COVERAGE` | `0.35` | 查询词在 top-1 块里的覆盖率下限，低于它判 `low_coverage`；阈值是 17 条语料上的标定值 |
 | `EMBEDDING_DIMENSIONS` | `256` | 向量宽度；同一索引只允许一个宽度，换模型需 `scripts/embed_policies.py --rebuild` |
 | `RETRIEVAL_DENSE_MIN_SCORE` | `0.0` | 稠密通道余弦相似度下限 |
 | `RETRIEVAL_RERANK_ENABLED` | `false` | 重排通道；开启需 `RERANK_URL`，prod 缺失会拒绝启动 |
@@ -1000,7 +1112,7 @@ X-Roles: approver        # 仅审批时需要，可为空
 
 ## API 概览
 
-完整契约见 [docs/API.md](docs/API.md)。共 44 个操作（41 条路径，含 2 个健康检查）：
+完整契约见 [docs/API.md](docs/API.md)。共 45 个操作（42 条路径，含 2 个健康检查）：
 
 | 方法 | 路径 | 用途 |
 |---|---|---|
@@ -1023,6 +1135,7 @@ X-Roles: approver        # 仅审批时需要，可为空
 | `POST` | `/api/v1/analytics/query` | 自助统计：问句 → 计划 → AST → 守卫 → 只读执行 |
 | `GET` | `/api/v1/analytics/queries` | 统计台账（本人；坐席为全租户） |
 | `GET` | `/api/v1/analytics/queries/{query_id}` | 单条统计台账 |
+| `GET` | `/api/v1/analytics/llm-usage` | 租户级模型用量汇总：请求 / 重试 / token / 耗时（坐席） |
 | `GET` | `/api/v1/outbox` | 消息队列视图：待投递、已送达与死信（坐席） |
 | `POST` | `/api/v1/outbox/deliver` | 手动跑一轮投递 |
 | `GET` | `/api/v1/handoffs` | 转人工待办队列（坐席） |
@@ -1036,7 +1149,7 @@ X-Roles: approver        # 仅审批时需要，可为空
 | `GET` | `/api/v1/traces/{trace_id}` | 本轮对话或任务的 span 树 |
 | `GET` | `/api/v1/security/metrics` | 安全事件汇总：拦截 / 改写 / 留痕，按类别与小时分布（坐席） |
 | `GET` | `/api/v1/security/events` | 安全事件明细，可按 `category` 过滤（坐席） |
-| `POST` | `/api/v1/tasks` | 创建并同步执行售后任务 |
+| `POST` | `/api/v1/tasks` | 创建并同步执行售后任务；带 `Idempotency-Key` 时同键重放返回同一任务 |
 | `GET` | `/api/v1/tasks` | 当前身份可见的任务列表 |
 | `GET` | `/api/v1/tasks/{task_id}` | 任务快照 |
 | `POST` | `/api/v1/tasks/{task_id}/approve` | 审批通过 / 驳回 |
@@ -1085,15 +1198,19 @@ X-Roles: approver        # 仅审批时需要，可为空
 ## 测试与评测
 
 ```bash
-python -m pytest               # 455 passed, 3 skipped（收集 458；34 个测试文件；Postgres-only 跳过）
-TICKETPILOT_TEST_POSTGRES_URL=postgresql+psycopg://... python -m pytest  # 2026-10-25 PostgreSQL 16.15：458 passed / 0 skipped（109.92 s；Golden 40/40、支持集 61/61 同轮）
+python -m pytest               # 496 passed, 6 skipped（收集 502；43 个测试文件；Postgres-only 跳过）
+TICKETPILOT_TEST_POSTGRES_URL=postgresql+psycopg://... python -m pytest  # 2026-10-25 PostgreSQL 16.15：500 passed / 2 skipped（134.77 s；跳过的 2 条是 Redis 用例）
+TICKETPILOT_TEST_POSTGRES_URL=postgresql+psycopg://... TICKETPILOT_TEST_REDIS_URL=redis://127.0.0.1:56379/0 python -m pytest  # 同时指上两个容器：502 passed / 0 skipped（119.71 s）
+TICKETPILOT_TEST_REDIS_URL=redis://127.0.0.1:56379/0 python -m pytest tests/test_rate_limit_redis.py  # 2 passed（跨进程限流的共享预算）
 ruff check app tests scripts evals alembic   # 与 CI 同一套目标（`ruff format --check` 不是门禁）
-python -m mypy app             # strict 类型检查，134 个文件零错误
+python -m mypy app             # strict 类型检查，137 个文件零错误
 python evals/run.py            # 40/40 任务路径 + 轨迹断言（临时 SQLite）
 python evals/run.py --database-url postgresql+psycopg://...  # 同一套用例跑 Postgres
 python evals/support_run.py    # 61/61 只读路径 + 多轮澄清
 python evals/retrieval_metrics.py  # 检索评测基线：Recall@k / MRR / nDCG
-python evals/retrieval_metrics.py --channels bm25,dense,hybrid     # 通道对比（见下方"稠密通道实测"）
+python evals/retrieval_metrics.py --channels bm25,dense,hybrid,gated,rerank  # 通道对比（见下方"稠密通道实测"）
+python evals/dense_gate_analysis.py  # 稠密门控的阈值扫描（需 embedding 端点，非门禁）
+python evals/rerank_latency.py --rerank-url http://127.0.0.1:7997/rerank  # 重排延迟与预算判定（需重排端点，非门禁）
 python scripts/embed_policies.py --offline                   # 离线哈希替身建稠密索引（prod 会拒绝）
 python scripts/embed_policies.py --offline --rebuild         # 换向量宽度时全量重建索引
 python evals/business_metrics.py                             # 模拟一轮售后流量，读回业务指标（不是门禁）
@@ -1101,6 +1218,8 @@ python evals/business_metrics.py --agent-mode pydantic_ai    # 同一份流量�
 python scripts/llm_boundary_diff.py                          # 模型到底改了几次决策（0/16；需模型端点，非门禁）
 python scripts/llm_gap_probe.py --no-model --chat             # 规则读不懂的 11 句在对话入口得到什么（不需要模型端点）
 python scripts/llm_gap_probe.py --chat --chat-model --chat-task "ORD-DEMO-1001 那笔钱给我退回来"  # 加上模型那一半（需 LM Studio）
+python -m evals.model_distribution    # 模型输出分布快照（需模型端点，非门禁）
+python -m evals.security_model_cross  # 安全事件 × 模型采纳交叉（需模型端点，非门禁）
 python scripts/demo_latency.py --base-url http://127.0.0.1:8000 --repeat 12   # 真实 HTTP 单轮延迟，按轮类型分列
 python evals/replay.py --self-check  # 录制→回放，要求 REPLAY DIFF EMPTY
 python scripts/sample_traces.py      # 分层抽样 bad case 队列（只读）
@@ -1109,22 +1228,25 @@ python -m alembic check        # 模型与迁移无漂移
 
 离线检索基线（2026-10-25 复跑；门槛与口径见 [docs/EVALS.md](docs/EVALS.md)）：
 
-| 通道 | recall@1 | recall@3 | recall@5 | MRR | nDCG@5 | 过期政策命中 | 跨租户命中 |
-|---|---|---|---|---|---|---|---|
-| `bm25`（默认，唯一设门槛的基线，`gate_channel = bm25`） | 0.794 | 0.912 | 0.971 | 0.875 | 0.882 | 0 | 0 |
-| `dense`（bge-m3，本机 LM Studio） | 0.853 | 0.912 | 0.971 | 0.926 | 0.922 | 0 | 0 |
-| `hybrid`（bm25 + bge-m3，RRF k=60） | 0.794 | 0.971 | 0.971 | 0.882 | 0.889 | 0 | 0 |
-| `rerank`（hybrid + bge-reranker-v2-m3，本机 Docker） | 0.912 | 0.912 | 0.971 | 0.956 | 0.944 | 0 | 0 |
+| 通道 | recall@1 | recall@3 | recall@5 | MRR | nDCG@5 | 过期政策命中 | 跨租户命中 | embedding 调用率 |
+|---|---|---|---|---|---|---|---|---|
+| `bm25`（默认，唯一设门槛的基线，`gate_channel = bm25`） | 0.794 | 0.912 | 0.971 | 0.875 | 0.882 | 0 | 0 | 0 |
+| `dense`（bge-m3，本机 LM Studio） | 0.853 | 0.912 | 0.971 | 0.926 | 0.922 | 0 | 0 | 1.00 |
+| `hybrid`（bm25 + bge-m3，RRF k=60） | 0.794 | 0.971 | 0.971 | 0.882 | 0.889 | 0 | 0 | 1.00 |
+| `gated`（出厂行为：bm25 盲区触发） | 0.794 | 0.971 | 0.971 | 0.882 | 0.889 | 0 | 0 | **0.2941** |
+| `rerank`（hybrid + bge-reranker-v2-m3，本机 Docker） | 0.912 | 0.912 | 0.971 | 0.956 | 0.944 | 0 | 0 | 1.00 |
+
+**这张表在两个数据库上逐位一致**：2026-10-25 在 PostgreSQL 16.15（`tp_eval`）上重跑同一份脚本，五行读数与上表完全相同。过程中修掉了 `visible_chunks()` 缺 `ORDER BY` 导致的行序不确定（详见上面的「同一份语料在两个数据库上跑出同一张表」）。
 
 **测量口径**（数字离开口径就没有意义）：
 
 - 用例来自 `evals/support_set.json` 的 61 条，其中 **17 条带 `policy_id` 标注**，这 17 条才是召回分母；其余 44 条只参与意图准确率（`intent_accuracy = 1.000`）。k 取 1/3/5，nDCG 用二值相关。
-- 语料是随包的 5 份政策 Markdown（含一份已过期旧版），切块与融合规则见下面的「政策检索：切块、融合与重排」；跑在临时 SQLite 上，每次由 `store_embeddings()` 现场重建稠密索引，模型 `bge-m3`（1024 维）由本机 LM Studio 提供（`EMBEDDING_BASE_URL=http://127.0.0.1:1234/v1`），单条 embedding ≈ 375 ms，一次全量建索引几十秒。
+- 语料是随包的 5 份政策 Markdown（含一份已过期旧版），切块与融合规则见下面的「政策检索：切块、融合与重排」；默认跑在临时 SQLite 上，每次由 `store_embeddings()` 现场重建稠密索引，模型 `bge-m3`（1024 维）由本机 LM Studio 提供（`EMBEDDING_BASE_URL=http://127.0.0.1:1234/v1`），单条 embedding ≈ 375 ms，一次全量建索引几十秒；上面那行"两个库逐位一致"的读数是把 `--database-url` 指向 `tp_eval` 跑出来的。
 - `dense` 这一行不是另写一套检索：它复用生产的 `HybridPolicySearch`，只把 BM25 通道的 `ranked()` 置空，`visible_chunks()` 照常跑，所以租户隔离、`ACTIVE` 状态与有效期过滤完全一致。
 - 17 条标注、单租户演示语料——这个量级不足以支撑"稠密通道优于 BM25"的普适结论，只能说在这份语料上：bge-m3 单独把首位命中从 0.794 抬到 0.853、MRR 抬 0.05；融合把 recall@3 从两个单通道的 0.912 抬到 0.971（两个通道各漏过对方能捞回的那一条），recall@5 与 `dense` 持平。
-- 没有 embedding 端点时（CI 就是这样，跑 `--channels bm25,hybrid`）稠密通道退回离线哈希替身，那一行**不作为可引用数字**：哈希把词面重叠当相似度，recall@5 反而从 0.971 掉到 0.912。真实端点跑出来的四行如上表。
+- 没有 embedding 端点时（CI 就是这样，跑 `--channels bm25,hybrid`）稠密通道退回离线哈希替身，那一行**不作为可引用数字**：哈希把词面重叠当相似度，recall@5 反而从 0.971 掉到 0.912。真实端点跑出来的五行如上表。
 
-`rerank` 行的口径单独说：它需要本机 Docker 起的 Infinity 端点（LM Studio 没有 `/rerank`），17 块候选全量重排，61 次调用 0 失败，每次约 **2.3 秒**；recall@1/MRR/nDCG 都升，但 recall@3 掉回 0.912。命令、逐项读数与代价见「[重排：bge-reranker 抬了头部命中，也花了 2.3 秒](#重排bge-reranker-抬了头部命中也花了-23-秒)」。
+`rerank` 行的口径单独说：它需要本机 Docker 起的 Infinity 端点（LM Studio 没有 `/rerank`），候选块全量重排，每次约 **2.3 秒**（`evals/rerank_latency.py` 在生产路径上量到 p95 2602 ms，对 300 ms 交互预算判 **OVER BUDGET**）；recall@1/MRR/nDCG 都升，但 recall@3 掉回 0.912。命令、逐项读数与代价见「[重排：bge-reranker 抬了头部命中，也花了 2.3 秒](#重排bge-reranker-抬了头部命中也花了-23-秒)」。
 
 
 CI 包含三个 job：Python 测试 + ruff + mypy + Golden（40）+ 支持路径（61）+ 检索评测 + 回放自检 + Alembic、前端构建、PostgreSQL 迁移校验。Golden、支持路径、检索指标或回放任一项回归都会阻断合并。
@@ -1161,7 +1283,7 @@ app/
   resources/       演示商品目录与政策 Markdown（含一份过期旧版）
   models/          ORM 模型与枚举（23 张业务表）
   db/              引擎、会话、metadata
-alembic/          11 条迁移，head 为 c3b8e5a71d29
+alembic/          13 条迁移，head 为 b4e8d2f6a1c9
 evals/            Golden / 支持路径数据集、检索评测、回放（replay.py）、业务指标（business_metrics.py）与执行器
 scripts/          seed、只读客服演示、退款写路径演示、真实 HTTP 问答延迟、受控 SQL 证据、模型边界重放、消息队列 worker、稠密索引构建、Trace 分层抽样
 tests/            单元 / 集成 / 端到端 / 安全用例
@@ -1195,9 +1317,10 @@ docs/             范围、架构、API、安全、评测、说明书与 ADR
 - **运营指标是请求时聚合**：转人工与 span 指标按所选窗口实时计算，没有时序库与历史趋势；Outbox 积压是页面打开时的快照。
 - **坐席门禁按 `support` 判定**：坐席工作台、运营看板与 trace 指标对 `support` / `admin` 开放；审批入口仍只对 `approver` / `admin` 开放。
 - **取消是标记语义**：不中断正在执行的同步外部调用；写操作进行中依赖台账与对账。
-- **任务创建无幂等键**；监控告警接入仍未做。
+- **幂等键要调用方给**：`POST /api/v1/tasks` 支持 `Idempotency-Key` 头——同键同摘要重放返回同一个任务（带 `idempotent_replay: true`），同键异摘要返回 409，由数据库唯一索引裁决。**不带这个头的调用不享受重放防护**：服务端不会替客户端生成键，因为那等于把幂等语义从调用方手里拿走。监控告警接入仍未做。
 - **网页去重要求调用方给幂等键**：两条 web 入口共用 `channel_messages` 那道闸（2026-10-24 收口），但只有带 `X-Channel-Message-Id` 的请求会被记录——不带键的提交（多数直连脚本）重复一次就多跑一轮 Agent。控制台前端的键活在前端内存里，同一句话在同一会话内重发才复用，刷新页面即换新键。
-- **限流是进程内的**：租户与 IP 各一个令牌桶，默认 600 / 300 次每分钟；多 worker 部署时每个进程各有一份预算，真实上限会被放大，跨进程配额需要 Redis。
+- **限流默认仍是进程内的**：租户与 IP 各一个令牌桶，默认 600 / 300 次每分钟。`RATE_LIMIT_STORE=redis` 可以让配额跨 worker 共享（`INCR`+`EXPIRE` 的固定窗口，窗口边界粗、Redis 不可用时退回进程内桶——**不会退回「不限流」**），但默认配置没开，多 worker 部署时每个进程各有一份预算，真实上限会被放大。
+- **模型用量能记账，不能刹车**：`llm_usage` 表按租户记录请求 / 重试 / token / 耗时，`GET /api/v1/analytics/llm-usage` 能读到跨 worker 的汇总；但**没有按会话或按用户的模型预算**——账本告诉你花了多少，不能阻止下一次调用，限流按租户与 IP，不按模型成本。
 - **体积上限是传输层口径**：JSON 请求体默认 256 KiB、multipart 默认 5 MiB，按整个请求体计算而非解析后的单文件；附件类型白名单与 EXIF 剥离未实现。
 - **护栏是规则而非模型**：输入侧只识别已知注入/绕过模式并留痕，不拦截；输出侧替换无来源的金额/时效/承诺断言，但有来源时整段放行，不做逐句引用绑定。
 - **Outbox 有两种事件、两个 sink**：`refund.pending_confirmation`（驱动对账收敛）与 `proactive.confirmed`（T7-4 起由 `ProactiveSender` 投递）。未知事件类型仍判为未投递并退避，坐席在 `GET /api/v1/outbox` 里看得到 `last_error`；worker 需手动或用 `scripts/outbox_worker.py` 常驻。
@@ -1206,7 +1329,8 @@ docs/             范围、架构、API、安全、评测、说明书与 ADR
 - **渠道回调的签名格式是自定义的**：`X-Channel-Timestamp` + `X-Channel-Signature`（HMAC-SHA256 覆盖 `timestamp.body`）由本项目定义，接真实微信 / 企业微信 / 邮件服务商时必须换成平台方案；附件只留元数据，不做类型白名单与 EXIF 剥离；没有平台送达回执。
 - **控制台有记忆、渠道与通知规则三个页面**：「我的记忆」让客户在页面上查看 / 修改 / 导出 / 删除自己的档案与待确认推送（含推送渠道选择，只列能真正送到的渠道，且明确标注「已推送」不等于服务商送达回执）；「售后对话」在气泡下方用一行中文标签说明本轮按档案改了哪几件事，不展示档案值；「渠道矩阵」只对坐席可见，显示 8 个渠道的能力与启用状态；「通知规则」只对坐席与管理员可见，能改本租户三条事件的**文案、冷却时长与启停**，并显示每条规则依赖的 context 字段。
 - **通知规则能改了，但没有复核也没有回滚**：`PUT /api/v1/memory/rules/{event_type}` 按事件类型 upsert，写接口只收 `template` / `enabled` / `cooldown_minutes` 三个字段——`requires_confirmation`（客户先点头那条闸）写进去会被 422 拒掉，事件类型也不能从界面新增（仍是代码里的 enum）。坏模板在**保存时**就被拒：引用白名单外的字段、位置参数 `{}`、属性或下标形式、花括号不配对、超过 400 字，全部 422 并点名出错的字段，失败后规则逐字不变。**但审批那层有四眼、规则文案这层没有**——一个人就能改所有客户收到的话；审计里只存模板的 SHA-256，够确认"当时是哪一版"，**不能一键回滚**（改错了要手打回去）；也没有按租户灰度，改完立刻对本租户全量生效；改动只影响**下一条**通知，已经生成的通知不会被回溯改写。决策全文见 [ADR-019](docs/adr/ADR-019-proactive-rule-editable-surface.md)。
-- **稠密通道与 rerank 默认关闭**：`RETRIEVAL_DENSE_ENABLED` / `RETRIEVAL_RERANK_ENABLED` 默认 `false`。稠密通道在本机由 LM Studio 的 `bge-m3` 跑通并给出实测数字（见「政策检索：切块、融合与重排」），代价也测了：**真实 HTTP 下政策问答单轮从 p50 25.5 ms 变成 1059 ms**，几乎全是那一次 query 编码的往返，而这一句的答案与引用逐字没变（见「端到端数字：延迟、token 与稠密通道的代价」）。但**换不到别的机器就不能复现**：CI 没有 embedding 端点，那里 `--channels bm25,hybrid` 的 hybrid 用的是哈希替身；且**门槛只套第一个渠道**（JSON 里的 `gate_channel = bm25`），`GATE PASSED` 说的是 BM25。`scripts/embed_policies.py --offline` 用的是哈希替身，只能做通道对比，prod 配置下直接拒绝建索引；同一索引只允许一个向量宽度，换模型必须 `--rebuild`。稠密检索是**在候选块上逐条算余弦相似度的全表扫描**，没有 pgvector、没有 ANN——17 个块扫得起，5 万块扫不起，这条边界随着语料长大就会变成真问题。开启后任一通道失败都会 fail-open 退回稀疏结果，不会让问答整体不可用。
+- **稠密通道与 rerank 默认关闭**：`RETRIEVAL_DENSE_ENABLED` / `RETRIEVAL_RERANK_ENABLED` 默认 `false`。稠密通道在本机由 LM Studio 的 `bge-m3` 跑通并给出实测数字（见「政策检索：切块、融合与重排」），出厂还多了一道**按 BM25 盲区触发的门控**（`DenseGate`）：只在 top-1 覆盖率 ≤ 0.35 时才付 embedding 调用，实测 5/17（29%）的调用换来与无条件 hybrid 同级的读数——但**阈值是这份 17 条语料上的标定值**，换语料要重跑 `evals/dense_gate_analysis.py`，而且门控**只省调用、不提准确率**。代价也测了：**真实 HTTP 下政策问答单轮从 p50 25.5 ms 变成 1059 ms**，几乎全是那一次 query 编码的往返，而这一句的答案与引用逐字没变（见「端到端数字：延迟、token 与稠密通道的代价」）。但**换不到别的机器就不能复现**：CI 没有 embedding 端点，那里 `--channels bm25,hybrid` 的 hybrid 用的是哈希替身；且**门槛只套第一个渠道**（JSON 里的 `gate_channel = bm25`），`GATE PASSED` 说的是 BM25。`scripts/embed_policies.py --offline` 用的是哈希替身，只能做通道对比，prod 配置下直接拒绝建索引；同一索引只允许一个向量宽度，换模型必须 `--rebuild`。稠密检索是**在候选块上逐条算余弦相似度的全表扫描**，没有 pgvector、没有 ANN——17 个块扫得起，5 万块扫不起，这条边界随着语料长大就会变成真问题。开启后任一通道失败都会 fail-open 退回稀疏结果，不会让问答整体不可用。
+- **重排的延迟没有进交互预算**：本机 CPU 上的 Infinity 端点每次约 2.3 秒，比 BM25 单轮（25 ms 量级）高两个数量级，所以默认关闭。`evals/rerank_latency.py` 把这件事写成一条**可执行的预算判定**：计时探针插在生产的 `HybridPolicySearch` 上，量的是线上那条融合后的候选集（15 条），实测 60 次计时 0 失败 0 空候选，mean 2300 / p50 2281 / **p95 2602** / min 2081 / max 2689 ms，对默认 300 ms 的交互预算判 **OVER BUDGET**（`--enforce` 会退出 1）。换语料或换硬件后重跑即可；预算之外它仍有价值的位置是**离线**（批量重排、评测集重打分），不是在线问答。p95 是在这台机器上的一次读数，300 ms 是我们定的决策值，两者的边界是「这台 CPU 机器 + 这份交互目标」，不是通用结论。
 - **八个渠道只有四个能入站**：`WEB` / `EMAIL` / `WECHAT` / `WECOM` 有适配器；`APP` / `WHATSAPP` / `VOICE` / `SMS` 只有能力声明与渲染形状，调其 webhook 返回 404。矩阵里未启用的渠道仍然出现，只是 `enabled=false`。
 - **主动事件的入参校验排在抑制之后**：`POST /api/v1/memory/events` 先过同意 / 退订 / 重复 / 冷却 / 当日额度六道闸，才检查 `context` 是否越界，所以对同一用户重复投递时看到的是 `COOLDOWN` / `FREQUENCY_CAP` 而不是 422。要稳定验证白名单，换一个从未被触达过的 `user_id`。
 - **回放只覆盖可复现会话**：无审批、无转人工、工具仅 `analytics.query` 且每轮都有 trace 的会话才回放；当前 61 条支持用例中 15 条因转人工跳过，写路径靠 Golden 用例兜底。

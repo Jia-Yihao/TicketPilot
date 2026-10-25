@@ -6,18 +6,20 @@
 > **定位方式：只写模块、类、函数、开关名，不写行号。** 行号会随提交漂移；需要精确定位时，
 > 在编辑器里按符号跳转即可。文中路径均相对仓库根目录。
 >
-> **事实基准：2026-10-25 复跑（T4 渠道抽象、T4b 渠道溯源、T5 客户记忆与主动服务、T6 稠密检索护栏、T7 控制台与主动消息出口、T8 网页入口幂等收口、T9 记忆进答案、T10 主动规则可编辑面、对话入口模型缺口收口完成后）。**
-> 本机结果：默认 pytest 套件 **455 passed / 3 skipped**（收集 458 个用例，34 个测试文件；2026-10-25 复跑，
-> 比 10-24 的 447 多出 8 条——`tests/test_refunds.py` 里 1 条退款作用域用例，加 `tests/test_llm_gap.py` 7 条模型边界用例），
-> Ruff 通过，`mypy app`（strict）零错误（134 个文件），任务路径 Golden Set **40/40**，只读路径支持集 **61/61**，
-> 回放自检 **REPLAY DIFF EMPTY**，离线检索评测门槛全过（`bm25` / `dense` / `hybrid` / `rerank` 四通道真实端点读数见 §11.5，
-> 门槛仍只套 `bm25`），`alembic check` 无漂移（head `c3b8e5a71d29`，11 条迁移、23 张表），
+> **事实基准：2026-10-25 复跑（T4 渠道抽象、T4b 渠道溯源、T5 客户记忆与主动服务、T6 稠密检索护栏、T7 控制台与主动消息出口、T8 网页入口幂等收口、T9 记忆进答案、T10 主动规则可编辑面、对话入口模型缺口收口、稠密通道门控、三级模型门控、跨进程接缝与模型评测完成后）。**
+> 本机结果：默认 pytest 套件 **496 passed / 6 skipped**（收集 502 个用例，43 个测试文件；2026-10-25 复跑，
+> 比 10-24 的 447 多出 49 条——`tests/test_refunds.py` 里 1 条退款作用域用例，`tests/test_llm_gap.py` 9 条模型边界用例，
+> 本轮新增 7 个测试文件 32 条：模型埋点 5、分布快照 3、安全交叉 6、幂等键 5、限流存储 7、限流 Redis 2、用量账本 4，
+> 外加并入 `test_retrieval_channels.py` 的 6 条稠密门控用例），
+> Ruff 通过，`mypy app`（strict）零错误（137 个文件），任务路径 Golden Set **40/40**，只读路径支持集 **61/61**，
+> 回放自检 **REPLAY DIFF EMPTY**，离线检索评测门槛全过（`bm25` / `dense` / `hybrid` / `gated` / `rerank` 五通道真实端点读数见 §11.5，
+> 门槛仍只套 `bm25`），`alembic check` 无漂移（head `b4e8d2f6a1c9`，13 条迁移、24 张表），
 > 控制台 `npm run build` 通过，本地 uvicorn + SQLite 下 `scripts/demo.py` 走完只读客服与渐进式披露，`/health/ready` 返回 `ready`。
-> **PostgreSQL 16.15（一次性容器）本轮全量复跑：458 passed / 0 skipped（109.92 s）**，默认跳过的 3 条
-> PostgreSQL 专项用例（并发与 Outbox）全部执行；同一容器上的 Golden Set **40/40**、支持集 **61/61**，
-> `alembic upgrade head` 走完 11 条迁移、`alembic check` 无漂移。T2 起新增的 10 个测试文件（148 条）
-> 与 T9/T10 的四张新表现在都有 PG 证据；**没有**在 PG 上跑的是四通道检索指标脚本本身（PG 侧跑的是
-> `test_retrieval_eval.py` 的门槛断言，不是 `retrieval_metrics.py` 的输出）。
+> **PostgreSQL 16.15（一次性容器）本轮全量复跑：同时指上 PostgreSQL 与 Redis 两个容器后 502 passed / 0 skipped（119.71 s）**，
+> 默认跳过的 4 条 PostgreSQL 专项用例（并发与 Outbox）与 2 条 Redis 共享配额专项全部执行；
+> 同一容器上的 Golden Set **40/40**、支持集 **61/61**，
+> `alembic upgrade head` 走完 13 条迁移、`alembic check` 无漂移。**五通道检索指标脚本本身已在 PG 上跑过**
+> （`evals/retrieval_metrics.py --channels bm25,dense,hybrid,gated,rerank --database-url …`，五行读数与 SQLite 逐项相同，见 §11.5）。
 > `docker compose up -d --build` 镜像构建通过，栈内 `/health/ready` 返回 `ready`、`/console/` 可访问，
 > 容器内 `scripts/seed.py` 与 `scripts/demo.py` 均跑通；
 > 真实模型调用已在本机 LM Studio（`qwen3-8b`）上验证，托管模型（Anthropic / OpenAI）仍未验证；OIDC 登录和实时 SSE 仍未实现。
@@ -532,12 +534,20 @@ tasks.create_task
 | `AGENT_MODEL` | `anthropic:claude-sonnet-4-5` | PydanticAI 模型标识 | 需要对应 provider 凭据 |
 | `AGENT_REQUEST_LIMIT` | `2` | PydanticAI `UsageLimits.request_limit` | 限制模型请求次数 |
 | `AGENT_TIMEOUT_SECONDS` | `20` | 单次抽取超时 | 超时回退规则 |
+| `AGENT_OTEL_INSTRUMENT` | `true` | 用 PydanticAI 的 `InstrumentedModel` 包一层 | **导出路径不是依赖**：SDK 不在依赖里，全局 provider 是 no-op；每次模型请求一个 `chat <model>` CLIENT span（§6.5） |
+| `RETRIEVAL_DENSE_ENABLED` | `false` | 稠密通道总开关 | 打开还需要 embedding 端点；出厂改为**按 BM25 盲区触发**（下一行） |
+| `RETRIEVAL_DENSE_GATE_ENABLED` | `true` | 是否按输入判定要不要调 embedding | 关掉后稠密每次都跑（判定记 `always_on`），保留「离线看全貌」的用法 |
+| `RETRIEVAL_DENSE_GATE_MIN_TOP1_SCORE` | `5.0` | BM25 top-1 分数下限 | 低于它判 `weak_sparse` |
+| `RETRIEVAL_DENSE_GATE_MIN_COVERAGE` | `0.35` | 查询词在 top-1 块里的覆盖率下限 | 低于它判 `low_coverage`；阈值是 17 条语料上的标定值（§11.5） |
 | `MOCK_REFUND_MODE` | `success` | 模拟渠道行为 | `success` / `fail` / `timeout_before` / `timeout_after` / `unknown` |
 | `MOCK_REFUND_DELAY_SECONDS` | `0` | 模拟外部延迟 | 用于复现并发/超时窗口 |
 | `SECURITY_EVENTS_ENABLED` | `true` | 是否写 `security_events` | 关闭后护栏仍工作，但不留痕 |
 | `RATE_LIMIT_ENABLED` | `true` | 是否启用租户 / IP 令牌桶 | 关闭用于压测或排障 |
 | `RATE_LIMIT_TENANT_PER_MINUTE` | `600` | 租户桶容量与每分钟补充 | 进程内计数，多 worker 各自一份 |
 | `RATE_LIMIT_IP_PER_MINUTE` | `300` | IP 桶容量与每分钟补充 | 同上 |
+| `RATE_LIMIT_STORE` | `memory` | 限流计数存哪 | `memory` 是进程内令牌桶；`redis` 是跨 worker 共享的固定窗口（`INCR`+`EXPIRE`，窗口边界是粗的） |
+| `REDIS_URL` | 空 | Redis 连接串 | `RATE_LIMIT_STORE=redis` 时必填 |
+| `REDIS_TIMEOUT_SECONDS` | `0.5` | Redis 操作超时 | Redis 不可用时**退回进程内桶**，绝不退回「不限流」 |
 | `REQUEST_MAX_BYTES` | `262144` | 非 multipart 请求体上限 | 超限 413 |
 | `ATTACHMENT_MAX_BYTES` | `5242880` | multipart 请求体上限 | 按整个请求体计，不是单文件 |
 | `MEMORY_PERSONALIZATION_ENABLED` | `true` | 是否让本人档案参与只读问答的四种模板效果（§6.7.4） | **进程级**，不是按租户或按客户；关掉后回复与 T9 之前逐字一致、`personalization` 恒为 `null`。（本表只列到 T2 的护栏变量；渠道 / 记忆 / 出站变量以 `README.md` 环境变量表与 §12.8 / §12.9 为准） |
@@ -672,9 +682,9 @@ Compose 里 `AUTO_CREATE_TABLES=false`，因此容器启动必须先跑迁移；
 
 ## 4. 领域模型与数据库
 
-### 4.1 二十三张表的分工
+### 4.1 二十四张表的分工
 
-数据库不是「把对象存下来」那么简单，它承担了八类互不替代的职责：
+数据库不是「把对象存下来」那么简单，它承担了九类互不替代的职责：
 
 1. **流程真源**：`tasks` + `task_events` 记录任务走到哪里、发生过什么。
 2. **业务真源**：`orders` / `logistics` / `refunds` / `tickets` 记录外部世界的状态。
@@ -689,10 +699,12 @@ Compose 里 `AUTO_CREATE_TABLES=false`，因此容器启动必须先跑迁移；
    让"重放同一条 webhook"落到已存回复而不是再跑一轮 Agent。
 8. **客户记忆与触达真源**：`customer_profiles` 存客户自己写的偏好与授权，
    `proactive_rules` 存"事件 → 措辞"的规则，`notifications` 存待客户确认的触达提案。
+9. **模型用量真源**：`llm_usage` 记录每次模型运行的请求 / 重试 / token / 耗时，
+   让"模型花了多少"是**跨 worker 的事实**而不是某个进程里的计数器。
 
 | 表 | 一句话职责 | 关键约束 |
 | --- | --- | --- |
-| `tasks` | 一次售后请求的流程实例 | 主键 `id`；`version` 乐观并发标记 |
+| `tasks` | 一次售后请求的流程实例 | 主键 `id`；`version` 乐观并发标记；`(tenant_id, user_id, idempotency_key)` 唯一 |
 | `task_events` | 任务事件流，供时间线与 SSE 回放 | `(task_id, created_at)` 复合索引 |
 | `approvals` | 高风险动作的审批单与绑定摘要 | 两个部分唯一索引（见 §4.3） |
 | `orders` | 订单快照与可退余额 | `version` 每次余额变动递增 |
@@ -715,6 +727,7 @@ Compose 里 `AUTO_CREATE_TABLES=false`，因此容器启动必须先跑迁移；
 | `customer_profiles` | 客户自己写的长期记忆与触达授权 | `(tenant_id, user_id)` 唯一 |
 | `proactive_rules` | 「事件类型 → 措辞与限额」的租户规则 | `(tenant_id, event_type)` 唯一 |
 | `notifications` | 等客户确认的主动触达提案 | `(tenant_id, user_id, event_type, event_key)` 唯一 |
+| `llm_usage` | 模型用量账本（每次模型运行一行） | `(tenant_id, created_at)` 与 `(tenant_id, user_id)` 索引 |
 
 ### 4.2 实体关系
 
@@ -1227,6 +1240,54 @@ amount   = rule_plan.amount_cents if not None else output.amount_cents
 它没有注册任何工具，也没有数据库访问。即使模型输出一个不存在的订单号，后续
 `OrderService.require_order` 也会按租户/归属校验拒绝。模型输出的 `confidence` 与
 `decision_summary` 当前**没有参与任何决策**，只存在于返回值里；不要把它当成风险分。
+
+#### 业务校验收进 Agent 合同（2026-10-25，见 [ADR-002 修订](adr/ADR-002-pydanticai-bounded-agent.md)）
+
+业务规则不再留在 Agent 之外等路由层兜底，而是挂在 `@agent.output_validator` 上：
+
+- `order_id` 必须为 `None` 或匹配 `ORD-` 前缀，否则抛 `ModelRetry`；
+- `amount_cents` 必须为正整数分，否则抛 `ModelRetry`。
+
+`ModelRetry` 把理由送回模型，于是「模型给了一个不存在的订单号」从**静默降级**变成
+**一次可见的重试**：重试在 Agent 合同内部完成，路由层不再需要为畸形输出写防御分支。
+Pydantic 校验类型与范围，业务校验管形状，两层各司其职。
+
+#### 重试次数是一等观测对象
+
+`IntentAgent.parse` 返回 `(IntentOutput, ModelTrace)`，`ModelTrace` 带 `requests` / `retries` /
+`latency_ms` / `status` / `instrumented`。重试次数**由用量派生而不是猜**：
+`retries = max(0, requests - 1)`——一次运行用了两个请求，说明第一次输出没通过校验，
+模型被问了一次第二次。
+
+三处可以读到同一个数：
+
+| 落点 | 形式 | 用途 |
+|---|---|---|
+| `ModelTrace` | `retries` 字段 | 进程内立即可读 |
+| `task.routed` span 属性 | `model_retries` | 回放时能看出「这一单问了几次」 |
+| `llm_usage` 表 | `requests` / `retries` 列 | 跨 worker 的账本（§4.1） |
+
+OTel 是**导出路径而不是依赖**：`opentelemetry-api` 是 `pydantic-ai-slim` 的硬依赖
+（已在 `pydantic_ai_slim-2.60.0.dist-info/METADATA` 中核对），但 SDK 不在依赖里，
+所以全局 provider 是一个 no-op——没人装 exporter 就不花钱。开了
+`AGENT_OTEL_INSTRUMENT` 后走 PydanticAI 自己的 `InstrumentedModel`，
+**每次模型请求一个 `chat <model>` CLIENT span**，因此一次校验重试会看到两个 span。
+`tests/test_model_instrumentation.py` 用假 tracer provider 把这条钉死。
+
+#### 三级门控：问句不进模型（2026-10-25，见 [ADR-024](adr/ADR-024-three-level-model-gate.md)）
+
+`app/agent/support_agent.py::model_gate(plan, route, message)` 在**调用之前**写下这一轮
+要不要问模型，三档：
+
+| 档 | 条件 | 后果 |
+|---|---|---|
+| `rules_hit` | 规则已经读懂这一轮 | 不问模型 |
+| `question` | 规则读不懂，但消息是问句（`blocks_write_action`） | 走读路径，不问模型 |
+| `consult` | 规则读不懂且是动作句 | 问模型，且**只采纳退款意图** |
+
+判定结果写进 `understand` span 的 `model_gap.gate` 属性，是**观测项而不是控制信号**：
+它记录「这一轮为什么没问模型」，但不参与任何决策分支。`AGENT_MODE=rules` 时在触碰模型
+之前就返回，所以规则模式的对话一次模型都不碰。
 
 ### 6.6 真实模型的验证范围
 
@@ -1985,23 +2046,23 @@ provider 返回的条数必须等于待灌 chunk 数；同一批里不允许出�
 ### 11.5 检索的边界（2026-10-25 实测）
 
 本机用两个本地端点把「代码有、数字没有」的两条通道跑出了数：稠密通道用 LM Studio 的
-`bge-m3`，重排通道用 Docker 里 Infinity 服务的 `bge-reranker-v2-m3`。下面是 17 条带
-`policy_id` 标注的用例展开出的 68 条查询上的读数，门槛仍只套 `bm25`：
+`bge-m3`，重排通道用 Docker 里 Infinity 服务的 `bge-reranker-v2-m3`。下面是 61 条用例中
+**17 条带 `policy_id` 标注**的那部分上的读数，门槛仍只套 `bm25`：
 
-| 通道 | recall@1 | recall@3 | recall@5 | MRR | nDCG@5 |
-|---|---|---|---|---|---|
-| `bm25`（默认） | 0.794 | 0.912 | 0.971 | 0.875 | 0.882 |
-| `dense`（bge-m3，1024 维） | 0.853 | 0.912 | 0.971 | 0.926 | 0.922 |
-| `hybrid`（BM25 + bge-m3，RRF k=60） | 0.794 | 0.971 | 0.971 | 0.882 | 0.889 |
-| `rerank`（hybrid + bge-reranker-v2-m3） | 0.912 | 0.912 | 0.971 | 0.956 | 0.944 |
+| 通道 | recall@1 | recall@3 | recall@5 | MRR | nDCG@5 | embedding 调用率 |
+|---|---|---|---|---|---|---|
+| `bm25`（默认） | 0.794 | 0.912 | 0.971 | 0.875 | 0.882 | 0 |
+| `dense`（bge-m3，1024 维） | 0.853 | 0.912 | 0.971 | 0.926 | 0.922 | 1.00 |
+| `hybrid`（BM25 + bge-m3，RRF k=60） | 0.794 | 0.971 | 0.971 | 0.882 | 0.889 | 1.00 |
+| `gated`（出厂配置：BM25 + 按盲区触发的稠密） | 0.794 | 0.971 | 0.971 | 0.882 | 0.889 | **0.29** |
+| `rerank`（hybrid + bge-reranker-v2-m3） | 0.912 | 0.912 | 0.971 | 0.956 | 0.944 | 1.00 |
 
 - 稠密与重排**默认关闭**，默认部署仍是纯 BM25；上表说明「打开后能拿到什么」，不是默认行为。
 - `dense` 单独把首位命中从 0.794 抬到 0.853、MRR 抬 0.05，`recall@5` 不变；`hybrid` 把
   `recall@3` 从 0.912 抬到 0.971——两个通道各漏过一条对方能捞回的用例，融合把它们都补上了。
+- `gated` 是出厂配置那一列：指标与无条件 `hybrid` **逐项相同**，embedding 调用少七成。
 - `rerank` **只买头部**：`recall@1` / MRR / nDCG 都升，但 `recall@3` 从 0.971 掉回 0.912
-  （有一句的正确块被挤出前三），`recall@5` 不变。本机 CPU 上每次调用约 2.3 秒（61 条查询
-  0 失败，mean 2277 ms / p50 2267 ms / min 2074 / max 2563）。是否值得用 2 秒换「第一条更对」
-  取决于业务，不是一个通用结论。
+  （有一句的正确块被挤出前三），`recall@5` 不变。代价见下面的「重排的延迟预算」。
 - 量级只够说「在这份 5 份政策、17 个块、17 条标注的演示语料上」，**不能外推**成
   「稠密 / 重排优于 BM25」的通用结论；换语料要重测。
 - CI 没有这些端点，跑的是哈希替身：它把词面重叠当语义，`recall@5` 反而从 0.971 掉到 0.912。
@@ -2020,6 +2081,65 @@ provider 返回的条数必须等于待灌 chunk 数；同一批里不允许出�
 - BM25 的排序还没有调过：`recall@1` 0.794（`recall@3` 0.912、`recall@5` 0.971），
   仍有正确章节被相邻章节压在 top-2。
 
+#### 两库一致性（2026-10-25 新增）
+
+上表本身**也在 PostgreSQL 上跑过**：同一份脚本、同一份语料、同一组端点，
+`evals/retrieval_metrics.py --channels bm25,dense,hybrid,gated,rerank --database-url
+postgresql+psycopg://tp:tp@127.0.0.1:55432/tp_eval` 在 `tp_eval` 库上产出的五行读数与
+SQLite **逐项相同**（含 `dense_trigger_rate` 0.2941 与 `rerank` 那一行）。
+
+修之前并不是这样：PG 上的 `rerank` 行 recall@1 是 0.85、SQLite 是 0.91。根因不在检索算法，
+在 `app/retrieval/search.py::visible_chunks()` **没有 `ORDER BY`**——数据库返回行的顺序不保证，
+而 BM25 的并列分正是靠这个顺序破的；破的顺序不同 → 送进重排器的候选块顺序不同 →
+同一批次的构成不同 → 边界分被翻转。现在查询固定为 `.order_by(DocumentChunk.id)`，
+两库逐位一致。**这是一条可复现性缺陷，不是检索质量问题**：没有指定顺序的查询，
+两库可以给出不同的排序。
+
+#### 稠密通道的门控（2026-10-25 新增，见 [ADR-021](adr/ADR-021-dense-channel-gate.md)）
+
+稠密通道不再是一个「开 / 关」的布尔量，而是**在调用 embedding 之前**按输入判定要不要走：
+`app/retrieval/hybrid.py::DenseGate` 用两个信号判定，顺序是无稀疏命中 → `no_sparse_hits`、
+top-1 分数 < 5.0 → `weak_sparse`、**top-1 词覆盖率 ≤ 0.35 → `low_coverage`**、
+否则 `sparse_confident`（跳过 embedding）。
+
+为什么不是「分数低才开」：BM25 在这份语料上**错得很自信**——17 条标注里 3 条 rank-1 没命中，
+它们的 top-1 分数是 12.96 / 20.64 / 25.31，属于中上段；低分规则恰好在最该开的三条上不触发。
+覆盖率（查询词里出现在 top-1 块中的比例）则是 0.33 / 0.35 / 0.26，是 17 条里最低的三条。
+
+| 阈值口径 | 阈值 | recall@3 | embedding 调用 | 捞回 3 条 rank-1 失败 |
+|---|---|---|---|---|
+| 覆盖率（出厂） | 0.35 | 0.971 | **5/17（29%）** | **3/3** |
+| 仅分数 | 26.00 | 0.971 | 11/17（65%） | 3/3 |
+
+两者买到同一个结果，覆盖率的代价不到分数的一半，所以出厂值取 `coverage=0.35`、
+`min_top1_score=5.0`。门控后的读数与无条件 hybrid 同级（recall@1 0.794 / @3 0.971 / @5 0.971 /
+MRR 0.882 / nDCG@5 0.889），`recall@1` 没降——**门控是加法，不是替代**：命中时把 BM25 的结果
+原样保留再与稠密做 RRF 融合。判定结果记在 `HybridPolicySearch.last_dense_decision`，
+检索 span 带上，回放时能看到「这一条为什么没走稠密」。
+
+三条边界要一起说清：门控**只省调用不提准确率**（抬 `recall@1` 的是稠密 0.853 与重排 0.912）；
+阈值是这份 17 条语料上的标定值，换语料要重跑 `evals/dense_gate_analysis.py`；
+覆盖率是词面信号，对同义改写不敏感——这类查询在 BM25 里本来就拿不到分，门控会放行稠密，
+恰好是对的行为。
+
+#### 重排的延迟预算（2026-10-25 新增）
+
+「重排让首位命中更准」是收益，「每次要等多久」是代价。`evals/rerank_latency.py` 走出厂那条链
+（稀疏 + 稠密 + 重排），只给重排器那次 HTTP 调用计时，60 条计时查询、15 个候选块、0 失败：
+
+| mean | p50 | p95 | min | max | 预算 | 判定 |
+|---|---|---|---|---|---|---|
+| 2300 ms | 2281 ms | 2602 ms | 2081 ms | 2689 ms | 300 ms | **OVER BUDGET** |
+
+结论：**在这台只有 CPU 的机器上，重排通道不能进请求路径**——交互式回答的等待上限是几百毫秒，
+p95 是预算的 8.7 倍，而且每次查询都要付；换来的只是 `recall@1` 0.794 → 0.912，
+`recall@3` 反而 0.971 → 0.912。所以 `RETRIEVAL_RERANK_ENABLED` 出厂仍关闭，而关闭的理由现在
+**有数字支撑**。重排仍然值得用的地方是离线：批量重打分、评测集重排、召回分析。
+
+`--enforce` 在 p95 超预算或有失败时返回退出码 1，可以当 CI 关卡用。**边界**：2.3 秒是本机 CPU
+上 15 个候选块的读数，不是托管端点的数字；300 ms 是按「交互式可接受等待」定的决策值，
+没有和服务端 SLA 对齐——上线前要回答的是「托管端点的 p95 是多少」。
+
 ### 11.6 测试覆盖
 
 - `test_policy_query_uses_active_version_only`：只返回 v3。
@@ -2027,7 +2147,7 @@ provider 返回的条数必须等于待灌 chunk 数；同一批里不允许出�
 - Golden Set `policy-active-v3-only`：断言 30 天、不出现 15 天、证据无 v2。
 - 检索评测（[EVALS.md](EVALS.md)）：`recall@k` / `mrr` / `ndcg@5` 打分，
   并把「命中过期政策」「命中其他租户」钉死为 0。
-- `test_retrieval_channels.py`（20 条）：哈希 embedder 的确定性与归一化、
+- `test_retrieval_channels.py`（26 条）：哈希 embedder 的确定性与归一化、
   相似文本必须排更近、`index_dimensions` 报告存量宽度、
   `store_embeddings` 拒绝第二个向量空间、混合检索忽略过期向量空间、
   RRF/z-score 融合语义、重排端点不可达时 fail-open、连续失败开熔断、
@@ -2040,7 +2160,7 @@ provider 返回的条数必须等于待灌 chunk 数；同一批里不允许出�
 
 ### 12.1 路由总表
 
-OpenAPI 里共 **44 个操作 / 41 条路径**（含 2 个健康检查），下表逐条列全；
+OpenAPI 里共 **45 个操作 / 42 条路径**（含 2 个健康检查），下表逐条列全；
 `/` 与 `/console/*` 是静态托管路由，不进 OpenAPI。
 
 | 方法 | 路径 | 身份 | 说明 |
@@ -2064,6 +2184,7 @@ OpenAPI 里共 **44 个操作 / 41 条路径**（含 2 个健康检查），下�
 | POST | `/api/v1/analytics/query` | 任意 | 受控 Text-to-SQL 聚合问答（详见 §22） |
 | GET | `/api/v1/analytics/queries` | 本人 | 查询台账（脱敏） |
 | GET | `/api/v1/analytics/queries/{query_id}` | 本人 | 单次查询详情（含拒绝理由码） |
+| GET | `/api/v1/analytics/llm-usage` | support/approver | 租户级模型用量汇总（跨 worker 的账本）；参数 `hours`（1–720，默认 24）、`limit`（1–200，默认 50） |
 | GET | `/api/v1/handoffs` | support | 转人工队列（每条含 `channel` 溯源） |
 | GET | `/api/v1/handoffs/{id}` | support | 案例详情（含移交包） |
 | POST | `/api/v1/handoffs/{id}/claim` | support | 接单（已被接则 409） |
@@ -2508,7 +2629,7 @@ PUT /api/v1/memory/rules/{event_type}（坐席，需 support 角色）
 
 ### 14.1 测试分层
 
-`tests/` 下收集 458 个测试用例（34 个测试文件，另有 `conftest.py`），按主题平铺成单文件，
+`tests/` 下收集 502 个测试用例（43 个测试文件，另有 `conftest.py`），按主题平铺成单文件，
 没有 unit/integration 分层（pytest marker 已声明但未实际使用）：
 
 | 文件 | 关注点 |
@@ -2549,10 +2670,10 @@ PUT /api/v1/memory/rules/{event_type}（坐席，需 support 角色）
 | `test_personalization.py` | 18 条：无档案不个性化、**答案路径不建档案行也不写 `memory.*` 审计**、称呼只在开场那一轮、`memory.personalize` span 排在 `support.reply` 之前、`history_summary` 与 `contact_window` 一个字都不进回复（且 `fields` 只点名 `preferred_name`）、目录认不出的兴趣完全惰性、认得出的兴趣只产一条追问且用目录名、本轮已在讲这个商品时不加追问、`tone=concise` 只裁追问不动回答、卡片重排两条纯函数用例（含"本来就在第一位不算重排"）、澄清轮只改 `reply`、个性化不写档案也不产生审计、开关关掉逐字回落朴素回答、删档案后回答回到原样、**接管静默轮 `personalization` 为 `null` 而触发了接管的那一轮照常带称呼** |
 | `test_proactive_rules.py` | 21 条（T10）：坐席可改 / 客户 403、未知事件类型 422、模板引用白名单外字段 → 422 且规则行逐字不变、花括号不配对 → 422、位置参数 `{}` → 422、带属性或下标的占位符 → 422、超长模板 → 422、请求体带 `requires_confirmation` → 422、冷却越界 → 422、改文案后**下一条**通知逐字是新文案且旧文案消失、改动**不回溯**已落库的通知、停用后 `emit` 抑制 `NO_RULE` 再启用恢复、冷却 60 → 0 后同一事件立即可再发、审计行只带 `template_sha256` 与字段名（断言模板原文不在 detail 序列化结果里）、跨租户既看不见也改不到、`GET /rules` 的 `required_context` 列出模板字段 |
 
-默认运行 455 passed / 3 skipped：跳过的是 PostgreSQL 专项测试（并发与 Outbox 共 3 个），
-需要 `TICKETPILOT_TEST_POSTGRES_URL`。这些测试会临时创建数据库、跑完删除，不能指向共享库。
-2026-10-25 在 PostgreSQL 16.15 容器上带这个变量跑了全量：**458 passed / 0 skipped（109.92 s）**，
-跳过项全部执行，包含 T2 起新增的 10 个文件与四张新表。
+默认运行 496 passed / 6 skipped：跳过的是 PostgreSQL 专项测试（并发与 Outbox 共 4 个）与 Redis 共享配额专项（2 个），
+需要 `TICKETPILOT_TEST_POSTGRES_URL` / `TICKETPILOT_TEST_REDIS_URL`。这些测试会临时创建数据库、跑完删除，不能指向共享库。
+2026-10-25 在 PostgreSQL 16.15 与 Redis 两个容器上同时带上这两个变量跑了全量：**502 passed / 0 skipped（119.71 s）**，
+包含 T2 起新增的文件与四张新表。
 
 ### 14.2 Golden Set
 
@@ -2582,16 +2703,18 @@ PUT /api/v1/memory/rules/{event_type}（坐席，需 support 角色）
 当成必须为 0 的硬约束。
 
 它不调模型、不联网，`tests/test_retrieval_eval.py` 在 `pytest` 里跑同一份数据，
-CI 也直接跑这个脚本。当前基线（SQLite，2026-10-25 实测；PostgreSQL 侧本轮跑的是
-`test_retrieval_eval.py` 的门槛断言，四通道指标脚本本身未在 PG 上跑）：
+CI 也直接跑这个脚本。当前基线（SQLite，2026-10-25 实测；**同一份脚本在 PostgreSQL 16.15
+的 `tp_eval` 库上也跑过，五行读数与 SQLite 逐位一致**）：
 `bm25` 的 `recall@1` 0.794 / `recall@3` 0.912 / `recall@5` 0.971 / `mrr` 0.875 /
 `ndcg@5` 0.882 / `intent_accuracy` 1.000 / 过期与跨租户命中均为 0。指标定义、
 数据集与暴露出的路由缺口见 [EVALS.md](EVALS.md)。
 
-`--channels bm25,dense,hybrid,rerank` 会额外打印三行对比（同日、同一份数据、
+`--channels bm25,dense,hybrid,gated,rerank` 会额外打印四行对比（同日、同一份数据、
 真实端点）：`dense(bge-m3)` 0.853/0.912/0.971/0.926/0.922，`hybrid` 0.794/0.971/0.971/0.882/0.889，
+`gated` 与 hybrid 同级而 embedding 调用率只有 0.2941，
 `rerank` 0.912/0.912/0.971/0.956/0.944。前两行说明稠密改的是名次、融合补的是覆盖；
-`rerank` 把首位与 MRR 抬到最高，但 `recall@3` 回落到 0.912，代价是每次约 2.3 秒。
+`rerank` 把首位与 MRR 抬到最高，但 `recall@3` 回落到 0.912，代价是每次约 2.3 秒
+（延迟预算判定见 §11.5，判 **OVER BUDGET**）。
 CI 没有端点，跑的是哈希替身（`hybrid(hashing)` 的 `recall@5` 会掉到 0.912），
 那一行只证明编排与守卫没坏，**不进任何生产结论**。
 
@@ -2626,7 +2749,7 @@ CI 没有端点，跑的是哈希替身（`hybrid(hashing)` 的 `recall@5` 会�
 `hybrid` 是对比行，进 CI 是为了让"多路召回与融合的编排"每次提交都被真跑一遍，
 而不是让它悄悄烂掉——它的数字本身不构成发布门槛。
 
-`pyproject.toml` 里 `[tool.mypy] strict = true`，CI 跑 `python -m mypy app`（134 个文件零错误）；
+`pyproject.toml` 里 `[tool.mypy] strict = true`，CI 跑 `python -m mypy app`（137 个文件零错误）；
 `tests` / `scripts` / `evals` 不在类型门禁范围内。没有覆盖率门槛。
 没有前端单元测试（`web` 只构建）。没有真实模型或真实退款的 CI。
 CI 用 Python 3.12，本机验证用 3.13——版本差异目前没有触发过不兼容。
@@ -3056,13 +3179,18 @@ VERIFIED_SUCCESS。
 
 已验证：
 
-- 默认 pytest：455 passed / 3 skipped（收集 458，34 个测试文件），含 T2 的 14 条安全用例、
+- 默认 pytest：**496 passed / 6 skipped（收集 502，43 个测试文件）**，含 T2 的 14 条安全用例、
   T3 的数据集/抽样用例、T4 起、T4b/T7 扩、T8 收口后的 20 条渠道用例、T5 的 21 条记忆/主动服务用例、
   T6 的 20 条稠密检索与融合用例、T7 的 17 条出站投递用例、T9 的 18 条记忆个性化用例、
-  T10 的 21 条规则编辑用例、「对话入口接通模型」轮的 7 条模型缺口用例（`test_llm_gap.py`，
-  规则模式零调用 / 只在缺口上采纳 / 采纳后仍等审批）；
+  T10 的 21 条规则编辑用例、「对话入口接通模型」轮的 9 条模型缺口用例（`test_llm_gap.py`，
+  规则模式零调用 / 只在缺口上采纳 / 采纳后仍等审批 / 三级门控命名三档），
+  以及本轮新增的 7 个测试文件 32 条：模型埋点 5（`test_model_instrumentation.py`）、
+  分布快照 3（`test_model_distribution.py`）、安全交叉 6（`test_security_model_cross.py`）、
+  幂等键 5（`test_task_idempotency.py`）、限流存储 7 + Redis 2（`test_rate_limit_store.py` /
+  `test_rate_limit_redis.py`）、用量账本 4（`test_llm_usage.py`）；
+  另有 6 条稠密门控用例并入 `test_retrieval_channels.py`（该文件现 26 条）；
   Ruff（`app tests scripts evals alembic`）：通过；
-- mypy（`strict = true`）：`app` 134 个文件零错误，已纳入 CI；
+- mypy（`strict = true`）：`app` **137** 个文件零错误，已纳入 CI；
   同一份代码在「装了 `pydantic-ai` + SQLAlchemy 2.0.55」与「没装 `pydantic-ai` + SQLAlchemy 2.0.43」
   两套环境里都零错误（声明的依赖区间两端都能过类型门禁）；
 - Golden Set（SQLite）：40/40，含工具名/参数/降级/回执来源的轨迹断言；
@@ -3071,7 +3199,10 @@ VERIFIED_SUCCESS。
 - 分层抽样：在 85 条 trace 上产出 32 条候选、18 条入队，按渠道×意图封顶；
 - 检索评测基线（SQLite）：recall@1 0.7941、recall@3 0.9118、recall@5 0.9706、mrr 0.8745、
   ndcg@5 0.8824、intent_accuracy 1.0000、stale_hits 0、cross_tenant_hits 0，门槛全过；
-- `alembic check`：无漂移，head 为 `c3b8e5a71d29`；迁移链另在全新 SQLite 上从零 `upgrade head` + `check` 验证通过（11 条迁移、23 张表）；
+  五通道真实端点读数（`dense` 0.8529 / `hybrid` 0.7941 / `gated` 0.7941 / `rerank` 0.9118 的 recall@1）
+  与 **PostgreSQL 上同一张表逐项相同**，见 §11.5；
+- `alembic check`：无漂移，head 为 **`b4e8d2f6a1c9`**；迁移链另在全新 SQLite 上从零 `upgrade head` + `check`
+  验证通过（**13 条迁移、24 张表**）；
 - 前端 `npm run build`：通过；
 - 护栏（T2）：输入侧注入/绕过/敏感内容命中写 `security_events` 且不改变资格判定；输出侧无来源的金额/时效/承诺断言替换为「需确认」并追加提示；租户/IP 令牌桶超限返回 429 + `Retry-After`；JSON >256 KiB、multipart >5 MiB 返回 413；
 - 运营看板（T1）：坐席工作台、运营看板、Trace 查看器与对话页统计卡片已接入，客户身份看不到入口；
@@ -3096,10 +3227,10 @@ VERIFIED_SUCCESS。
   返回状态真的落库；
 - 稠密检索护栏（T6）：20 条用例覆盖哈希 embedder 确定性、`store_embeddings` 拒绝第二个向量空间、
   融合与 fail-open；`--channels bm25,hybrid` 实测对比行已进 CI（门槛仍只套 `bm25`）；
-  同一份 68 条展开查询上 recall@1 0.7941 → 0.8529、MRR 0.8745 → 0.9020，但 **recall@5 从 0.9706
+  同一份 61 条用例（17 条带标注）上 recall@1 0.7941 → 0.8529、MRR 0.8745 → 0.9020，但 **recall@5 从 0.9706
   退化到 0.9118**（RRF 把哈希向量抬上来的块推进前五，挤掉原本在第五的相关块）——这是**无 embedding
   端点时的离线哈希替身**读数，不作为可引用数字；真实 `bge-m3` 端点下 hybrid 是 recall@5 0.9706、
-  recall@1 0.7941，四通道（bm25 / dense / hybrid / rerank）完整读数见 §11.5。两列必须逐 k 看，
+  recall@1 0.7941，五通道（bm25 / dense / hybrid / gated / rerank）完整读数见 §11.5。两列必须逐 k 看，
   不能合成单一分数；生产 `ENVIRONMENT=prod` + `RETRIEVAL_DENSE_ENABLED=true` 而缺 `EMBEDDING_BASE_URL`/`EMBEDDING_MODEL`
   时启动即被拒；
 - 在线真跑（2026-10-24，服务实启于 `127.0.0.1:8124`）：74 条 HTTP 断言 `total=74 passed=74 failed=0`，
@@ -3156,6 +3287,26 @@ VERIFIED_SUCCESS。
   （`updated_at` 变了）、三种坏模板把服务端的 422 原文回显在页面上、停用 / 启用后摘要计数在 3/3 ↔ 2/3 之间变、
   客户身份进页面看到 `.gate` 拒绝面板且**一个规则请求都不发**。
   截图未取——应用内浏览器当时没有可见视口，验收以 DOM 断言 + 服务端回读为准。
+- 本轮（2026-10-25，检索门控 / 三级门控 / 跨进程接缝 / 模型评测）：
+  - **稠密门控**（§11.5）：在 LM Studio `bge-m3` 上扫出「覆盖率 0.35 → embedding 调用 5/17（29%）
+    且捞回 3/3 条 rank-1 失败」，与无条件 hybrid 同级读数（recall@3 0.971、recall@1 0.794 不降）；
+    分数口径要开到 26.00 才捞得回同样三条，代价 11/17（65%）——这是选覆盖率而非分数的直接证据。
+    **一处修正**：上一轮写的「4 条用例的正确答案进不了前两名」在逐条证据上是 **3 条 rank-1 完全没命中
+    + 1 条部分命中**（`refund-window` 首个命中正确、第二个相关章节被挤出 top-3，稠密也救不了）；
+  - **三级门控**：问句不再进模型。`model_gate` 的三档（`rules_hit` / `question` / `consult`）
+    在调用前写下并进 `understand` span 的 `model_gap.gate`；`AGENT_MODE=rules` 在触碰模型前就返回。
+    分布快照里 **4 条用例（注入问题 / 绕过审批 / PII 退款 / 干净问题）模型调用数为 0**；
+  - **模型分布快照**（`evals/model_distribution.py`，30 次运行 / 32 句）：意图变更率 **73.3%**、
+    金额回填在预定义区间内 **9-9**、订单号与原文一致 **12-12**、平均置信度 0.885、
+    **重试 0 次 / 失败 0 次**；唯一不稳定的是 `handoff-third`（TICKET_CREATE:1 / UNKNOWN:2）——
+    所以「73.3% 意图变更」**不能**读成「73.3% 准确率」；
+  - **安全 × 采纳交叉**（`evals/security_model_cross.py`，9 条用例）：4 条危险输入在进模型前就被拦下
+    （模型调用数 0）；`authority-other-order` 是**拒绝**（FAILED / 「订单不存在」）而不是失败。
+    安全判据是「**没有任何审批被通过、没有任何退款行存在**」——钱没动；
+  - **跨进程接缝**：`RATE_LIMIT_STORE=redis` 走 `INCR`+`EXPIRE` 的固定窗口，Redis 不可用时退回进程内桶
+    （**绝不退回「不限流」**）；`llm_usage` 表跨 worker 记账（请求 / 重试 / token / 耗时），
+    `GET /api/v1/analytics/llm-usage` 给租户级汇总；`Idempotency-Key` 三种语义
+    （新键 201 / 同键同摘要重放并带 `idempotent_replay: true` / 同键异摘要 409）由数据库唯一索引裁决；
 - 截图所用演示库计数：tasks 1、approvals 1（`CONSUMED`）、refunds 1、tool_executions 1、
   orders 4、documents 5。**这组数字在 2026-10-24 重建后的本地库上重新跑出来了**（服务实启于 `127.0.0.1:8126`，
   `AUTO_CREATE_TABLES=false` + `alembic upgrade head` 后的 seed 库）：`scripts/demo.py` 三条只读问答与两次
@@ -3169,14 +3320,20 @@ VERIFIED_SUCCESS。
   **那是 T7-4 之前的一轮**：handler 接上之后（下面 T7 那条真跑记录）同一条链路已经实测收敛到 `SENT`，
   退款侧「成功退款不产生 Outbox 消息」这个口径没有变，变的只是主动通知有出口了；
 - PostgreSQL 16.15（一次性容器，2026-10-25 复跑）：带 `TICKETPILOT_TEST_POSTGRES_URL` 的全量 pytest
-  **458 passed / 0 skipped（109.92 s）**，默认跳过的三项并发 / Outbox 用例全部执行；同一容器上
-  Golden Set **40/40**、支持集 **61/61**，`alembic upgrade head` 走完 11 条迁移（head `c3b8e5a71d29`）、
-  `alembic check` 输出 `No new upgrade operations detected.`。T2 起新增的 10 个测试文件（148 条，
-  含 `test_llm_gap.py` 7 条）与四张新表（T4 的 `channel_messages` + T5 的三张）都在这次覆盖内。
-  此前「141 条新用例从未在 PG 执行」的口径到此为止，不再成立；
-- 两库一致的证据现在是：全量 pytest、Golden 40/40、支持集 61/61 都在 SQLite 与 PostgreSQL 上跑过。
-  **仍未在 PG 上跑的是四通道检索指标脚本本身**（PG 侧跑的是 `test_retrieval_eval.py` 的门槛断言，
-  不是 `retrieval_metrics.py` 的四行输出）；`dense` / `hybrid` / `rerank` 三列仍只有 SQLite 读数；
+  **502 passed / 0 skipped（119.71 s）**——同时指上 PostgreSQL 与 Redis 两个容器，默认跳过的 4 条
+  PostgreSQL 专项（并发与 Outbox）与 2 条 Redis 共享配额专项全部执行；同一容器上
+  Golden Set **40/40**、支持集 **61/61**，`alembic upgrade head` 走完 13 条迁移（head `b4e8d2f6a1c9`）、
+  `alembic check` 输出 `No new upgrade operations detected.`。T2 起新增的测试文件与四张新表
+  （T4 的 `channel_messages` + T5 的三张）都在这次覆盖内。此前「141 条新用例从未在 PG 执行」的口径
+  到此为止，不再成立。**秒数会随机器负载浮动**（早先一次同读数是 194.54 s，当时并发跑着五通道 PG 指标
+  与重排基准），稳定的是通过 / 跳过条数，不是耗时；
+- **五通道检索指标脚本本身已在 PG 上跑过**（`tp_eval` 库）：`bm25` / `dense` / `hybrid` / `gated` / `rerank`
+  五行读数与 SQLite **逐项相同**（见 §11.5）。这一条此前是缺口，现在不是了；
+- **两库一致的证据**：全量 pytest、Golden 40/40、支持集 61/61、五通道指标表，
+  都在 SQLite 与 PostgreSQL 上跑过；
+- **重排延迟预算（`evals/rerank_latency.py`，2026-10-25 实测）**：60 条计时查询、15 个候选块、0 失败，
+  mean 2300 ms / p50 2281 / p95 2602 / max 2689，对 300 ms 的交互式预算判定 **OVER BUDGET**。
+  重排通道**不进请求路径**的结论现在有数字支撑（见 §11.5）；
 - Docker Compose 实跑：`docker compose up -d --build` 镜像构建通过并起栈，
   栈内 `/health/ready` → `{"status":"ready"}`、`/console/` 200、
   容器内 `scripts/seed.py` 与 `scripts/demo.py` 均跑通。
@@ -3188,15 +3345,20 @@ VERIFIED_SUCCESS。
 - 真实退款渠道（未实现，prod 拒绝启动）；
 - 实时 SSE（只有回放）；
 - 任务执行的崩溃恢复（退款对账有 worker，任务本身的断点续跑没有）；
-- 任务创建幂等；
-- 跨进程 / 多副本共享限流配额（当前每进程各有一份令牌桶，真实上限随 worker 数放大）；
+- 幂等键的**客户端义务**：服务端已支持 `Idempotency-Key`（§12.3），但**不带这个头的调用不享受重放防护**——
+  服务端没有"代客户端生成一个键"的做法，因为那等于把幂等语义从调用方手里拿走；
+- 跨进程限流只在 `RATE_LIMIT_STORE=redis` 时成立：默认 `memory` 仍是每进程各有一份令牌桶，
+  真实上限随 worker 数放大；Redis 模式是**固定窗口**（边界粗），且 Redis 不可用时退回进程内桶；
+- 模型用量账本能**记账不能刹车**：`llm_usage` 告诉你花了多少，但没有按会话 / 按用户的模型预算，
+  限流按租户与 IP，不按模型成本；
 - 附件类型白名单与 EXIF 剥离（当前只限制 multipart 请求体总量）；
 - 回放不覆盖转人工与写路径会话（坐席动作与审批不可重放，只能靠 Golden 兜底）；
 - bad case 队列没有自动回灌数据集的流程，也没有跨天去重；抽样渠道在 T7-5 之后两处都可信——优先取移交包上的
   渠道，没有移交时读 `TaskRuntime` 的 `context.channel`（`scripts/sample_traces.py::_channel`），
   回落成 `web` 只发生在早于 T7-5 的历史数据上；
 - 真实语料上的稠密检索效果：本机已用 `bge-m3` 跑出数字（§11.5），但只有 17 条标注、17 个块，
-  不能外推；重排也只在本机 CPU 的 Infinity 上测过，没有生产级部署与延迟预算；
+  不能外推；重排也只在本机 CPU 的 Infinity 上测过，**延迟预算已判定为 OVER BUDGET（§11.5），
+  但没有生产级部署与容量数据**；
 - 主动服务的投递只到"交给配置的出站通道"：只有 `none`（默认，拒绝一切发送）与 `local_file`（写本地文件）
   两种传输，**没有服务商协议**，所以 `SENT` 不等于送达；
 - 主动规则的写面（T10）只到"能改"：坐席可以在控制台「通知规则」页改文案 / 冷却 / 启停
@@ -3210,8 +3372,9 @@ VERIFIED_SUCCESS。
   的真实验签算法并不一致，接入时以对方文档为准；
 - **PostgreSQL 缺口已关闭（2026-10-25）**：T2 起新建的 10 个测试文件（148 条）与四张新表
   （`channel_messages` + 档案 / 规则 / 通知，T9/T10 未新增表）都在 PostgreSQL 16.15 容器上跑过，
-  全量 **458 passed / 0 skipped**、Golden 40/40、支持集 61/61。仍然没有的是四通道检索指标脚本本身
-  在 PG 上的输出（PG 侧只有 `test_retrieval_eval.py` 的门槛断言）；
+  全量 **458 passed / 0 skipped**、Golden 40/40、支持集 61/61；同日把 Redis 容器也指上后是
+  **502 passed / 0 skipped（119.71 s）**。检索指标脚本本身也在 PG 上跑过（`tp_eval` 库），
+  **五行读数与 SQLite 逐位一致**——为此修掉了 `visible_chunks()` 缺 `ORDER BY` 的行序不确定（§11.5）。
 - Outbox 承载两类消息（`refund.pending_confirmation` 与 `proactive.confirmed`），两者都有消费者；
   但主动通知一侧的传输只有演示实现，`SENT` 之后到客户设备之间没有任何代码；
 - 主动事件的入参校验排在六门抑制之后（`context` 白名单与模板完整性），因此对同一用户重复投递时
@@ -3332,6 +3495,19 @@ VERIFIED_SUCCESS。
 | 本文件 §11.4 / §11.5、`docs/EVALS.md` 基线节、`docs/AGENT_PLATFORM_PLAN.md`、`README.md` | 「稠密通道与重排默认关闭，本机没有真实端点，跑的是哈希替身」「hybrid 的 recall@5 退化，不能当结论」「rerank 没有可引用数字」 | 稠密用 LM Studio `bge-m3`、重排用 Docker Infinity `bge-reranker-v2-m3` 跑出四行读数：recall@1 bm25 0.794 / dense 0.853 / hybrid 0.794 / rerank 0.912；rerank 的 recall@3 回落到 0.912、每次约 2.3 秒。默认仍关闭，门槛仍只套 bm25，哈希行降级为 CI 编排证据 |
 | 本文件 §19.4「不应承诺」 | 「已接入真实大模型——只有 TestModel」「控制台能配置主动服务规则——页面上改不了冷却、额度与话术模板」 | 前一句改为「托管大模型未接入；本机 LM Studio 有实测」；后一句 T10 后已不成立，改为「可改文案 / 冷却 / 启停，但事件类型固定、无复核 / 回滚 / 灰度」 |
 | `docs/TicketPilot项目说明书.docx` 的生成方式 | 手工 Pandoc 重生成，容易漏 | 新增 `scripts/build_manual.py`（`make manual`）：渲染后校验 U+FFFD=0、段落 / 表格数、体积，失败不替换旧文件 |
+
+本轮（2026-10-25，五通道两库 + 重排预算 + 版面实看）已修正的漂移：
+
+| 位置 | 原措辞 | 现在的说法 |
+| --- | --- | --- |
+| 本文件 §11.5、`docs/EVALS.md` 基线节、`README.md` 检索基线表、`docs/AGENT_PLATFORM_PLAN.md` | 检索指标只有**四**行（bm25 / dense / hybrid / rerank），且只在 SQLite 上跑过；「四通道检索指标脚本从未在 PostgreSQL 上执行」 | 指标脚本扩到**五**行（加 `gated`），并在 PostgreSQL 16.15（`tp_eval`）上真跑——**与 SQLite 逐位一致**：recall@1 bm25 0.794 / dense 0.853 / hybrid 0.794 / gated 0.794 / rerank 0.912；`dense_trigger_rate` gated **0.2941**（其余通道 0 或 1.00） |
+| 本文件 §11.5、`docs/EVALS.md`、`app/retrieval/search.py` | —— | **修掉一个可复现性缺陷**：`PolicySearchService.visible_chunks()` 原本没有 `ORDER BY`，行序随数据库而变 → BM25 同分行的次序变 → 重排候选集变 → 同一个语料在 SQLite 与 PostgreSQL 上排序不一致。改为 `.order_by(DocumentChunk.id)` 后两库逐位一致（改动见 `app/retrieval/search.py` 的 `visible_chunks`） |
+| 本文件 §11.5、`docs/EVALS.md`、`README.md`、`CONTRIBUTING.md` | 「rerank 没有可引用数字」「每次约 2.3 秒」（无判定） | 新增 `evals/rerank_latency.py`：把计时探针注入**生产**的 `HybridPolicySearch`，量的是线上那条融合后的候选集（15 条）。实测 60 次调用、0 失败：mean 2300 / p50 2281 / **p95 2602** / min 2081 / max 2689 ms，预算 300 ms → **OVER BUDGET**。结论：在这台纯 CPU 机器上重排**不能进请求路径**，默认仍关闭，理由从「没测」变成「测了，超预算」 |
+| 本文件 §11.5 的指标说明、`docs/EVALS.md` 基线节 | 「同一份 **68 条**展开查询」「61 条用例」混用 | 分母写清：**数据集 61 条用例，其中 17 条带 `policy_id` 标注**；召回指标的分母是这 17 条，其余 44 条只参与 `intent_accuracy` |
+| 本文件 §11.6 与 §19.1、`docs/EVALS.md` T1 验收记录 | 「`test_retrieval_channels.py`（**20 条**）」「稠密门控的 **5 条**」「限流存储 **9** 条」 | 逐文件核对后的实际值：`test_retrieval_channels.py` **26 条**（其中稠密门控 **6** 条）、`test_rate_limit_store.py` **7** 条 + `test_rate_limit_redis.py` **2** 条（合计 9，但分属两个文件） |
+| 本文件 §1.7 / §14.1 / §19.1、`README.md`、`CONTRIBUTING.md`、`docs/NEXT_STEPS.md` | 「458 passed / 0 skipped（109.92 s）」（PG，但没带 Redis） | 同时指上 **PostgreSQL 与 Redis** 两个容器后 **502 passed / 0 skipped（119.71 s）**；13 条迁移、head `b4e8d2f6a1c9`、`alembic check` 无漂移；Golden 40/40、支持集 61/61 不变 |
+| 本文件 §14.1、§19.1、`docs/AGENT_PLATFORM_PLAN.md` | 「**41** 条路径 / **44** 个操作」「mypy strict **134** 个文件」「**32** 个测试文件」「**23** 张表」「**11** 条迁移」 | 按 `create_app().openapi()` 复核为 **42 条路径 / 45 个操作**；mypy strict **137** 个文件零错误；`tests/*.py` **43** 个文件、收集 **502** 条；**24** 张表；**13** 条迁移 |
+| 本文件附录 C、`docs/NEXT_STEPS.md` §7 | docx 只做了结构与编码校验（U+FFFD = 0） | 本轮补上**版面实看**：docx → PDF（Gotenberg 8 容器内 LibreOffice，路由是 `POST /forms/libreoffice/convert`）→ PNG（容器内 `pdftoppm`）→ 逐页目视标题页 / 正文 / 表格 / 复选框。结论：复选框里的空心方块是**真实的 U+2610 球票框**（`pdftotext` 字节级核对），不是豆腐块；U+FFFD = 0、无 `w:sym` / 私用区字符 |
 
 处理原则：本文档以代码为准；对外材料引用前先核对上表，不要复制旧措辞。
 
@@ -3982,7 +4158,7 @@ python scripts/outbox_worker.py --once     # 单轮后退出
 
 在声称「完成」之前，逐项确认：
 
-- [ ] `python -m pytest` 通过（默认 455 passed / 3 skipped，跳过的是 PostgreSQL 用例；收集 458、34 个测试文件）
+- [ ] `python -m pytest` 通过（默认 496 passed / 6 skipped，跳过的是 PostgreSQL 与 Redis 专项用例；收集 502、43 个测试文件）
 - [ ] 如改了并发/锁，设置 `TICKETPILOT_TEST_POSTGRES_URL` 在真实 PostgreSQL 上跑全量
 - [ ] `ruff check .` 通过
 - [ ] `python -m mypy app` 通过（`strict = true`，只覆盖 `app`）
@@ -4108,6 +4284,27 @@ python scripts/outbox_worker.py --once     # 单轮后退出
 > （`make manual`），docx 已重生成并校验 `U+FFFD` 计数 0，精确读数记在 `docs/NEXT_STEPS.md` §7.4。
 > **仍未执行**：四通道检索指标脚本本身在 PG 上的输出；生产托管 embedding / rerank 的接入与压测；
 > 服务商侧投递；浏览器截图未取。
+
+> **2026-10-25（检索门控 + 三级门控 + 跨进程接缝 + 模型评测 + 两库复跑 + 重排延迟预算）本轮实跑并留痕
+> （取代上一行的读数）**：
+> `ruff` All checks passed · `mypy app` **137 文件**零错误 · `pytest` **496 passed / 6 skipped**
+> （收集 502、43 个测试文件、**118.54 s**）· Golden **40/40** · 支持集 **61/61** ·
+> 检索门槛 `GATE PASSED`（`bm25` 读数与上一轮逐字相同）·
+> 回放 **REPLAY DIFF EMPTY** · `alembic check` → `No new upgrade operations detected.`
+> （全新 SQLite 从零 `upgrade head` 走完 **13 条迁移**、**24 张表**，head `b4e8d2f6a1c9`）。
+> **PostgreSQL 16.15 一次性容器**（`ticketpilot-pg`，`127.0.0.1:55432`）上另跑一轮：全量
+> **500 passed / 2 skipped（134.77 s）**——跳过的 2 条是 Redis 用例；同时指上本机 Redis 容器
+> （`ticketpilot-redis`，`127.0.0.1:56379`）后是 **502 passed / 0 skipped（119.71 s）**，一条不跳。
+> **五通道检索指标脚本本身已在 PG 上跑过**（`evals/retrieval_metrics.py --channels bm25,dense,hybrid,gated,rerank
+> --database-url postgresql+psycopg://tp:tp@127.0.0.1:55432/tp_eval`），**五行读数与 SQLite 逐位一致**——
+> 能一致的前提是修掉了 `PolicySearchService.visible_chunks()` 缺 `ORDER BY` 的行序不确定（`app/retrieval/search.py`，
+> 唯一的行为改动），上一行那句「检索指标脚本本身在 PG 上的输出」到此为止。
+> **重排延迟预算**：新增 `evals/rerank_latency.py`，把「2.3 秒/次」写成一条可执行的预算判定
+> （默认 300 ms 交互预算，p95 超标 → OVER BUDGET），读数见 §11.5。
+> **说明书 docx**：已做**版式目视检查**——docx → PDF（Gotenberg 8 容器内 LibreOffice）→ PNG（容器内 `pdftoppm`）→ 逐页看；
+> 复选框里的空心方块是真实的 U+2610 球票框（`pdftotext` 字节级核对），不是豆腐块，U+FFFD 计数 0。
+> **仍未执行**：生产托管 embedding / rerank 的接入与压测；服务商侧投递；
+> 浏览器截图未取（应用内浏览器当时没有可见视口）。
 
 ---
 

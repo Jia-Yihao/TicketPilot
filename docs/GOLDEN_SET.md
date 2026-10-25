@@ -57,7 +57,7 @@ docker compose exec app alembic -x db_url=postgresql+psycopg://ticketpilot:ticke
 docker compose exec app python evals/run.py --database-url postgresql+psycopg://ticketpilot:ticketpilot-dev-only@db:5432/ticketpilot_eval
 ```
 
-执行器使用临时 SQLite（或显式指定的数据库）、真实种子数据和完整 HTTP 层；不 mock 业务规则。输出逐条 PASS/FAIL，任一失败退出码为 1。2026-10-25 实测 SQLite **40/40**、PostgreSQL 16.15 **40/40**（同一轮全量 pytest 458 passed / 0 skipped）。`tests/test_golden_runner.py` 另外要求执行器拒绝脏库（同一库重跑返回 2，`--reset` 后恢复）。
+执行器使用临时 SQLite（或显式指定的数据库）、真实种子数据和完整 HTTP 层；不 mock 业务规则。输出逐条 PASS/FAIL，任一失败退出码为 1。2026-10-25 实测 SQLite **40/40**、PostgreSQL 16.15 **40/40**（同一轮全量 pytest 502 passed / 0 skipped，两个容器同时指上）。`tests/test_golden_runner.py` 另外要求执行器拒绝脏库（同一库重跑返回 2，`--reset` 后恢复）。
 
 并发回归不在 Golden Set 中，而由 `tests/test_postgres_concurrency.py` 覆盖：设置 `TICKETPILOT_TEST_POSTGRES_URL` 后，在真实 PostgreSQL 上先验证同订单重复申请被订单级唯一索引挡下（第二个任务 `FAILED`、开放审批仍只有一条），再让两个审批人用栅栏并发审批**同一个任务**，断言仅一个成功、仅一条退款、余额只扣一次、订单版本只递增一次。该用例会创建并删除临时数据库，需显式启用，避免误连业务库。
 

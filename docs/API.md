@@ -511,6 +511,37 @@
 
 台账只保留 SQL 文本与参数摘要，**不保存结果行**；`row_count` 是执行时的行数。控制台的统计卡片据此展示计划、SQL 与行数，但不会重新执行查询。
 
+### GET `/api/v1/analytics/llm-usage`
+
+本租户的**模型用量账本**，跨所有 worker 汇总（每次模型运行一行 `llm_usage`）。要求 `support` / `approver` / `admin` 角色——数字里带着任务与会话 ID，客户不该读到。
+
+参数 `hours`（1–2160，默认 24）与 `limit`（1–200，默认 50）。
+
+```json
+{
+  "window_hours": 24,
+  "totals": {
+    "calls": 5, "failed": 0, "requests": 5, "retries": 0,
+    "input_tokens": 3104, "output_tokens": 413, "avg_latency_ms": 7651.2
+  },
+  "by_source": [
+    {"source": "chat", "calls": 3, "failed": 0, "requests": 3, "retries": 0,
+     "input_tokens": 1957, "output_tokens": 231, "avg_latency_ms": 7433.0}
+  ],
+  "recent": [
+    {"id": "llm_...", "source": "chat", "planning_source": "pydantic_ai",
+     "model_name": "openai:qwen/qwen3-8b", "conversation_id": "conv_...",
+     "task_id": null, "requests": 1, "retries": 0, "input_tokens": 691,
+     "output_tokens": 62, "latency_ms": 7931, "status": "OK",
+     "created_at": "..."}
+  ]
+}
+```
+
+- `requests` 是模型请求数，**`retries` 是校验重试数**（`retries = max(0, requests - 1)`，由 PydanticAI 自己的计数派生，不是猜的）。`requests = 2 && retries = 1` 就是「第一次没过、被问了一次」。
+- `source` 是 `task`（任务路径）或 `chat`（对话路径）；`planning_source` 是这次规划由谁做的。
+- `AGENT_MODE=rules` 的部署返回**空账本**而不是 404——「没有花费」是一个事实，不是一个缺失的资源。
+
 ## 转人工（坐席侧）
 
 客服侧说"已转人工"只是话术；这一组接口是坐席真正接手用的。所有接口都要求 `support` 角色、且按租户隔离：别的租户的坐席看到的是"没有这条"，而不是别人的客户。
@@ -719,6 +750,24 @@
 同一订单同一动作已有 `PENDING`/`APPROVED` 审批时，第二个退款申请**仍然返回 `201`**，但任务快照为 `status = "FAILED"`、`result.outcome = "FAILED"`、`result.summary` 含 `This resource already has an open approval.`，且数据库里仍只有一条开放审批。这是订单级并发防护的**业务结论**，不是 HTTP 错误：第一笔任务与审批不受影响。服务端内部用 `ConflictError(APPROVAL_ALREADY_OPEN)` 表达该冲突，它被任务运行时捕获后落在任务上，不会变成 409。
 
 真正返回 `409` 的是审批决策阶段：重复审批同一任务返回 `409 CONFLICT`，过期审批返回 `409 APPROVAL_EXPIRED`（见下）。
+
+#### `Idempotency-Key`（可选请求头）
+
+请求头 `Idempotency-Key`（最长 200 字符）让「创建并执行」这一步可以被安全重试。三种情况：
+
+| 情况 | 结果 |
+|---|---|
+| 新键 + 新请求 | 建任务并执行，`201`（同上） |
+| 同键 + **同**请求摘要 | **回放**已有任务，不重复执行；响应体多一个 `idempotent_replay: true` |
+| 同键 + **不同**请求摘要 | `409 CONFLICT`，`message` 为 `Idempotency-Key was reused with a different request.` |
+
+请求摘要 = `sha256` of `canonical_json({"request": ..., "context": ...})`（`sort_keys=True`、紧凑分隔符，所以跨进程稳定）。**摘要只覆盖请求体，不覆盖身份**——键的作用域是 `(tenant_id, user_id, key)`，不同用户用同一个键不会互相命中。
+
+回放时如果原任务停在 `CREATED`（没跑起来），服务端会把它接着跑完再返回——键的含义是「这件事我提交过」，不是「我只要一份回执」。
+
+**仲裁者是数据库唯一索引** `uq_tasks_idempotency (tenant_id, user_id, idempotency_key)`，不是应用层的先查后建：两个 worker 同时提交同一个键时，一个撞约束，回滚后读回赢家写的行。应用层的查询只是**省掉常见的顺序重试**这一笔写。
+
+**不带这个头 = 不受保护**：客户端不给键，重放防护不存在。同样的边界在渠道入口是 `X-Channel-Message-Id`（见「渠道」一节）。
 
 ### GET `/api/v1/tasks`
 

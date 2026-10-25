@@ -42,7 +42,9 @@
 | 客户档案里的自由文本借"个性化"进回复 | 档案只有四种可枚举的模板效果（称呼开头 / 商品卡重排 / 按 `tone` 裁追问 / 把兴趣变成一条追问），没有"把档案拼进提示词"这条路：`preferred_name` 与每条兴趣在**写入时**过 PII 检查（命中 422），`history_summary` 落库前已是掩码文本且根本不在读取列里，兴趣必须被 `CatalogService.resolve()` 解析成真实商品才生效（解析不出就静默丢弃，不回显客户写的字符串）；Trace 里只落原因码与字段名，不落档案值 | `agent/personalization.py`、`services/memory.py::_clean_text`、`services/catalog.py::resolve` |
 | 提示注入诱导越权 | 模型无工具权限；写操作过 Tool Gateway；服务端规则兜底；注入模式命中只留痕，不参与规则判定 | `tools/gateway.py`、`core/guard.py` |
 | 无来源的金额/时效承诺 | 输出护栏检查金额、时效、百分比与承诺词；无工具/卡片/任务来源的片段替换为「需确认」并追加提示 | `core/output_guard.py` |
-| 高频请求拖垮服务 | 租户与 IP 双令牌桶，超限返回 429 + `Retry-After`（进程内预算，多 worker 会放大） | `api/middleware.py` |
+| 客户端重试造成重复写 | `Idempotency-Key` 头 + 唯一索引 `uq_tasks_idempotency (tenant_id, user_id, idempotency_key)`；同键同请求回放，同键不同请求 409；仲裁者是约束不是应用层时序 | `api/v1/tasks.py`、`services/runtime.py::create_task` |
+| 模型成本被无限放大 | 三级门控：规则读懂不问、问句不问、只有真缺口才问；`UsageLimits(request_limit=2)` 限制单次运行的请求数；每次调用落 `llm_usage` 一行 | `agent/support_agent.py::model_gate`、`agent/pydantic_agent.py`、`services/llm_usage.py` |
+| 高频请求拖垮服务 | 租户与 IP 双令牌桶，超限返回 429 + `Retry-After`（默认进程内预算，多 worker 会放大；`RATE_LIMIT_STORE=redis` 换成跨进程共享的固定窗口计数器） | `api/middleware.py`、`core/rate_limit.py` |
 | 超大请求体 | JSON 默认 256 KiB、multipart 默认 5 MiB，超限返回 413；SSE 等无 body 的 GET 不受影响 | `api/middleware.py`、`core/config.py` |
 | 安全事件不可追溯 | 输入/输出/传输层拒绝统一写 `security_events`（PII 只存掩码摘要与指纹） | `models/security_event.py`、`api/v1/security.py` |
 | 错误信息泄漏 | 统一错误信封；500 不返回内部细节 | `core/errors.py` |
@@ -134,8 +136,9 @@ DATABASE_URL=postgresql+psycopg://...       # SQLite 会被拒绝
 ## 日志与密钥
 
 - 不记录 API Key、令牌、`.env` 内容、完整连接串。
-- 本次实现未引入真实模型调用；启用 `AGENT_MODE=pydantic_ai` 时需由部署环境注入 `ANTHROPIC_API_KEY`，代码不读取也不打印它。
+- 启用 `AGENT_MODE=pydantic_ai` 时，模型凭据由部署环境注入（本地 LM Studio 用 `OPENAI_API_KEY=lmstudio` + `OPENAI_BASE_URL`；托管路径需要 `ANTHROPIC_API_KEY`），代码不读取也不打印它。**本仓库验证过的只有本地 LM Studio**（`qwen/qwen3-8b`），托管模型没有密钥也没有断言。
 - 审计事件保存动作、资源、结果和必要的业务摘要，不保存完整支付凭证。
+- 模型用量账本 `llm_usage` 记 token 计数与耗时，**不记 prompt 原文与模型回复原文**；`decision_summary` 不落这张表，它只在 trace 的 span 属性里（且已过 PII 掩码）。
 
 ## P0 修复（2026-10-23）
 
@@ -169,8 +172,9 @@ DATABASE_URL=postgresql+psycopg://...       # SQLite 会被拒绝
 ## 已知缺口
 
 - 开发 Header 身份仍是本地默认；真实 OIDC/JWT 适配器与真实退款渠道尚未实现，因此 prod 模式目前只能验证“拒绝启动”，不能对外服务
-- 无任务创建幂等键：同一文本请求执行两次会生成两个任务（P1）
-- 限流是**进程内**令牌桶（默认租户 600 次/分、IP 300 次/分），多 worker 部署时预算按进程放大，跨进程配额需要 Redis
+- ~~无任务创建幂等键~~ **已关闭（2026-10-25）**：`POST /api/v1/tasks` 现在接受 `Idempotency-Key` 头，同键同请求回放已有任务（`idempotent_replay: true`），同键不同请求 409；唯一索引 `uq_tasks_idempotency (tenant_id, user_id, idempotency_key)` 是仲裁者。**残留边界**：客户端**不给键**就没有重放防护（与渠道入口 `X-Channel-Message-Id` 同一类边界）
+- ~~限流是进程内令牌桶~~ **部分关闭（2026-10-25）**：`RATE_LIMIT_STORE=redis` + `REDIS_URL` 提供跨进程共享的配额（`INCR` + `EXPIRE` 的固定窗口）。**残留边界**：固定窗口在分钟边界可花双倍预算（要精确得用滑动窗口或 Lua）；Redis 挂掉时**退回进程内桶**，此时多 worker 的预算仍然按进程放大——所以「共享配额」依赖 Redis 可用，不是强保证
+- 模型用量已落 `llm_usage` 表（跨 worker 可查，`GET /api/v1/analytics/llm-usage`），但**没有按会话 / 按用户的模型预算**：账本能告诉你花了多少，不能阻止下一次调用；限流按租户与 IP，不按模型成本
 - 体积上限按整个请求体计（JSON 256 KiB、multipart 5 MiB），不是解析后的单文件大小；附件类型白名单与 EXIF 剥离未实现
 - 输入护栏只识别已知注入/绕过模式并留痕，不拦截；输出护栏按「任务/卡片/工具」粗粒度判定来源，有来源时整段放行，不做逐句引用绑定
 - 审批过期仍在操作时惰性判断，无后台过期扫描；退款对账已由 Outbox worker 驱动，但 worker 需常驻进程或手动触发，未接入调度器与告警

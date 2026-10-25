@@ -26,8 +26,8 @@ uvicorn app.asgi:app --reload --port 8000
 
 ```bash
 ruff check app tests scripts evals alembic
-python -m mypy app                        # strict 模式，零错误（134 个文件）
-python -m pytest                          # 455 passed, 3 skipped（收集 458、34 个测试文件；跳过的 3 条需要 PostgreSQL）
+python -m mypy app                        # strict 模式，零错误（137 个文件）
+python -m pytest                          # 496 passed, 6 skipped（收集 502、43 个测试文件；跳过的 6 条需要 PostgreSQL 或 Redis）
 python evals/run.py                       # 40/40 任务路径 Golden Set
 python evals/support_run.py               # 61/61 只读路径（含多轮澄清）
 python evals/retrieval_metrics.py         # 检索/路由评测基线，门槛全过
@@ -38,20 +38,26 @@ cd web && npm run build                   # 控制台类型检查 + 构建
 
 这九条与 `.github/workflows/ci.yml` 的主 job 一一对应；CI 的 Postgres job 只验迁移链，不跑 pytest。
 
-只有需要真实 PostgreSQL 的用例（并发锁与 Outbox 认领竞态）才要指过去；指过去之后它们会真的执行，不再是 3 个 skip：
+只有需要真实 PostgreSQL（并发锁与 Outbox 认领竞态）或真实 Redis（跨进程共享配额）的用例才要指过去；指过去之后它们会真的执行，不再是 skip：
 
 ```bash
-TICKETPILOT_TEST_POSTGRES_URL=postgresql+psycopg://... python -m pytest   # 2026-10-25：458 passed / 0 skipped（109.92 s）
+TICKETPILOT_TEST_POSTGRES_URL=postgresql+psycopg://... python -m pytest   # 2026-10-25：500 passed / 2 skipped（134.77 s）
+TICKETPILOT_TEST_REDIS_URL=redis://127.0.0.1:56379/0 python -m pytest tests/test_rate_limit_redis.py   # 2 passed
+# 两个容器同时指上：全量一条不跳
+TICKETPILOT_TEST_POSTGRES_URL=postgresql+psycopg://... TICKETPILOT_TEST_REDIS_URL=redis://127.0.0.1:56379/0 python -m pytest   # 2026-10-25：502 passed / 0 skipped（119.71 s）
 ```
 
 这些用例会临时创建数据库、跑完删除，不能指向共享库。
 
-> **Postgres 覆盖范围（2026-10-25）**：T2 起新建的 10 个测试文件（148 条，含 `test_personalization.py` 18 条、
-> `test_proactive_rules.py` 21 条、`test_llm_gap.py` 7 条）与四张新表已经在 PostgreSQL 16.15 容器上跑过：
-> 全量 **458 passed / 0 skipped**，同一容器上 Golden **40/40**、支持集 **61/61**、11 条迁移 + `alembic check` 无漂移。
-> 默认 `pytest` 的 455 passed / 3 skipped 是 SQLite 基线，两个读数不要混写。
-> **仍未在 PG 上跑**的是四通道检索指标脚本（`retrieval_metrics.py` 的 dense / hybrid / rerank 三列），
-> PG 侧只有 `test_retrieval_eval.py` 的门槛断言。
+> **Postgres 覆盖范围（2026-10-25）**：T2 起新建的测试文件与四张新表已经在 PostgreSQL 16.15 容器上跑过：
+> 全量 **500 passed / 2 skipped**，跳过的 2 条是 Redis 用例（把 `TICKETPILOT_TEST_REDIS_URL` 也指上后是 **502 passed / 0 skipped**，119.71 s），
+> 13 条迁移 + `alembic check` 无漂移。
+> 默认 `pytest` 的 496 passed / 6 skipped 是 SQLite 基线，两个读数不要混写。
+> **检索指标脚本本身也在 PG 上跑过**（`retrieval_metrics.py --channels bm25,dense,hybrid,gated,rerank`
+> 在 `tp_eval` 库上跑出五行读数，与 SQLite 逐位一致）。
+> 这次能一致，前提是修掉了一个可复现性缺陷：`PolicySearchService.visible_chunks()` 原本没有 `ORDER BY`，
+> 行序随数据库而变 → BM25 同分行的次序变 → 重排候选集变 → 同一个语料在两个库上排出不同名次。
+> 现在它按块 ID 排序，`app/retrieval/search.py` 的 `visible_chunks()` 是这轮唯一的行为改动。
 
 CI 会跑 ruff、mypy、后端测试、Golden Set、Alembic 迁移与 `alembic check`、以及控制台构建，
 见 [.github/workflows/ci.yml](.github/workflows/ci.yml)。
@@ -102,7 +108,7 @@ evals/             Golden Set、只读评测集、检索指标与回放脚本
 请在 `docs/adr/` 追加一条 ADR（编号递增，含背景/决策/后果/被否决方案），
 并在 PR 描述里链接它。纯文案、样式与测试补充不需要。
 
-编号规则：`docs/adr/` 当前 **19 篇**（ADR-001…ADR-011、ADR-013…ADR-020），
+编号规则：`docs/adr/` 当前 **23 篇**（ADR-001…ADR-011、ADR-013…ADR-024），
 **ADR-012 是预留号位**（策略外置与阈值灰度），**不回收、不重排**。
 即使中间号位空着，新 ADR 也要接在当前最大号之后；`docs/AGENT_PLATFORM_PLAN.md` 的
 §9.4 ADR 索引、编号说明与文件计数要同步改。

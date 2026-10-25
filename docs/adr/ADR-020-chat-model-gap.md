@@ -60,6 +60,8 @@
 - 托管模型（Anthropic / OpenAI）依然没有验证过；本轮实测只在本地 LM Studio（`AGENT_MODEL=openai:qwen/qwen3-8b`）上。
 
 > **修订（2026-10-25）**：上面「只有 SQLite 证据」这条是 2026-10-25 收尾当天的读数。当天随后用本机 Docker 起 PostgreSQL 16.15 临时容器补跑全量：**458 passed / 0 skipped（109.92 秒）**，这 10 个文件、148 条全部覆盖，`test_llm_gap.py` 的 7 条在 Postgres 上同样绿；同轮在独立 `eval_pg` 库上跑通 11 条迁移与 `alembic check`，Golden 40/40、支持集 61/61。**仍未执行**：四通道检索指标脚本的输出没有在 PG 上产出过（PG 上跑的是 `test_retrieval_eval.py` 的断言）；托管模型（Anthropic / OpenAI）仍未验证。
+>
+> **修订（2026-10-25，第二次）**：上面那条「仍未执行」已经过时——检索指标脚本的五通道输出在 `tp_eval` 库上跑出来了，且与 SQLite 逐位一致（前提是修掉 `visible_chunks()` 缺 `ORDER BY` 的行序不确定）。同日补上 Redis 容器后，全量为 **502 passed / 0 skipped（119.71 s）**；迁移链 13 条、head `b4e8d2f6a1c9`。§55 那组读数是本 ADR 当天的读数，现已更新：SQLite 基线 **496 passed / 6 skipped**（收集 502、43 个测试文件）、mypy strict **137** 个文件、`test_llm_gap.py` 补到 **9** 条（新增：模型边界的三条事实 + 作用域一条）。托管模型（Anthropic / OpenAI）**仍未验证**——这一条没有变。
 
 ## 备选方案
 

@@ -141,7 +141,7 @@
 | 25 | **渠道抽象与入站（T4）** | `app/channels/{base,registry,gateway,store,render}.py` + 四个适配器、`channel_messages` 表、`GET /api/v1/channels` 矩阵 | `tests/test_channels.py` 现为 **20 条**（T4 落 13 条，T4b 与 T7 补到 14 条，T8 再加 6 条）：验签 401、身份映射 403、数据库级幂等（重放读回 / 换内容 409 / 在途 409 / 陈旧认领接管）、渲染降级、关闭渠道 404 | ✅ |
 | 26 | **渠道溯源（T4b）** | `SupportAgent.handle(channel=...)` → 移交包 `bundle.channel`、放弃事件、队列行与 `abandon_by_channel` | 同一批请求邮件记 `EMAIL`、网页记 `WEB`；队列行与移交包同源 | ✅ |
 | 27 | **客户记忆与主动服务（T5）** | `app/services/{memory,proactive}.py`、`customer_profiles` / `proactive_rules` / `notifications`、`app/api/v1/memory.py` 10 个操作（T5 当时 9 个，T10 加 `PUT /memory/rules/{event_type}`） | `tests/test_memory.py` 21 条：默认视图不落档、部分合并、PII 两类处置、七道抑制闸、确认/取消状态机、跨用户 404、导出只有计数 | ✅ |
-| 28 | **稠密检索护栏与多通道评测（T6）** | `app/retrieval/{build,dense,hybrid,fusion,rerank}.py`（`store_embeddings` 是 `dense.py` 里的函数）、`scripts/embed_policies.py`、`evals/retrieval_metrics.py --channels` | `tests/test_retrieval_channels.py` 20 条 + bm25/dense/hybrid/rerank 四通道真实端点实测；prod 缺 embedding 配置启动即拒 | ✅ |
+| 28 | **稠密检索护栏与多通道评测（T6）** | `app/retrieval/{build,dense,hybrid,fusion,rerank}.py`（`store_embeddings` 是 `dense.py` 里的函数）、`scripts/embed_policies.py`、`evals/retrieval_metrics.py --channels` | `tests/test_retrieval_channels.py` 26 条 + bm25/dense/hybrid/gated/rerank 五通道真实端点实测（SQLite 与 PostgreSQL 逐位一致）；prod 缺 embedding 配置启动即拒 | ✅ |
 | 29 | **主动通知的出站投递（T7-4）** | `app/channels/outbound.py`（`ProactiveSender` + `OutboundTransport` 协议 + `none` / `local_file` + 地址反向查找）、`app/services/runtime.py::_outbox_sink` 按事件类型分派、`render_notice` 复用 T4 能力表 | `tests/test_outbound.py` 17 条：默认 `none` 拒发、未同意 / 已退订 / 静音 / 未确认各有拒绝码、渠道取档案偏好且 `payload` 改不动去向、`local_file` 下 `SENT` 首次可达、审计只存 `address_digest`；另在真实 HTTP 与浏览器走完「选渠道 → 确认 → 投递 → 已推送」 | ✅ |
 | 30 | **新能力的控制台页面（T7-1/2/3，T10 加第 10 页）** | `web/src/pages/ChannelMatrix.tsx`、`MemoryPage.tsx`、`ProactiveRules.tsx`、`App.tsx` 路由与门禁 | 10 个业务页面；渠道矩阵只对 `support` / `admin` 可见，「我的记忆」是客户视角（读写删导出 + 待确认通知同意 / 取消 + 推送渠道只列真能送到的三个）；「通知规则」页只对 `support` / `admin` 可见，只能改文案 / 冷却 / 启停且改完当场看到字段校验结果；真跑确认删除按钮连带取消排队通知、页面文案标注「已推送 ≠ 服务商送达回执」 | ✅ |
 | 31 | **网页入口并入同一道幂等闸（T8）** | 改 `app/api/v1/support.py`（委托 `ChannelGateway.accept_web`）、`app/api/deps.py`、`web/src/api.ts`、`web/src/pages/ConversationPage.tsx` | `tests/test_channels.py` 新增 6 条：旧入口带键去重、旧入口不带键不留一行、同一个键跨两条路由只受理一次、旧入口换内容 409、在途 409 且零新任务、陈旧认领被接管（`attempts` 变 2）；真实浏览器「丢掉一次响应 → 原话重发」拿到 `X-Channel-Deduplicated: true`、同一个 `task_id`、任务总数不变，坐席视角的渠道矩阵 `WEB` 计数随控制台发送 +1 | ✅ |
@@ -149,7 +149,7 @@
 
 | 33 | **主动规则的可编辑面（T10）** | `app/services/proactive.py::update_rule` + `_template`（写时校验）、`app/schemas/memory.py::ProactiveRuleUpdateRequest`（`extra="forbid"`，不暴露 `requires_confirmation`）、`app/api/v1/memory.py` 的 `PUT /rules/{event_type}`（`_require_seat`）、`web/src/pages/ProactiveRules.tsx` + `App.tsx` 的 `/rules` 路由 | `tests/test_proactive_rules.py` 21 条（九种 422 形态、`requires_confirmation` 被拒、事件类型越界、upsert 不新建表、审计只存 `template_sha256`、失败后规则行逐字不变）+ 真实 HTTP 52 项断言（`127.0.0.1:8135`、`.tmp/t10_live.db`）+ 浏览器 DOM 走查；ADR-019 | ✅ |
 
-**规模事实**：Python 代码 `app/` 134 个文件；34 个测试文件（收集 458 条用例，455 通过 + 3 skipped）；23 张表；41 个 API 路径 / 44 个操作（含 2 个健康检查）；19 篇 ADR（缺 ADR-012）；10 个控制台页面；离线用例 101 条（40 任务 + 61 只读）+ 以 `evals/support_set.json` 为源的检索评测。
+**规模事实**：Python 代码 `app/` 137 个文件；43 个测试文件（收集 502 条用例，SQLite 基线 496 通过 + 6 skipped，PG + Redis 两个容器同时指上则是 502 通过 + 0 skipped）；24 张表；42 个 API 路径 / 45 个操作（含 2 个健康检查）；23 篇 ADR（缺 ADR-012）；10 个控制台页面；离线用例 101 条（40 任务 + 61 只读）+ 以 `evals/support_set.json` 为源的检索评测。
 
 ### 1.2 八层差距矩阵
 
@@ -840,8 +840,8 @@ SpanKind = Literal["guard", "understand", "retrieve", "generate",
 | # | 门禁 | 命令 | 当前状态 |
 |---|---|---|---|
 | 1 | 静态检查 | `ruff check app tests scripts evals alembic` | ✅（注意范围是这五个目录，不是整仓 `.`） |
-| 2 | 类型检查 | `python -m mypy app`（`strict = true`，134 文件） | ✅ |
-| 3 | 单元与集成 | `python -m pytest` | ✅（455 passed / 3 skipped；跳过的 3 条需要 `TICKETPILOT_TEST_POSTGRES_URL`，CI **没有注入**，所以 Postgres 专项只在一次性容器里手工跑。2026-10-25 已在 PostgreSQL 16.15 容器上补跑全量：**458 passed / 0 skipped**，T4–T10 新增用例（含 `test_personalization.py` 18 条、`test_proactive_rules.py` 21 条、`test_llm_gap.py` 7 条）与 `test_refunds.py` 1 条全部覆盖） |
+| 2 | 类型检查 | `python -m mypy app`（`strict = true`，137 文件） | ✅ |
+| 3 | 单元与集成 | `python -m pytest` | ✅（SQLite 基线 496 passed / 6 skipped；跳过的 6 条需要 `TICKETPILOT_TEST_POSTGRES_URL` 或 `TICKETPILOT_TEST_REDIS_URL`，CI **没有注入**，所以 Postgres / Redis 专项只在一次性容器里手工跑。2026-10-25 已在 PostgreSQL 16.15 + Redis 两个容器上补跑全量：**502 passed / 0 skipped**（119.71 s），T4–T10 新增用例（含 `test_personalization.py` 18 条、`test_proactive_rules.py` 21 条、`test_llm_gap.py` 9 条）与 `test_refunds.py` 1 条全部覆盖） |
 | 4 | 任务路径 | `python evals/run.py` | ✅（40/40，含轨迹断言） |
 | 5 | 只读路径 | `python evals/support_run.py` | ✅（61/61） |
 | 6 | 检索评测 | `python evals/retrieval_metrics.py --channels bm25,hybrid` | ✅（GATE PASSED；门槛只套第一个渠道 `bm25`，`hybrid(hashing)` 行是对比编排） |
@@ -851,7 +851,7 @@ SpanKind = Literal["guard", "understand", "retrieve", "generate",
 `web` job：`npm ci` + `npm run build`（内含 `tsc --noEmit`）— ✅。
 
 `postgres-migration` job：在 `postgres:16-alpine` 服务上 `alembic upgrade head` + `alembic check` — ✅。
-**它只验迁移链，不跑 pytest**，所以「Postgres 上测试全绿」不是 CI 结论；2026-10-25 本地 PostgreSQL 16.15 一次性容器上的全量是 **458 passed / 0 skipped**（Golden 40/40、支持集 61/61 同轮），但那是一次手工复跑，不是 CI 门禁。
+**它只验迁移链，不跑 pytest**，所以「Postgres 上测试全绿」不是 CI 结论；2026-10-25 本地 PostgreSQL 16.15 + Redis 两个一次性容器上的全量是 **502 passed / 0 skipped**（119.71 s；Golden 40/40、支持集 61/61 同轮），但那是一次手工复跑，不是 CI 门禁。
 
 > **纪律**：所有命令用 `.venv/Scripts/...` 执行；CI 与本地用同一套命令，避免「本地过了线上红」。
 
@@ -950,7 +950,7 @@ SpanKind = Literal["guard", "understand", "retrieve", "generate",
 
 ### 9.2 接口清单
 
-**现状 44 个操作 / 41 条路径**（`app/api/v1/` 42 个 + 健康检查 2 个，按 OpenAPI tag 分组）：
+**现状 45 个操作 / 42 条路径**（`app/api/v1/` 43 个 + 健康检查 2 个，按 OpenAPI tag 分组）：
 
 | 分组 | 操作 | 角色 |
 |---|---|---|
@@ -962,12 +962,12 @@ SpanKind = Literal["guard", "understand", "retrieve", "generate",
 | 审批（2） | `GET /api/v1/approvals`、`GET /api/v1/approvals/{id}` | 审批角色 |
 | 轨迹（2） | `GET /api/v1/traces/metrics`、`GET /api/v1/traces/{trace_id}` | 坐席（`support`）/ 管理员；客户仅本人 |
 | 协同（7） | `GET /api/v1/handoffs/metrics`、`GET /api/v1/handoffs/abandons`、`GET /api/v1/handoffs`、`GET /api/v1/handoffs/{id}`、`POST /{id}/claim`、`POST /{id}/release`、`POST /{id}/close` | 坐席（`support`） |
-| 台账（3） | `POST /api/v1/analytics/query`、`GET /api/v1/analytics/queries`、`GET /api/v1/analytics/queries/{query_id}` | 客服 / 管理员 |
+| 台账（4） | `POST /api/v1/analytics/query`、`GET /api/v1/analytics/llm-usage`、`GET /api/v1/analytics/queries`、`GET /api/v1/analytics/queries/{query_id}` | 客服 / 管理员 |
 | 消息（2） | `GET /api/v1/outbox`、`POST /api/v1/outbox/deliver` | 坐席（`support`）/ 审批角色 |
 | 安全（2） | `GET /api/v1/security/metrics`、`GET /api/v1/security/events` | 坐席（`support`）/ 审批角色 |
 | 记忆与主动服务（10） | `GET` / `PUT` / `DELETE /api/v1/memory`、`GET /memory/export`、`GET /memory/rules`、`PUT /memory/rules/{event_type}`、`POST /memory/events`、`GET /memory/notifications`、`POST /memory/notifications/{id}/confirm`、`POST /memory/notifications/{id}/cancel` | 档案与通知只操作**当前身份自己**的；`POST /memory/events`、`GET /memory/rules` 与 `PUT /memory/rules/{event_type}` 额外要求 `support` 角色，其余客户本人即可 |
 
-**原规划清单的兑现情况**（现状 44 个操作，已超出原「目标 30+」）：
+**原规划清单的兑现情况**（现状 45 个操作，已超出原「目标 30+」）：
 
 | 规划操作 | 用途 | 期次 |
 |---|---|---|
@@ -1033,6 +1033,10 @@ SpanKind = Literal["guard", "understand", "retrieve", "generate",
 | ADR-018 | 记忆进答案只允许四种模板效果，读路径不走 `MemoryService`（T9 落地，收 ADR-014 自己点名的后果） | 已接受 |
 | ADR-019 | 主动规则的开写接口与写时校验（T10 落地，收 ADR-014 自己点名的后果） | 已接受 |
 | ADR-020 | 对话入口只在规则读不懂时问模型，而且只买一张待审退款单（「对话入口接通模型」轮落地） | 已接受 |
+| ADR-021 | 稠密通道按 BM25 的盲区触发，而不是按分数开关 | 已接受 |
+| ADR-022 | 用「分布快照」和「安全×采纳交叉」两把尺量模型，而不是用单条示例 | 已接受 |
+| ADR-023 | 三条接缝跨进程——限流、模型用量、任务幂等 | 已接受 |
+| ADR-024 | 模型调用三级门控——规则命中不问、问句不问、真缺口才问 | 已接受 |
 
 **待写 ADR（1 篇）**：
 
@@ -1043,8 +1047,9 @@ SpanKind = Literal["guard", "understand", "retrieve", "generate",
 > 编号说明：ADR-013 与 ADR-015 在 Phase 1 落地时分别占用 Outbox 与执行器失败模型两个编号位；
 > ADR-012（策略灰度）仍预留，编号不回收；ADR-014（记忆模型）与 ADR-016（渠道抽象）已分别在
 > T5、T4 落地时补齐，ADR-017（出站接缝）随 T7-4 落地，ADR-018（记忆进答案）随 T9 落地，
-> ADR-019（规则写面）随 T10 落地，ADR-020（对话入口的模型缺口）随「对话入口接通模型」轮落地。
-> 当前 `docs/adr/` 共 19 个文件（缺 ADR-012）。
+> ADR-019（规则写面）随 T10 落地，ADR-020（对话入口的模型缺口）随「对话入口接通模型」轮落地，
+> ADR-021…ADR-024 随「检索门控 + 三级门控 + 跨进程接缝 + 模型评测」轮落地。
+> 当前 `docs/adr/` 共 23 个文件（缺 ADR-012）。
 
 ---
 
