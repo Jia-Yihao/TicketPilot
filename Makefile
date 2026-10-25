@@ -1,4 +1,4 @@
-.PHONY: install run seed test lint eval eval-support eval-retrieval eval-replay eval-business sample-bad-cases migrate compose-up compose-down manual
+.PHONY: install run seed test guard guard-negative lint eval eval-support eval-retrieval eval-replay eval-business sample-bad-cases migrate compose-up compose-down manual
 
 install:
 	python -m pip install -e ".[dev]"
@@ -11,6 +11,12 @@ seed:
 
 test:
 	python -m pytest -q
+
+guard:
+	python -m pytest tests/test_architecture_guard.py tests/test_docs_consistency.py
+
+guard-negative:
+	python scripts/guard_negative_check.py
 
 lint:
 	ruff check app tests scripts evals alembic

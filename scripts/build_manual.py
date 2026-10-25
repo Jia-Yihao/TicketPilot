@@ -11,6 +11,11 @@ command with its own post-checks:
 * The document must contain body paragraphs and at least one table, so a
   silently truncated render fails loudly.
 
+It also writes a build record (``docs/manual-build.json``) holding the source
+digest and the Pandoc version.  ``tests/test_docs_consistency.py`` uses that
+record to tell "the manual is stale" apart from "a different Pandoc renders
+slightly differently" -- without the record the two cases look identical.
+
 It prints the measurements it checked.  Exit code 0 means all checks passed;
 anything else means the output was not replaced.
 
@@ -23,6 +28,8 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import os
 import re
 import shutil
@@ -35,6 +42,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SOURCE = ROOT / "docs" / "PROJECT_SPEC.md"
 DEFAULT_OUTPUT = ROOT / "docs" / "TicketPilot项目说明书.docx"
+DEFAULT_RECORD = ROOT / "docs" / "manual-build.json"
 
 _W_P = re.compile(r"<w:p[ >]")
 _W_TBL = re.compile(r"<w:tbl[ >]")
@@ -47,6 +55,23 @@ def _find_pandoc(explicit: str | None) -> str:
     if found:
         return found
     raise SystemExit("pandoc not found on PATH; pass --pandoc /path/to/pandoc")
+
+
+def pandoc_version(pandoc: str) -> str:
+    """The Pandoc version string, e.g. ``3.8``."""
+
+    completed = subprocess.run(
+        [pandoc, "--version"], capture_output=True, text=True, check=False
+    )
+    first = (completed.stdout or completed.stderr).splitlines()
+    if not first:
+        return "unknown"
+    parts = first[0].split()
+    return parts[1] if len(parts) > 1 else first[0].strip()
+
+
+def source_digest(source: Path) -> str:
+    return hashlib.sha256(source.read_bytes()).hexdigest()
 
 
 def _inspect(path: Path) -> dict[str, int]:
@@ -104,20 +129,47 @@ def build(source: Path, output: Path, pandoc: str) -> dict[str, int]:
         temp.unlink(missing_ok=True)
 
 
+def write_record(record: Path, source: Path, pandoc: str, stats: dict[str, int]) -> None:
+    """Write the build record the documentation guard reads.
+
+    The record is deterministic: same source plus same Pandoc gives the same
+    file, so rebuilding an unchanged manual does not dirty the tree.
+    """
+
+    payload = {
+        "source": source.relative_to(ROOT).as_posix(),
+        "source_sha256": source_digest(source),
+        "pandoc": pandoc_version(pandoc),
+        "bytes": stats["bytes"],
+        "paragraphs": stats["paragraphs"],
+        "tables": stats["tables"],
+    }
+    record.parent.mkdir(parents=True, exist_ok=True)
+    record.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--source", type=Path, default=DEFAULT_SOURCE)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--record", type=Path, default=DEFAULT_RECORD)
     parser.add_argument("--pandoc", help="pandoc executable (default: search PATH)")
     args = parser.parse_args(argv)
 
     pandoc = _find_pandoc(args.pandoc)
     source = args.source if args.source.is_absolute() else (ROOT / args.source)
     output = args.output if args.output.is_absolute() else (ROOT / args.output)
+    record = args.record if args.record.is_absolute() else (ROOT / args.record)
     stats = build(source, output, pandoc)
-    print(f"pandoc: {pandoc}")
+    write_record(record, source, pandoc, stats)
+    print(f"pandoc: {pandoc} ({pandoc_version(pandoc)})")
     print(f"source: {source.relative_to(ROOT).as_posix()}")
     print(f"output: {output.relative_to(ROOT).as_posix()}")
+    print(f"record: {record.relative_to(ROOT).as_posix()}")
     print(
         f"bytes={stats['bytes']} paragraphs={stats['paragraphs']} "
         f"tables={stats['tables']} fffd={stats['fffd']} parts={stats['parts']}"

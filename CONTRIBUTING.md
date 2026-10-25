@@ -27,7 +27,7 @@ uvicorn app.asgi:app --reload --port 8000
 ```bash
 ruff check app tests scripts evals alembic
 python -m mypy app                        # strict 模式，零错误（137 个文件）
-python -m pytest                          # 496 passed, 6 skipped（收集 502、43 个测试文件；跳过的 6 条需要 PostgreSQL 或 Redis）
+python -m pytest                          # 513 passed, 6 skipped（收集 519、45 个测试文件；跳过的 6 条需要 PostgreSQL 或 Redis）
 python evals/run.py                       # 40/40 任务路径 Golden Set
 python evals/support_run.py               # 61/61 只读路径（含多轮澄清）
 python evals/retrieval_metrics.py         # 检索/路由评测基线，门槛全过
@@ -41,18 +41,18 @@ cd web && npm run build                   # 控制台类型检查 + 构建
 只有需要真实 PostgreSQL（并发锁与 Outbox 认领竞态）或真实 Redis（跨进程共享配额）的用例才要指过去；指过去之后它们会真的执行，不再是 skip：
 
 ```bash
-TICKETPILOT_TEST_POSTGRES_URL=postgresql+psycopg://... python -m pytest   # 2026-10-25：500 passed / 2 skipped（134.77 s）
+TICKETPILOT_TEST_POSTGRES_URL=postgresql+psycopg://... python -m pytest   # 2026-10-25：517 passed / 2 skipped（153.64 s）
 TICKETPILOT_TEST_REDIS_URL=redis://127.0.0.1:56379/0 python -m pytest tests/test_rate_limit_redis.py   # 2 passed
 # 两个容器同时指上：全量一条不跳
-TICKETPILOT_TEST_POSTGRES_URL=postgresql+psycopg://... TICKETPILOT_TEST_REDIS_URL=redis://127.0.0.1:56379/0 python -m pytest   # 2026-10-25：502 passed / 0 skipped（119.71 s）
+TICKETPILOT_TEST_POSTGRES_URL=postgresql+psycopg://... TICKETPILOT_TEST_REDIS_URL=redis://127.0.0.1:56379/0 python -m pytest   # 2026-10-25：519 passed / 0 skipped（137.23 s）
 ```
 
 这些用例会临时创建数据库、跑完删除，不能指向共享库。
 
 > **Postgres 覆盖范围（2026-10-25）**：T2 起新建的测试文件与四张新表已经在 PostgreSQL 16.15 容器上跑过：
-> 全量 **500 passed / 2 skipped**，跳过的 2 条是 Redis 用例（把 `TICKETPILOT_TEST_REDIS_URL` 也指上后是 **502 passed / 0 skipped**，119.71 s），
+> 全量 **517 passed / 2 skipped**，跳过的 2 条是 Redis 用例（把 `TICKETPILOT_TEST_REDIS_URL` 也指上后是 **519 passed / 0 skipped**，137.23 s），
 > 13 条迁移 + `alembic check` 无漂移。
-> 默认 `pytest` 的 496 passed / 6 skipped 是 SQLite 基线，两个读数不要混写。
+> 默认 `pytest` 的 513 passed / 6 skipped 是 SQLite 基线，两个读数不要混写。
 > **检索指标脚本本身也在 PG 上跑过**（`retrieval_metrics.py --channels bm25,dense,hybrid,gated,rerank`
 > 在 `tp_eval` 库上跑出五行读数，与 SQLite 逐位一致）。
 > 这次能一致，前提是修掉了一个可复现性缺陷：`PolicySearchService.visible_chunks()` 原本没有 `ORDER BY`，
@@ -61,6 +61,34 @@ TICKETPILOT_TEST_POSTGRES_URL=postgresql+psycopg://... TICKETPILOT_TEST_REDIS_UR
 
 CI 会跑 ruff、mypy、后端测试、Golden Set、Alembic 迁移与 `alembic check`、以及控制台构建，
 见 [.github/workflows/ci.yml](.github/workflows/ci.yml)。
+
+## 两个守卫：架构与文档
+
+上面那九条里已经包含两个守卫——它们是 `pytest` 里的普通用例，所以 CI 的主 job 会自动跑到。
+想单独跑一遍（改完分层或改完文档数字时用）：
+
+```bash
+make guard
+```
+
+- **架构依赖守卫**：`tests/test_architecture_guard.py`，规则源是 `docs/architecture-guard.yaml`。
+  改了 `app/` 的分层依赖方向（新增一层目录、让下层反过来依赖上层、引入循环导入），
+  **先改 `docs/architecture-guard.yaml` 并走 ADR**，再改代码；直接改代码会被守卫挡下。
+  每条例外都必须写 `why`，守卫会检查「登记过的例外是否还在用」——删了违规代码却不清理例外，同样会红。
+- **文档一致性守卫**：`tests/test_docs_consistency.py`，清单源是 `docs/fact-baseline.yaml`。
+  清单里**不写数字**，只写「在哪个文件的哪一行」与「用哪个正则把数字抠出来」；
+  数字由代码现算。所以改完代码后，**改文档里的数字**就行，不需要碰清单。
+  改完 `docs/PROJECT_SPEC.md` 还要跑 `make manual` 重生成说明书，否则说明书同步那条会红。
+
+失败信息都带 `文件:行`，直接改那一行。
+
+守卫自己也有反例：`scripts/guard_negative_check.py` 在临时副本上造六处破坏（未声明的层、
+反向依赖、`forbidden` 边、模块级环、登记腐化、文档数字漂移），逐处断言对应的用例会红，
+还原后断言会绿——它不碰仓库里的任何文件。改完守卫本身（规则或用例）之后跑一遍：
+
+```bash
+make guard-negative
+```
 
 ## 目录约定
 
@@ -108,7 +136,7 @@ evals/             Golden Set、只读评测集、检索指标与回放脚本
 请在 `docs/adr/` 追加一条 ADR（编号递增，含背景/决策/后果/被否决方案），
 并在 PR 描述里链接它。纯文案、样式与测试补充不需要。
 
-编号规则：`docs/adr/` 当前 **23 篇**（ADR-001…ADR-011、ADR-013…ADR-024），
+编号规则：`docs/adr/` 当前 **24 篇**（ADR-001…ADR-011、ADR-013…ADR-025），
 **ADR-012 是预留号位**（策略外置与阈值灰度），**不回收、不重排**。
 即使中间号位空着，新 ADR 也要接在当前最大号之后；`docs/AGENT_PLATFORM_PLAN.md` 的
 §9.4 ADR 索引、编号说明与文件计数要同步改。

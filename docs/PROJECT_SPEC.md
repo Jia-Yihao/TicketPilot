@@ -7,15 +7,16 @@
 > 在编辑器里按符号跳转即可。文中路径均相对仓库根目录。
 >
 > **事实基准：2026-10-25 复跑（T4 渠道抽象、T4b 渠道溯源、T5 客户记忆与主动服务、T6 稠密检索护栏、T7 控制台与主动消息出口、T8 网页入口幂等收口、T9 记忆进答案、T10 主动规则可编辑面、对话入口模型缺口收口、稠密通道门控、三级模型门控、跨进程接缝与模型评测完成后）。**
-> 本机结果：默认 pytest 套件 **496 passed / 6 skipped**（收集 502 个用例，43 个测试文件；2026-10-25 复跑，
-> 比 10-24 的 447 多出 49 条——`tests/test_refunds.py` 里 1 条退款作用域用例，`tests/test_llm_gap.py` 9 条模型边界用例，
-> 本轮新增 7 个测试文件 32 条：模型埋点 5、分布快照 3、安全交叉 6、幂等键 5、限流存储 7、限流 Redis 2、用量账本 4，
-> 外加并入 `test_retrieval_channels.py` 的 6 条稠密门控用例），
+> 本机结果：默认 pytest 套件 **513 passed / 6 skipped**（收集 519 个用例，45 个测试文件；2026-10-25 复跑），
+> 用例构成：`tests/test_refunds.py` 里 1 条退款作用域用例、`tests/test_llm_gap.py` 9 条模型边界用例、
+> 模型那一轮新增的 7 个测试文件 32 条（模型埋点 5、分布快照 3、安全交叉 6、幂等键 5、限流存储 7、限流 Redis 2、用量账本 4）、
+> 并入 `tests/test_retrieval_channels.py` 的 6 条稠密门控用例，
+> 以及两个守卫轮的 2 个测试文件 17 条（架构依赖守卫 8、文档一致性守卫 9），
 > Ruff 通过，`mypy app`（strict）零错误（137 个文件），任务路径 Golden Set **40/40**，只读路径支持集 **61/61**，
 > 回放自检 **REPLAY DIFF EMPTY**，离线检索评测门槛全过（`bm25` / `dense` / `hybrid` / `gated` / `rerank` 五通道真实端点读数见 §11.5，
 > 门槛仍只套 `bm25`），`alembic check` 无漂移（head `b4e8d2f6a1c9`，13 条迁移、24 张表），
 > 控制台 `npm run build` 通过，本地 uvicorn + SQLite 下 `scripts/demo.py` 走完只读客服与渐进式披露，`/health/ready` 返回 `ready`。
-> **PostgreSQL 16.15（一次性容器）本轮全量复跑：同时指上 PostgreSQL 与 Redis 两个容器后 502 passed / 0 skipped（119.71 s）**，
+> **PostgreSQL 16.15（一次性容器）本轮全量复跑：同时指上 PostgreSQL 与 Redis 两个容器后 519 passed / 0 skipped（137.23 s）**，
 > 默认跳过的 4 条 PostgreSQL 专项用例（并发与 Outbox）与 2 条 Redis 共享配额专项全部执行；
 > 同一容器上的 Golden Set **40/40**、支持集 **61/61**，
 > `alembic upgrade head` 走完 13 条迁移、`alembic check` 无漂移。**五通道检索指标脚本本身已在 PG 上跑过**
@@ -92,6 +93,7 @@
 | | 18 | 技术选型与被拒方案 | `docs/adr/` |
 | | 19 | 当前边界、文档漂移、演进路线 | 实测与源码 |
 | | 20 | 源码阅读路线与练习 | 全仓库 |
+| **守卫** | 25 | 架构依赖守卫与文档一致性守卫（规则在 YAML，事实从代码现算；§25.4 是守卫的反向验证） | `docs/architecture-guard.yaml`、`docs/fact-baseline.yaml`、`scripts/guard_negative_check.py` |
 
 ### 0.4 术语表
 
@@ -2640,7 +2642,7 @@ PUT /api/v1/memory/rules/{event_type}（坐席，需 support 角色）
 
 ### 14.1 测试分层
 
-`tests/` 下收集 502 个测试用例（43 个测试文件，另有 `conftest.py`），按主题平铺成单文件，
+`tests/` 下收集 519 个测试用例（45 个测试文件，另有 `conftest.py`），按主题平铺成单文件，
 没有 unit/integration 分层（pytest marker 已声明但未实际使用）：
 
 | 文件 | 关注点 |
@@ -2679,11 +2681,13 @@ PUT /api/v1/memory/rules/{event_type}（坐席，需 support 角色）
 | `test_outbound.py` | 17 条：四种渠道形状的出站渲染（邮件主题＋署名＋处理时限、IM 裁到 200、短信保留退订行、语音带转人工句）、默认传输拒绝且通知**停在 `CONFIRMED`**、`local_file` 缺路径即拒、`prod` 拒绝 `local_file`、地址来自服务端映射而非消息、`payload` 改不动去向（Alice 的行不能落到 Bob）、`[NO_CHANNEL]` / `[NO_CONSENT]` / `[UNSUBSCRIBED]` / 未确认四种拒绝、`contact_channel` 只收渠道名（填地址 422） |
 
 | `test_personalization.py` | 18 条：无档案不个性化、**答案路径不建档案行也不写 `memory.*` 审计**、称呼只在开场那一轮、`memory.personalize` span 排在 `support.reply` 之前、`history_summary` 与 `contact_window` 一个字都不进回复（且 `fields` 只点名 `preferred_name`）、目录认不出的兴趣完全惰性、认得出的兴趣只产一条追问且用目录名、本轮已在讲这个商品时不加追问、`tone=concise` 只裁追问不动回答、卡片重排两条纯函数用例（含"本来就在第一位不算重排"）、澄清轮只改 `reply`、个性化不写档案也不产生审计、开关关掉逐字回落朴素回答、删档案后回答回到原样、**接管静默轮 `personalization` 为 `null` 而触发了接管的那一轮照常带称呼** |
+| `test_architecture_guard.py` | 8 条：每个 `app/` 子目录都在 `tiers` 里声明、跨层依赖只向下、`forbidden` 里的边一条不存在、没有未登记的互指层对、模块级导入无环、登记过的例外仍在用、已知偏离仍成立、每条例外都写了理由 |
+| `test_docs_consistency.py` | 9 条：清单只指向可算的事实、清单里没有字面数字、文档数字与代码现算一致、每个事实至少两处声明、说明书含这些说法、说明书构建记录对得上、说明书与规格同步、说明书文本干净、说明书是可读的 docx |
 | `test_proactive_rules.py` | 21 条（T10）：坐席可改 / 客户 403、未知事件类型 422、模板引用白名单外字段 → 422 且规则行逐字不变、花括号不配对 → 422、位置参数 `{}` → 422、带属性或下标的占位符 → 422、超长模板 → 422、请求体带 `requires_confirmation` → 422、冷却越界 → 422、改文案后**下一条**通知逐字是新文案且旧文案消失、改动**不回溯**已落库的通知、停用后 `emit` 抑制 `NO_RULE` 再启用恢复、冷却 60 → 0 后同一事件立即可再发、审计行只带 `template_sha256` 与字段名（断言模板原文不在 detail 序列化结果里）、跨租户既看不见也改不到、`GET /rules` 的 `required_context` 列出模板字段 |
 
-默认运行 496 passed / 6 skipped：跳过的是 PostgreSQL 专项测试（并发与 Outbox 共 4 个）与 Redis 共享配额专项（2 个），
+默认运行 513 passed / 6 skipped：跳过的是 PostgreSQL 专项测试（并发与 Outbox 共 4 个）与 Redis 共享配额专项（2 个），
 需要 `TICKETPILOT_TEST_POSTGRES_URL` / `TICKETPILOT_TEST_REDIS_URL`。这些测试会临时创建数据库、跑完删除，不能指向共享库。
-2026-10-25 在 PostgreSQL 16.15 与 Redis 两个容器上同时带上这两个变量跑了全量：**502 passed / 0 skipped（119.71 s）**，
+2026-10-25 在 PostgreSQL 16.15 与 Redis 两个容器上同时带上这两个变量跑了全量：**519 passed / 0 skipped（137.23 s）**，
 包含 T2 起新增的文件与四张新表。
 
 ### 14.2 Golden Set
@@ -3190,15 +3194,16 @@ VERIFIED_SUCCESS。
 
 已验证：
 
-- 默认 pytest：**496 passed / 6 skipped（收集 502，43 个测试文件）**，含 T2 的 14 条安全用例、
+- 默认 pytest：**513 passed / 6 skipped（收集 519，45 个测试文件）**，含 T2 的 14 条安全用例、
   T3 的数据集/抽样用例、T4 起、T4b/T7 扩、T8 收口后的 20 条渠道用例、T5 的 21 条记忆/主动服务用例、
   T6 的 20 条稠密检索与融合用例、T7 的 17 条出站投递用例、T9 的 18 条记忆个性化用例、
   T10 的 21 条规则编辑用例、「对话入口接通模型」轮的 9 条模型缺口用例（`test_llm_gap.py`，
   规则模式零调用 / 只在缺口上采纳 / 采纳后仍等审批 / 三级门控命名三档），
-  以及本轮新增的 7 个测试文件 32 条：模型埋点 5（`test_model_instrumentation.py`）、
+  以及模型那一轮新增的 7 个测试文件 32 条：模型埋点 5（`test_model_instrumentation.py`）、
   分布快照 3（`test_model_distribution.py`）、安全交叉 6（`test_security_model_cross.py`）、
   幂等键 5（`test_task_idempotency.py`）、限流存储 7 + Redis 2（`test_rate_limit_store.py` /
-  `test_rate_limit_redis.py`）、用量账本 4（`test_llm_usage.py`）；
+  `test_rate_limit_redis.py`）、用量账本 4（`test_llm_usage.py`）、
+  架构依赖守卫 8（`test_architecture_guard.py`）、文档一致性守卫 9（`test_docs_consistency.py`）；
   另有 6 条稠密门控用例并入 `test_retrieval_channels.py`（该文件现 26 条）；
   Ruff（`app tests scripts evals alembic`）：通过；
 - mypy（`strict = true`）：`app` **137** 个文件零错误，已纳入 CI；
@@ -3331,7 +3336,7 @@ VERIFIED_SUCCESS。
   **那是 T7-4 之前的一轮**：handler 接上之后（下面 T7 那条真跑记录）同一条链路已经实测收敛到 `SENT`，
   退款侧「成功退款不产生 Outbox 消息」这个口径没有变，变的只是主动通知有出口了；
 - PostgreSQL 16.15（一次性容器，2026-10-25 复跑）：带 `TICKETPILOT_TEST_POSTGRES_URL` 的全量 pytest
-  **502 passed / 0 skipped（119.71 s）**——同时指上 PostgreSQL 与 Redis 两个容器，默认跳过的 4 条
+  **519 passed / 0 skipped（137.23 s）**——同时指上 PostgreSQL 与 Redis 两个容器，默认跳过的 4 条
   PostgreSQL 专项（并发与 Outbox）与 2 条 Redis 共享配额专项全部执行；同一容器上
   Golden Set **40/40**、支持集 **61/61**，`alembic upgrade head` 走完 13 条迁移（head `b4e8d2f6a1c9`）、
   `alembic check` 输出 `No new upgrade operations detected.`。T2 起新增的测试文件与四张新表
@@ -3384,7 +3389,7 @@ VERIFIED_SUCCESS。
 - **PostgreSQL 缺口已关闭（2026-10-25）**：T2 起新建的 10 个测试文件（148 条）与四张新表
   （`channel_messages` + 档案 / 规则 / 通知，T9/T10 未新增表）都在 PostgreSQL 16.15 容器上跑过，
   全量 **458 passed / 0 skipped**、Golden 40/40、支持集 61/61；同日把 Redis 容器也指上后是
-  **502 passed / 0 skipped（119.71 s）**。检索指标脚本本身也在 PG 上跑过（`tp_eval` 库），
+  **519 passed / 0 skipped（137.23 s）**。检索指标脚本本身也在 PG 上跑过（`tp_eval` 库），
   **五行读数与 SQLite 逐位一致**——为此修掉了 `visible_chunks()` 缺 `ORDER BY` 的行序不确定（§11.5）。
 - Outbox 承载两类消息（`refund.pending_confirmation` 与 `proactive.confirmed`），两者都有消费者；
   但主动通知一侧的传输只有演示实现，`SENT` 之后到客户设备之间没有任何代码；
@@ -3516,9 +3521,17 @@ VERIFIED_SUCCESS。
 | 本文件 §11.5、`docs/EVALS.md`、`README.md`、`CONTRIBUTING.md` | 「rerank 没有可引用数字」「每次约 2.3 秒」（无判定） | 新增 `evals/rerank_latency.py`：把计时探针注入**生产**的 `HybridPolicySearch`，量的是线上那条融合后的候选集（15 条）。实测 60 次调用、0 失败：mean 2300 / p50 2281 / **p95 2602** / min 2081 / max 2689 ms，预算 300 ms → **OVER BUDGET**。结论：在这台纯 CPU 机器上重排**不能进请求路径**，默认仍关闭，理由从「没测」变成「测了，超预算」 |
 | 本文件 §11.5 的指标说明、`docs/EVALS.md` 基线节 | 「同一份 **68 条**展开查询」「61 条用例」混用 | 分母写清：**数据集 61 条用例，其中 17 条带 `policy_id` 标注**；召回指标的分母是这 17 条，其余 44 条只参与 `intent_accuracy` |
 | 本文件 §11.6 与 §19.1、`docs/EVALS.md` T1 验收记录 | 「`test_retrieval_channels.py`（**20 条**）」「稠密门控的 **5 条**」「限流存储 **9** 条」 | 逐文件核对后的实际值：`test_retrieval_channels.py` **26 条**（其中稠密门控 **6** 条）、`test_rate_limit_store.py` **7** 条 + `test_rate_limit_redis.py` **2** 条（合计 9，但分属两个文件） |
-| 本文件 §1.7 / §14.1 / §19.1、`README.md`、`CONTRIBUTING.md`、`docs/NEXT_STEPS.md` | 「458 passed / 0 skipped（109.92 s）」（PG，但没带 Redis） | 同时指上 **PostgreSQL 与 Redis** 两个容器后 **502 passed / 0 skipped（119.71 s）**；13 条迁移、head `b4e8d2f6a1c9`、`alembic check` 无漂移；Golden 40/40、支持集 61/61 不变 |
-| 本文件 §14.1、§19.1、`docs/AGENT_PLATFORM_PLAN.md` | 「**41** 条路径 / **44** 个操作」「mypy strict **134** 个文件」「**32** 个测试文件」「**23** 张表」「**11** 条迁移」 | 按 `create_app().openapi()` 复核为 **42 条路径 / 45 个操作**；mypy strict **137** 个文件零错误；`tests/*.py` **43** 个文件、收集 **502** 条；**24** 张表；**13** 条迁移 |
+| 本文件 §1.7 / §14.1 / §19.1、`README.md`、`CONTRIBUTING.md`、`docs/NEXT_STEPS.md` | 「458 passed / 0 skipped（109.92 s）」（PG，但没带 Redis） | 同时指上 **PostgreSQL 与 Redis** 两个容器后 **519 passed / 0 skipped（137.23 s）**；13 条迁移、head `b4e8d2f6a1c9`、`alembic check` 无漂移；Golden 40/40、支持集 61/61 不变 |
+| 本文件 §14.1、§19.1、`docs/AGENT_PLATFORM_PLAN.md` | 「**41** 条路径 / **44** 个操作」「mypy strict **134** 个文件」「**32** 个测试文件」「**23** 张表」「**11** 条迁移」 | 按 `create_app().openapi()` 复核为 **42 条路径 / 45 个操作**；mypy strict **137** 个文件零错误；`tests/*.py` **45** 个文件、收集 **519** 条；**24** 张表；**13** 条迁移 |
 | 本文件附录 C、`docs/NEXT_STEPS.md` §7 | docx 只做了结构与编码校验（U+FFFD = 0） | 本轮补上**版面实看**：docx → PDF（Gotenberg 8 容器内 LibreOffice，路由是 `POST /forms/libreoffice/convert`）→ PNG（容器内 `pdftoppm`）→ 逐页目视标题页 / 正文 / 表格 / 复选框。结论：复选框里的空心方块是**真实的 U+2610 球票框**（`pdftotext` 字节级核对），不是豆腐块；U+FFFD = 0、无 `w:sym` / 私用区字符 |
+
+本轮（2026-10-25，两个守卫）已修正的漂移：
+
+| 位置 | 原措辞 | 现在的说法 |
+| --- | --- | --- |
+| 本文件 §0.3 / §1.7 / §14.1 / §19.1 / 附录 C、`README.md`、`CONTRIBUTING.md`、`docs/SCOPE.md`、`docs/EVALS.md`、`docs/GOLDEN_SET.md`、`docs/NEXT_STEPS.md` §0 与 §5、`docs/AGENT_PLATFORM_PLAN.md` 规模事实与门禁表 | 「496 passed / 6 skipped（收集 502、43 个测试文件）」「502 passed / 0 skipped」「500 passed / 2 skipped」「23 篇 ADR」 | 两个守卫落地后：**513 passed / 6 skipped（收集 519、45 个测试文件）**、**519 passed / 0 skipped**（PG + Redis）、**517 passed / 2 skipped**（仅 PG）、**24 篇 ADR**。这些数字现在由 `tests/test_docs_consistency.py` 现算现比，文档不再是人肉维护的第二份事实源 |
+| 本文件 §19.2 漂移表「现在的说法」列 | 「`tests/*.py` **43** 个文件、收集 **502** 条」「**23** 篇 ADR」 | 「`tests/*.py` **45** 个文件、收集 **519** 条」「**24** 篇 ADR」。这两行是文档一致性守卫的**检查点**：改了数字必须同步 `docs/fact-baseline.yaml` 里的锚点与正则，否则守卫直接报这两行 |
+| `docs/adr/` 编号规则（`CONTRIBUTING.md` 与 `docs/AGENT_PLATFORM_PLAN.md` §9.4） | 「当前 23 篇（ADR-001…ADR-011、ADR-013…ADR-024）」 | 「当前 **24** 篇（ADR-001…ADR-011、ADR-013…ADR-025）」，新增 ADR-025（两个守卫） |
 
 处理原则：本文档以代码为准；对外材料引用前先核对上表，不要复制旧措辞。
 
@@ -4069,6 +4082,81 @@ python scripts/outbox_worker.py --once     # 单轮后退出
 
 ---
 
+## 25. 两个守卫：架构依赖与文档一致性
+
+本项目把「诚实标注」这句话从**承诺**变成**测试**。两个守卫都是 `pytest` 里的普通用例：
+不新增运行时依赖，不改一行业务代码，规则写在 YAML 里、事实从代码现算。
+
+### 25.1 架构依赖守卫（`tests/test_architecture_guard.py`）
+
+规则源是 `docs/architecture-guard.yaml`，**不在测试代码里**——改规则等于改架构，必须走 ADR。
+那份文件声明：
+
+| 字段 | 含义 |
+|---|---|
+| `tiers` | `app/` 下每个子目录的层号，**层号越大越靠上**：`core` / `observability` / `db` = 0，`models` / `schemas` = 1，`repositories` / `retrieval` / `sql` = 2，`tools` / `agent` / `channels` = 3，`services` = 4，`api` = 5 |
+| `roots` | 入口文件（`main` / `seed` / `asgi`）不参与方向判定 |
+| `exceptions` | 允许的越层依赖，每条必须写 `why` |
+| `forbidden` | 即使方向向下也禁止的边 |
+| `known_deviations` | 已知存在、暂时不改的偏离（当前只有 `api → sql`） |
+
+守卫做六件事：
+
+1. **每个 `app/` 子目录必须在 `tiers` 里声明**——新加一层目录而不声明，直接红。
+2. **跨层依赖必须严格向下**（`tier(源) > tier(目标)`，即从高层指向低层），否则必须在 `exceptions` 里登记并写明理由。
+3. **`forbidden` 里的边一条都不许存在**，哪怕方向是对的。
+4. **没有未登记的互指层对**——`services ↔ agent` 这种双向依赖必须显式登记。
+5. **模块级导入无环**（Tarjan 求强连通分量，只算模块顶层的 import）。
+6. **登记的例外与已知偏离必须仍在使用**——删掉违规代码却不清理例外条目，守卫会要求清理。
+
+判定结果带 `file:line`，失败信息直接指向那一行 import。
+
+### 25.2 文档一致性守卫（`tests/test_docs_consistency.py`）
+
+规则源是 `docs/fact-baseline.yaml`。清单里**只写两件事**：某个数字「在哪个文件的哪一行」，
+以及「用哪个正则把数字抠出来」。
+
+**清单里不写数字本身**，这是硬要求：清单一旦写下「43 个测试文件」这样的字面数字，
+它就变成第二份事实源，守卫会拿旧数字去对新代码，然后一直报同样的错。清单里的锚点也必须**不含数字**。
+
+守卫现算 14 个事实并与文档逐个比对：OpenAPI 路径数与操作数、迁移条数与 head 修订号、
+业务表数、`app/` 下的 Python 文件数、mypy strict 实际检查的文件数、`tests/` 下的测试文件数、
+pytest 收集到的用例数、ADR 篇数、Golden Set 与只读评测集的用例数、离线用例总数、
+控制台页面数。它同时要求：每个事实**至少有两处声明**（防止只改一处、别处继续漂）、
+清单里的每条声明都能算出来、清单本身不含字面数字。
+
+**说明书同步**也在守卫范围内：`docs/manual-build.json` 记录 `PROJECT_SPEC.md` 的 sha256 与
+pandoc 版本，sha256 对不上就红；本机 pandoc 版本与记录一致时，逐段比对 docx 与规格；
+docx 还要文本干净（无 `U+FFFD`、无私用区字符、无 `<w:sym>`）且是可读的 zip 归档。
+说明书由 `scripts/build_manual.py`（`make manual`）生成：渲染到临时文件 → 校验体积 /
+段落数 / 表格数 / `U+FFFD` → 才替换旧 docx，同时写一份**确定性**（不含时间戳）的构建记录。
+
+### 25.3 两个守卫的边界
+
+- 架构守卫只看 `app/` 内部的导入；`web/`、`evals/`、`scripts/` 不在范围内。
+- 文档守卫只守清单里列出的事实；正文里其他数字（例如「13 条迁移」）不在守卫范围内，
+  靠 §19.2 的漂移表与人工复核。
+- 两者都**不控制运行时行为**：架构守卫不阻止你写代码，只是事后报红；
+  文档守卫不生成文档，只核对。
+- 规则依赖词表与人工登记，词表不全就有漏判——这是已知边界，写在 ADR-025 的后果段里。
+
+### 25.4 守卫的反向验证
+
+守卫本身也要有反例，否则它只是「看起来会红」。`scripts/guard_negative_check.py`
+把要用的子树复制到临时目录，在**副本**上造六处破坏，逐处断言对应的守卫用例会红，
+还原后断言会绿——仓库里的文件一个都不碰：
+
+| 破坏 | 应当失败的用例 |
+|---|---|
+| 新增未声明的层目录 | `test_every_layer_directory_is_declared` |
+| 低层反向依赖高层（core → services） | `test_dependencies_only_point_strictly_down` |
+| 明确禁止的依赖（api → tools） | `test_forbidden_edges_do_not_exist` |
+| 模块级 import 环 | `test_no_module_level_import_cycles` |
+| 登记腐化（代码里那条边没了，登记还在） | `test_registered_exceptions_are_still_used` |
+| 文档数字漂移（README 的路径数改错） | `test_documented_numbers_match_the_code` |
+
+跑法：`make guard-negative`（实测 33 秒：六处破坏各自复制一份仓库，另加两次基线）。
+
 ## 附录 A：状态与错误码速查
 
 ### A.1 任务状态
@@ -4169,7 +4257,7 @@ python scripts/outbox_worker.py --once     # 单轮后退出
 
 在声称「完成」之前，逐项确认：
 
-- [ ] `python -m pytest` 通过（默认 496 passed / 6 skipped，跳过的是 PostgreSQL 与 Redis 专项用例；收集 502、43 个测试文件）
+- [ ] `python -m pytest` 通过（默认 513 passed / 6 skipped，跳过的是 PostgreSQL 与 Redis 专项用例；收集 519、45 个测试文件）
 - [ ] 如改了并发/锁，设置 `TICKETPILOT_TEST_POSTGRES_URL` 在真实 PostgreSQL 上跑全量
 - [ ] `ruff check .` 通过
 - [ ] `python -m mypy app` 通过（`strict = true`，只覆盖 `app`）
@@ -4331,6 +4419,20 @@ python scripts/outbox_worker.py --once     # 单轮后退出
 > **改成三列**（指标 / 记录读数 / 复跑读数）后重渲染确认已修好，渲染文本里仍是 **26 个真 U+2610** 空心方块。
 > **仍未执行**：生产托管 embedding / rerank 的接入与压测；服务商侧投递；浏览器截图未取。
 
+> **2026-10-25（两个守卫：架构依赖 + 文档一致性）本轮实跑并留痕（取代上一行的读数）**：
+> `ruff` All checks passed · `mypy app` **137 文件**零错误 ·
+> `pytest`（SQLite 基线）**513 passed / 6 skipped**（收集 519、45 个测试文件、**140.96 s**）·
+> `pytest`（仅 PostgreSQL 16.15）**517 passed / 2 skipped（153.64 s）** ·
+> `pytest`（PostgreSQL + Redis 两个容器同时指上）**519 passed / 0 skipped（137.23 s）** ·
+> Golden **40/40** · 支持集 **61/61** · 检索门槛 `GATE PASSED` ·
+> 回放 **REPLAY DIFF EMPTY** · `alembic check` → `No new upgrade operations detected.` ·
+> `npm run build` ✓ · OpenAPI **42 个路径 / 45 个操作**。
+> **新增的两个守卫**：`make guard` → 17 条全绿（架构依赖 8 + 文档一致性 9）。
+> 守卫抓到的第一处漂移是这一轮自己造成的：加完两个测试文件后文档仍写「43 个测试文件 / 502 条 /
+> 23 篇 ADR」，守卫当场报出四处——`docs/AGENT_PLATFORM_PLAN.md:152`、`docs/PROJECT_SPEC.md:3520`、
+> `docs/NEXT_STEPS.md:65`、`CONTRIBUTING.md:111`。
+> **仍未执行**：生产托管 embedding / rerank 的接入与压测；服务商侧投递；浏览器截图未取。
+
 ---
 
 ## 附录 D：文档同步面
@@ -4360,6 +4462,8 @@ python scripts/outbox_worker.py --once     # 单轮后退出
 | 修改记忆个性化（增删效果码、`personalization` 契约、`MEMORY_PERSONALIZATION_ENABLED`） | `app/agent/personalization.py`（含 `EFFECT_FIELDS`）、`app/agent/support_agent.py::_personalize`、`app/schemas/support.py::SupportPersonalization`、`app/core/config.py`、`web/src/pages/ConversationPage.tsx::PERSONALIZATION_LABELS`、`tests/test_personalization.py`、`docs/API.md`「`personalization`」一节、`docs/ARCHITECTURE.md` 只读客服路径、`docs/SECURITY.md` 档案进回复条目、`docs/EVALS.md` 回放口径、README 四种效果表、本文 §1.7/§6.7.4/§12.9/§13.5/§19、ADR-014 后果段与 ADR-018。**加新码必须先想清楚回放影响**：档案改过回复 ⇒ 该客户历史 trace 不再逐字可回放 |
 | 修改出站传输 / 去向解析 / `SENT` 语义 | `app/channels/outbound.py`、`app/services/runtime.py::_outbox_sink`、`app/core/config.py`、`.env.example`、`tests/test_outbound.py`、`docs/API.md`「主动通知的出站投递」、`docs/SECURITY.md`、`docs/ARCHITECTURE.md`、README 环境变量表与已知边界、本文 §12.9/§24、ADR-013/017 |
 | 修改质量门禁（ruff/mypy/CI） | `pyproject.toml`、`.github/workflows/ci.yml`、CONTRIBUTING 门禁清单、本文 §14.3/§19.2、附录 C |
+| 修改 `app/` 的分层依赖方向 | `docs/architecture-guard.yaml`（`tiers` / `exceptions` / `forbidden`）、`tests/test_architecture_guard.py`、本文 §2 / §25、`docs/ARCHITECTURE.md`、ADR-025 |
+| 修改文档里会被守卫核对的数字 | `docs/fact-baseline.yaml`（只改「去哪核对」，不改数字）、`tests/test_docs_consistency.py`、本文 §25、ADR-025 |
 | 新增真实依赖 | README「尚未验证」清单、本文 §19、CI |
 
 > 本文档到此结束。它描述的是 **2026-10-25 的代码事实**，不是产品愿景。

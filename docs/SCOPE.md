@@ -87,7 +87,7 @@ LLM 输出只能作为**建议或槽位来源**；任何写操作都必须经过
 
 ## 验收口径
 
-- 496 个默认 pytest 用例通过（收集 502、43 个测试文件，6 个 PostgreSQL / Redis 专项默认跳过）；**PostgreSQL 16.15 同轮全量 500 passed / 2 skipped（134.77 s）**（跳过的 2 条是 Redis 用例，指向本机 Redis 容器后 2 passed；两个容器同时指上则是 **502 passed / 0 skipped**，119.71 s），T2 起新增的文件与四张新表（T4 的 `channel_messages` + T5 的档案/规则/通知）全部覆盖；Golden 40/40、支持集 61/61 也在 PG 上跑过。**五通道检索指标脚本本身也在 PG 上跑过**（`--channels bm25,dense,hybrid,gated,rerank`，读数与 SQLite 逐位一致，见 [PROJECT_SPEC](PROJECT_SPEC.md) §11.5）
+- 513 个默认 pytest 用例通过（收集 519、45 个测试文件，6 个 PostgreSQL / Redis 专项默认跳过）；**PostgreSQL 16.15 同轮全量 517 passed / 2 skipped（153.64 s）**（跳过的 2 条是 Redis 用例，指向本机 Redis 容器后 2 passed；两个容器同时指上则是 **519 passed / 0 skipped**，137.23 s），T2 起新增的文件与四张新表（T4 的 `channel_messages` + T5 的档案/规则/通知）全部覆盖；Golden 40/40、支持集 61/61 也在 PG 上跑过。**五通道检索指标脚本本身也在 PG 上跑过**（`--channels bm25,dense,hybrid,gated,rerank`，读数与 SQLite 逐位一致，见 [PROJECT_SPEC](PROJECT_SPEC.md) §11.5）
 - `ruff check .` 与 `mypy app`（strict，137 个文件）零告警
 - 任务路径 Golden Set 40 条全过（SQLite；上一轮 10 条在 SQLite 与 PostgreSQL 16 均实测）
 - 只读路径支持集 61 条全过（12 意图 × 正常/边界/失败，含多轮澄清与续跑）

@@ -174,7 +174,7 @@ WEB/LOGISTICS_QUERY: 1/1     ← 同一条邮件会话（只是没触发转人�
 - `rerank` 只买头部：`recall@1` 0.9118、`mrr` 0.9559、`nDCG@5` 0.9438 都是五行最高，但 **`recall@3` 从 0.9706 掉回 0.9118**，`recall@5` 不变——有一句的正确块被挤出了前三。
 - 17 条标注、单租户演示语料，不足以支撑「稠密或重排优于 BM25」的普适结论；门槛仍按 bm25 的实测值设定，没有为了放行任何通道而调低。
 
-**两库口径**：2026-10-25 在 PostgreSQL 16.15 容器上复跑了全量 `pytest`（含 `tests/test_retrieval_eval.py` 对同一份标注的门槛断言）与 Golden / 支持集，**502 passed / 0 skipped**（同时指上 PostgreSQL 与 Redis 容器）、Golden 40/40、支持集 61/61（见 [PROJECT_SPEC](PROJECT_SPEC.md) §14.1）。**上面这张五通道表本身也在 PG 上跑过**：`retrieval_metrics.py --channels bm25,dense,hybrid,gated,rerank --database-url postgresql+psycopg://tp:tp@127.0.0.1:55432/tp_eval` 在 `tp_eval` 库上产出的五行读数与 SQLite **逐项相同**（含 `dense_trigger_rate` 0.2941 与 `rerank` 那一行）。
+**两库口径**：2026-10-25 在 PostgreSQL 16.15 容器上复跑了全量 `pytest`（含 `tests/test_retrieval_eval.py` 对同一份标注的门槛断言）与 Golden / 支持集，**519 passed / 0 skipped**（同时指上 PostgreSQL 与 Redis 容器）、Golden 40/40、支持集 61/61（见 [PROJECT_SPEC](PROJECT_SPEC.md) §14.1）。**上面这张五通道表本身也在 PG 上跑过**：`retrieval_metrics.py --channels bm25,dense,hybrid,gated,rerank --database-url postgresql+psycopg://tp:tp@127.0.0.1:55432/tp_eval` 在 `tp_eval` 库上产出的五行读数与 SQLite **逐项相同**（含 `dense_trigger_rate` 0.2941 与 `rerank` 那一行）。
 
 > **这里修掉了一个真的缺陷**：修之前，PG 上的 `rerank` 行与 SQLite **对不上**（recall@1 0.85 vs 0.91）。根因不在检索算法，在 `app/retrieval/search.py::visible_chunks()` 没有 `ORDER BY`——数据库按什么顺序返回行是不确定的，而 BM25 的并列分正是靠这个顺序破的；破的顺序不同 → 送给重排器的候选块顺序不同 → 批次构成不同 → 边界分被翻转。现在查询加了 `.order_by(DocumentChunk.id)`，两库逐位一致。**没有指定顺序的查询，两库可以给出不同的排序**，这跟检索质量无关，是可复现性问题。
 

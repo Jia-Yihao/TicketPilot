@@ -366,7 +366,7 @@ LOGISTICS_QUERY  UNKNOWN          -> UNKNOWN
 
 **为什么是两次调用**：对话入口的结论不会被递给任务台账。`create_task` 进 `_run` 之后，`brain.plan` 用同一份请求和槽位**重新**算一次，`task.routed` 记的是这一次的 `planning_source`。一次对话退款因此问两次模型（上一条实测正是 `calls=2`、20.3 秒）。这是故意的：台账不接受调用方递进来的结论，入口那道门写错时，最坏情况是多追问一轮，而不是一条被入口指定了意图的退款单。
 
-`AGENT_MODE=rules` 的确定性用一条更硬的断言钉住：测试里把 `IntentAgent` 换成一个"被调用就失败"的桩，整段规则模式对话跑完，桩一次没响。`tests/test_llm_gap.py` 现在 9 条（离线、不依赖模型服务）：规则读不懂这些句子、`IntentBrain` 只在缺口上采纳模型、`rules` 模式一次不问、问了但模型也读不懂时不建任务、问句不花调用、采纳退款后任务仍等人工审批且台账来源是 `pydantic_ai`、直接调任务接口会问一次。全量 **496 passed / 6 skipped**（收集 502、43 个测试文件；6 条是 PostgreSQL / Redis 专项）。
+`AGENT_MODE=rules` 的确定性用一条更硬的断言钉住：测试里把 `IntentAgent` 换成一个"被调用就失败"的桩，整段规则模式对话跑完，桩一次没响。`tests/test_llm_gap.py` 现在 9 条（离线、不依赖模型服务）：规则读不懂这些句子、`IntentBrain` 只在缺口上采纳模型、`rules` 模式一次不问、问了但模型也读不懂时不建任务、问句不花调用、采纳退款后任务仍等人工审批且台账来源是 `pydantic_ai`、直接调任务接口会问一次。全量 **513 passed / 6 skipped**（收集 519、45 个测试文件；6 条是 PostgreSQL / Redis 专项）。
 
 我没有采纳读意图，也没有设置信度阈值：`IntentOutput` 里虽然带 `confidence`，但没有一份真实工单语料能告诉我阈值该是多少，拍一个数只是把"我选的"伪装成"算出来的"。这两个缺口和"11 句是我写的、不是真实工单"一起，写在 [ADR-020](docs/adr/ADR-020-chat-model-gap.md) 的后果段里。
 
@@ -996,6 +996,39 @@ POST /api/v1/support/messages  ← 两条 web 入口都经网关，旧入口不�
 - **转人工是正常出口而不是异常兜底**：`app/agent/escalation.yaml` 用 8 个信号（用户明说、投诉、情绪激动、重复失败、检索无证据、风险等级、反复澄清、空闲超时）决定何时交人，阈值在策略引擎里，表本身是数据。
 - **自助统计不含模型**：问句由确定性启发式写成计划，写不出来就 `NO_PLAN` 转人工，不会硬猜 SQL。
 
+## 两个守卫：架构依赖与文档一致性
+
+这两个守卫把「文档里的每个数字都能跑出来」从**承诺**变成**测试**。它们是 `pytest` 里的普通用例，
+规则写在 YAML 里、事实从代码现算，所以没有「人肉核对」这一环。
+
+```bash
+make guard        # 只跑这两个守卫（约 4 秒）
+python -m pytest  # 全量 519 条里已经包含它们，CI 的主 job 自然会跑
+```
+
+**架构依赖守卫**（`tests/test_architecture_guard.py`，规则在 `docs/architecture-guard.yaml`）：
+`app/` 下每个子目录都要在 `tiers` 里声明层号，跨层依赖必须**严格向下**，
+越层的必须在 `exceptions` 里登记并写明理由，`forbidden` 里的边一条都不许存在，
+模块级导入不许成环，登记过的例外必须仍在使用（否则是过期借口）。失败信息带 `file:line`。
+
+**文档一致性守卫**（`tests/test_docs_consistency.py`，清单在 `docs/fact-baseline.yaml`）：
+清单里**只写「在哪个文件的哪一行」和「用哪个正则把数字抠出来」**，**不写数字本身**——
+写进去它就变成第二份事实源。守卫现算 14 个事实（OpenAPI 路径 / 操作数、迁移条数与 head、表数、
+`app/` 文件数、mypy 文件数、测试文件数、收集用例数、ADR 篇数、Golden / 支持集 / 离线用例数、
+控制台页面数），与文档里的值逐个比对，并要求每个事实至少有两处声明。
+说明书（`docs/TicketPilot项目说明书.docx`）与规格的同步也由它守：sha256 + pandoc 版本对得上才逐段比对。
+
+两个守卫都**不新增运行时依赖**，也**不改一行业务代码**——它们只读代码与文档。
+边界如实说：架构守卫只看 `app/` 内部的导入；文档守卫只守清单里列出的事实。
+
+守卫自己也要被验证：`scripts/guard_negative_check.py` 在临时副本上造六处破坏
+（未声明的层、反向依赖、`forbidden` 边、模块级环、登记腐化、文档数字漂移），
+逐处断言对应的用例会红，还原后断言会绿。
+
+```bash
+make guard-negative   # 守卫的反向验证（实测 33 秒）
+```
+
 ## 快速开始
 
 要求：Python 3.12+；控制台需要 Node.js 20.19+ 或 22.12+（CI 使用 24）。SQLite 模式无需 Docker。
@@ -1198,9 +1231,9 @@ X-Roles: approver        # 仅审批时需要，可为空
 ## 测试与评测
 
 ```bash
-python -m pytest               # 496 passed, 6 skipped（收集 502；43 个测试文件；Postgres-only 跳过）
-TICKETPILOT_TEST_POSTGRES_URL=postgresql+psycopg://... python -m pytest  # 2026-10-25 PostgreSQL 16.15：500 passed / 2 skipped（134.77 s；跳过的 2 条是 Redis 用例）
-TICKETPILOT_TEST_POSTGRES_URL=postgresql+psycopg://... TICKETPILOT_TEST_REDIS_URL=redis://127.0.0.1:56379/0 python -m pytest  # 同时指上两个容器：502 passed / 0 skipped（119.71 s）
+python -m pytest               # 513 passed, 6 skipped（收集 519；45 个测试文件；Postgres-only 跳过）
+TICKETPILOT_TEST_POSTGRES_URL=postgresql+psycopg://... python -m pytest  # 2026-10-25 PostgreSQL 16.15：517 passed / 2 skipped（153.64 s；跳过的 2 条是 Redis 用例）
+TICKETPILOT_TEST_POSTGRES_URL=postgresql+psycopg://... TICKETPILOT_TEST_REDIS_URL=redis://127.0.0.1:56379/0 python -m pytest  # 同时指上两个容器：519 passed / 0 skipped（137.23 s）
 TICKETPILOT_TEST_REDIS_URL=redis://127.0.0.1:56379/0 python -m pytest tests/test_rate_limit_redis.py  # 2 passed（跨进程限流的共享预算）
 ruff check app tests scripts evals alembic   # 与 CI 同一套目标（`ruff format --check` 不是门禁）
 python -m mypy app             # strict 类型检查，137 个文件零错误

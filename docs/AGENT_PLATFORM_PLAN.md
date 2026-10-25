@@ -149,7 +149,7 @@
 
 | 33 | **主动规则的可编辑面（T10）** | `app/services/proactive.py::update_rule` + `_template`（写时校验）、`app/schemas/memory.py::ProactiveRuleUpdateRequest`（`extra="forbid"`，不暴露 `requires_confirmation`）、`app/api/v1/memory.py` 的 `PUT /rules/{event_type}`（`_require_seat`）、`web/src/pages/ProactiveRules.tsx` + `App.tsx` 的 `/rules` 路由 | `tests/test_proactive_rules.py` 21 条（九种 422 形态、`requires_confirmation` 被拒、事件类型越界、upsert 不新建表、审计只存 `template_sha256`、失败后规则行逐字不变）+ 真实 HTTP 52 项断言（`127.0.0.1:8135`、`.tmp/t10_live.db`）+ 浏览器 DOM 走查；ADR-019 | ✅ |
 
-**规模事实**：Python 代码 `app/` 137 个文件；43 个测试文件（收集 502 条用例，SQLite 基线 496 通过 + 6 skipped，PG + Redis 两个容器同时指上则是 502 通过 + 0 skipped）；24 张表；42 个 API 路径 / 45 个操作（含 2 个健康检查）；23 篇 ADR（缺 ADR-012）；10 个控制台页面；离线用例 101 条（40 任务 + 61 只读）+ 以 `evals/support_set.json` 为源的检索评测。
+**规模事实**：Python 代码 `app/` 137 个文件；45 个测试文件（收集 519 条用例，SQLite 基线 513 通过 + 6 skipped，PG + Redis 两个容器同时指上则是 519 通过 + 0 skipped）；24 张表；42 个 API 路径 / 45 个操作（含 2 个健康检查）；24 篇 ADR（缺 ADR-012）；10 个控制台页面；离线用例 101 条（40 任务 + 61 只读）+ 以 `evals/support_set.json` 为源的检索评测。
 
 ### 1.2 八层差距矩阵
 
@@ -841,7 +841,7 @@ SpanKind = Literal["guard", "understand", "retrieve", "generate",
 |---|---|---|---|
 | 1 | 静态检查 | `ruff check app tests scripts evals alembic` | ✅（注意范围是这五个目录，不是整仓 `.`） |
 | 2 | 类型检查 | `python -m mypy app`（`strict = true`，137 文件） | ✅ |
-| 3 | 单元与集成 | `python -m pytest` | ✅（SQLite 基线 496 passed / 6 skipped；跳过的 6 条需要 `TICKETPILOT_TEST_POSTGRES_URL` 或 `TICKETPILOT_TEST_REDIS_URL`，CI **没有注入**，所以 Postgres / Redis 专项只在一次性容器里手工跑。2026-10-25 已在 PostgreSQL 16.15 + Redis 两个容器上补跑全量：**502 passed / 0 skipped**（119.71 s），T4–T10 新增用例（含 `test_personalization.py` 18 条、`test_proactive_rules.py` 21 条、`test_llm_gap.py` 9 条）与 `test_refunds.py` 1 条全部覆盖） |
+| 3 | 单元与集成 | `python -m pytest` | ✅（SQLite 基线 513 passed / 6 skipped；跳过的 6 条需要 `TICKETPILOT_TEST_POSTGRES_URL` 或 `TICKETPILOT_TEST_REDIS_URL`，CI **没有注入**，所以 Postgres / Redis 专项只在一次性容器里手工跑。2026-10-25 已在 PostgreSQL 16.15 + Redis 两个容器上补跑全量：**519 passed / 0 skipped**（137.23 s），T4–T10 新增用例（含 `test_personalization.py` 18 条、`test_proactive_rules.py` 21 条、`test_llm_gap.py` 9 条）与 `test_refunds.py` 1 条全部覆盖） |
 | 4 | 任务路径 | `python evals/run.py` | ✅（40/40，含轨迹断言） |
 | 5 | 只读路径 | `python evals/support_run.py` | ✅（61/61） |
 | 6 | 检索评测 | `python evals/retrieval_metrics.py --channels bm25,hybrid` | ✅（GATE PASSED；门槛只套第一个渠道 `bm25`，`hybrid(hashing)` 行是对比编排） |
@@ -851,7 +851,7 @@ SpanKind = Literal["guard", "understand", "retrieve", "generate",
 `web` job：`npm ci` + `npm run build`（内含 `tsc --noEmit`）— ✅。
 
 `postgres-migration` job：在 `postgres:16-alpine` 服务上 `alembic upgrade head` + `alembic check` — ✅。
-**它只验迁移链，不跑 pytest**，所以「Postgres 上测试全绿」不是 CI 结论；2026-10-25 本地 PostgreSQL 16.15 + Redis 两个一次性容器上的全量是 **502 passed / 0 skipped**（119.71 s；Golden 40/40、支持集 61/61 同轮），但那是一次手工复跑，不是 CI 门禁。
+**它只验迁移链，不跑 pytest**，所以「Postgres 上测试全绿」不是 CI 结论；2026-10-25 本地 PostgreSQL 16.15 + Redis 两个一次性容器上的全量是 **519 passed / 0 skipped**（137.23 s；Golden 40/40、支持集 61/61 同轮），但那是一次手工复跑，不是 CI 门禁。
 
 > **纪律**：所有命令用 `.venv/Scripts/...` 执行；CI 与本地用同一套命令，避免「本地过了线上红」。
 
@@ -1037,6 +1037,7 @@ SpanKind = Literal["guard", "understand", "retrieve", "generate",
 | ADR-022 | 用「分布快照」和「安全×采纳交叉」两把尺量模型，而不是用单条示例 | 已接受 |
 | ADR-023 | 三条接缝跨进程——限流、模型用量、任务幂等 | 已接受 |
 | ADR-024 | 模型调用三级门控——规则命中不问、问句不问、真缺口才问 | 已接受 |
+| ADR-025 | 架构依赖守卫 + 文档一致性守卫——规则写进 YAML，事实从代码现算 | 已接受 |
 
 **待写 ADR（1 篇）**：
 
@@ -1048,8 +1049,9 @@ SpanKind = Literal["guard", "understand", "retrieve", "generate",
 > ADR-012（策略灰度）仍预留，编号不回收；ADR-014（记忆模型）与 ADR-016（渠道抽象）已分别在
 > T5、T4 落地时补齐，ADR-017（出站接缝）随 T7-4 落地，ADR-018（记忆进答案）随 T9 落地，
 > ADR-019（规则写面）随 T10 落地，ADR-020（对话入口的模型缺口）随「对话入口接通模型」轮落地，
-> ADR-021…ADR-024 随「检索门控 + 三级门控 + 跨进程接缝 + 模型评测」轮落地。
-> 当前 `docs/adr/` 共 23 个文件（缺 ADR-012）。
+> ADR-021…ADR-024 随「检索门控 + 三级门控 + 跨进程接缝 + 模型评测」轮落地，
+> ADR-025（两个守卫）随「架构依赖守卫 + 文档一致性守卫」轮落地。
+> 当前 `docs/adr/` 共 24 个文件（缺 ADR-012）。
 
 ---
 
