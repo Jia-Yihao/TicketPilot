@@ -113,6 +113,8 @@ PUT /api/v1/memory/rules/{event_type}
 > 检索指标脚本 `evals/retrieval_metrics.py --channels bm25,dense,hybrid,gated,rerank` 在 `tp_eval` 库上跑出**五行读数，与 SQLite 逐位一致**；前提是修掉 `visible_chunks()` 缺 `ORDER BY` 导致的行序不确定（`app/retrieval/search.py`）。
 > 同时指上 Redis 容器后，全量是 **502 passed / 0 skipped（119.71 s）**，迁移链 **13 条**、head `b4e8d2f6a1c9`，`alembic check` 无漂移。
 > §107 与本修订里那组「41 路径 / 44 操作」「447 passed / 3 skipped」是 T10 当天的读数，现已更新为 **42 路径 / 45 操作**与 SQLite 基线 **496 passed / 6 skipped**（收集 502、43 个测试文件）、mypy strict **137** 个文件。
+>
+> **修订（2026-10-25，第三次）**：上一条修订里的「496 passed / 6 skipped（收集 502、43 个测试文件）」是 2026-10-25 当天的读数，**不是现行口径**——本 ADR 讲的是决策，读数会变。现行口径只在一处说了算：`README.md` 的「测试与评测」与 `docs/PROJECT_SPEC.md` §14.1，那几处由 `tests/test_docs_consistency.py` 逐条比对（规则见 [ADR-025](ADR-025-architecture-and-docs-guards.md)）。本轮（2026-10-25，守卫轮）复跑：SQLite **513 passed / 6 skipped**（收集 **519** 条、**45** 个测试文件）、仅 PostgreSQL **517 passed / 2 skipped**、PostgreSQL + Redis **519 passed / 0 skipped**、mypy strict **137** 个文件、OpenAPI **42 路径 / 45 操作**。收集数从 502 变 519 的原因是新增了两个守卫用例文件（`tests/test_architecture_guard.py` 8 条、`tests/test_docs_consistency.py` 9 条）——它们守的就是这一轮。
 
 ## 备选方案
 

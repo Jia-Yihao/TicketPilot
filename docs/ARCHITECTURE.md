@@ -43,6 +43,12 @@ flowchart TD
 - `observability/`：trace span 记录与 PII 脱敏
 - `core/policy.py`：策略引擎（阈值与放行判定）
 
+> **分层是被守着的，不是写在纸上就算**：`docs/architecture-guard.yaml` 把层号、例外与禁止边写成数据，
+> `tests/test_architecture_guard.py` 每次跑 `pytest` 都按它检查 `app/` 的 import 图——新增一层目录、
+> 让下层反过来依赖上层、引入模块级 import 环、或者把已登记的例外留着却不再使用，都会红。
+> 已知并登记的反向依赖只有四条（`agent → services`、`tools → services`、`channels → agent`、
+> `core → observability`），外加一条已知偏离 `api → sql`；每条都写了 why，改动要走 ADR（[ADR-025](adr/ADR-025-architecture-and-docs-guards.md)）。
+
 ## 只读客服路径
 
 问答与写操作是两条互不重叠的路径：只读路径**不创建任务、不落台账、不写审计**，写路径必须走 `TaskRuntime`。
