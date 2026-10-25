@@ -1,21 +1,20 @@
-"""The model's one vote is real, and the chat path never calls it in.
+"""The model's one vote on the chat path: where it is asked, what it may buy.
 
-Three facts the README's「模型在哪一层」section rests on — written as assertions
+The README's「模型边界」section rests on these facts, written as assertions
 instead of prose:
 
-1. the rule table reads refund and hand-off phrasings that a human has no
-   trouble with as ``UNKNOWN``;
+1. the rule table reads refund phrasings that a human has no trouble with as
+   ``UNKNOWN``;
 2. ``IntentBrain`` does recover them when a model fills the gap, and only there:
    a message the rules already read keeps the rule's intent even when the model
    disagrees;
-3. the chat path cannot benefit from (2). ``classify_support`` hands a message to
-   the write path only when the rules read it as a write intent
-   (``app/agent/support_agent.py:108-111``), so an ``UNKNOWN`` turn never becomes
-   a task and ``TaskRuntime._run`` never calls the brain for it. The direct
-   ``POST /api/v1/tasks`` route does, because there the request text *is* the
-   task.
+3. the chat path now asks the model *only* on an ``UNKNOWN`` turn, and adopts
+   *only* a refund reading. The refund it opens still waits for human approval,
+   and ``task.routed`` records ``planning_source=pydantic_ai`` because the task
+   runtime plans the request itself — the chat gate cannot hand it a verdict;
+4. with ``AGENT_MODE=rules`` nothing changes: the model is never called.
 
-No model server is needed: the extractor is stubbed, so these run in CI.
+No model server is needed: the extractor/brain is stubbed, so these run in CI.
 """
 
 from __future__ import annotations
@@ -28,10 +27,11 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
 from app.agent.pydantic_agent import IntentAgent, IntentBrain, IntentOutput
-from app.agent.routing import classify
+from app.agent.routing import RoutePlan, classify
 from app.core.config import Settings
 from app.main import create_app
-from app.models.task import Task
+from app.models.enums import Intent
+from app.models.task import Task, TaskEvent
 from app.seed import seed_all
 from tests.conftest import ALICE
 
@@ -57,24 +57,56 @@ class StubAgent:
         return self.output
 
 
-class RecordingBrain:
-    """Delegates to the rules and remembers that it was asked."""
+class ExplodingAgent:
+    """Fails the test if the rules-mode path ever reaches a model."""
 
-    def __init__(self) -> None:
+    def parse(self, request: str, context: dict[str, Any] | None = None) -> IntentOutput:
+        raise AssertionError(f"rules mode asked the model about {request!r}")
+
+
+class FixedBrain:
+    """Rules first; a fixed model reading wherever the rules give ``UNKNOWN``."""
+
+    def __init__(
+        self,
+        intent: str = "UNKNOWN",
+        *,
+        order_id: str | None = None,
+        amount_cents: int | None = None,
+    ) -> None:
+        self.intent = intent
+        self.model_order_id = order_id
+        self.model_amount_cents = amount_cents
         self.requests: list[str] = []
 
-    def plan(self, request: str, context: dict[str, Any] | None = None) -> tuple[Any, str]:
+    def plan(self, request: str, context: dict[str, Any] | None = None) -> tuple[RoutePlan, str]:
         self.requests.append(request)
-        return classify(request, context), "pydantic_ai"
+        rules = classify(request, context)
+        if rules.intent is not Intent.UNKNOWN:
+            return rules, "rules"
+        if self.intent == "UNKNOWN":
+            return rules, "pydantic_ai"
+        return (
+            RoutePlan(
+                intent=Intent(self.intent),
+                order_id=rules.order_id or self.model_order_id,
+                amount_cents=(
+                    rules.amount_cents
+                    if rules.amount_cents is not None
+                    else self.model_amount_cents
+                ),
+            ),
+            "pydantic_ai",
+        )
 
 
-def _app(tmp_path: Path, brain: Any) -> FastAPI:
+def _app(tmp_path: Path, brain: Any, *, agent_mode: str = "pydantic_ai") -> FastAPI:
     application = create_app(
         Settings(
             environment="test",
             database_url=f"sqlite+pysqlite:///{tmp_path / 'gap.db'}",
             auto_create_tables=True,
-            agent_mode="pydantic_ai",
+            agent_mode=agent_mode,
         ),
         brain=brain,
     )
@@ -82,10 +114,25 @@ def _app(tmp_path: Path, brain: Any) -> FastAPI:
     return application
 
 
+def _tasks(app: FastAPI) -> int:
+    with app.state.session_factory() as session:
+        return int(session.scalar(select(func.count()).select_from(Task)) or 0)
+
+
+def _routed(task_id: str, app: FastAPI) -> dict[str, Any]:
+    with app.state.session_factory() as session:
+        row = session.execute(
+            select(TaskEvent.payload)
+            .where(TaskEvent.task_id == task_id, TaskEvent.event_type == "task.routed")
+            .order_by(TaskEvent.created_at.desc())
+        ).first()
+    assert row is not None, f"no task.routed event for {task_id}"
+    return dict(row[0])
+
+
 def test_rules_read_these_refund_phrasings_as_unknown() -> None:
     for text in REFUND_GAPS:
         assert classify(text, {}).intent.value == "UNKNOWN", text
-    # ... while the task runtime is the only place that could ask a model.
     assert classify(RULE_READABLE_REFUND, {}).intent.value == "REFUND_REQUEST"
 
 
@@ -118,28 +165,110 @@ def test_brain_adopts_the_model_only_where_the_rules_left_a_gap() -> None:
     assert kept.intent.value == "REFUND_REQUEST"
 
 
-def test_chat_turns_that_the_rules_cannot_read_never_reach_the_model(
-    tmp_path: Path,
-) -> None:
-    brain = RecordingBrain()
-    app = _app(tmp_path, brain)
+def test_rules_mode_chat_never_asks_a_model(tmp_path: Path) -> None:
+    brain = IntentBrain(mode="rules", agent=cast("IntentAgent", ExplodingAgent()))
+    app = _app(tmp_path, brain, agent_mode="rules")
     client = TestClient(app)
 
-    for text in REFUND_GAPS:
+    # The first sentence carries an order id, so the catalog answers with the
+    # order card it is allowed to give; the other two stay UNKNOWN.
+    expected = ("ORDER_QUERY", "UNKNOWN", "UNKNOWN")
+    for index, (text, intent) in enumerate(zip(REFUND_GAPS, expected, strict=True)):
         response = client.post(
             "/api/v1/support/messages",
             headers=ALICE,
-            json={"message": text, "conversation_id": f"gap-{text[:6]}"},
+            json={"message": text, "conversation_id": f"rules-{index}"},
         )
         assert response.status_code == 200, response.text
+        assert response.json()["intent"] == intent
 
+    assert _tasks(app) == 0
+
+
+def test_chat_asks_the_model_where_the_rules_cannot_read(tmp_path: Path) -> None:
+    brain = FixedBrain("UNKNOWN")
+    app = _app(tmp_path, brain)
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/v1/support/messages",
+        headers=ALICE,
+        json={"message": REFUND_GAPS[0], "conversation_id": "asked"},
+    )
+
+    assert response.status_code == 200, response.text
+    # Asked once, and an unhelpful answer changes nothing: the order-id
+    # fallback still stands and no task is created.
+    assert brain.requests == [REFUND_GAPS[0]]
+    assert response.json()["intent"] == "ORDER_QUERY"
+    assert _tasks(app) == 0
+
+
+def test_chat_does_not_spend_a_model_call_on_a_question(tmp_path: Path) -> None:
+    """``blocks_write_action`` still runs first: a question is not a request.
+
+    The model reads "运费谁出？" as POLICY_QA, but no reading would be adopted
+    for a read question, so the gate does not ask and the turn stays UNKNOWN.
+    """
+    brain = FixedBrain("POLICY_QA")
+    app = _app(tmp_path, brain)
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/v1/support/messages",
+        headers=ALICE,
+        json={"message": "运费谁出？", "conversation_id": "shipping"},
+    )
+
+    assert response.status_code == 200, response.text
     assert brain.requests == []
-    with app.state.session_factory() as session:
-        assert int(session.scalar(select(func.count()).select_from(Task)) or 0) == 0
+    assert response.json()["intent"] == "UNKNOWN"
+    assert _tasks(app) == 0
+
+
+def test_chat_adopts_a_refund_reading_and_the_task_still_waits_for_approval(
+    tmp_path: Path,
+) -> None:
+    brain = FixedBrain("REFUND_REQUEST", amount_cents=12900)
+    app = _app(tmp_path, brain)
+    client = TestClient(app)
+    conversation = "refund-gap"
+
+    first = client.post(
+        "/api/v1/support/messages",
+        headers=ALICE,
+        json={"message": REFUND_GAPS[0], "conversation_id": conversation},
+    )
+    assert first.status_code == 200, first.text
+    body = first.json()
+    assert body["intent"] == "REFUND_REQUEST"
+    # The intent was rescued; the order came from the text, the amount did not
+    # exist anywhere yet, so the catalog still asks for it.
+    assert body["clarification"]["expected_slot"] == "amount_cents"
+    assert body["task"] is None
+    assert _tasks(app) == 0
+
+    second = client.post(
+        "/api/v1/support/messages",
+        headers=ALICE,
+        json={"message": "129 元", "conversation_id": body["conversation_id"]},
+    )
+    assert second.status_code == 200, second.text
+    payload = second.json()
+    assert payload["task"]["status"] == "WAITING_APPROVAL"
+    assert payload["task"]["pending_approval"]["amount_cents"] == 12900
+
+    routed = _routed(payload["task"]["task_id"], app)
+    assert routed["intent"] == "REFUND_REQUEST"
+    # The ledger's verdict is the runtime's own plan (it asked the model again
+    # about the merged request); the chat gate cannot pass a verdict down.
+    assert routed["planning_source"] == "pydantic_ai"
+    assert brain.requests == [REFUND_GAPS[0], REFUND_GAPS[0]]
+    assert _tasks(app) == 1
 
 
 def test_the_task_api_does_ask_the_model_about_the_same_text(tmp_path: Path) -> None:
-    brain = RecordingBrain()
+    brain = FixedBrain("UNKNOWN")
     app = _app(tmp_path, brain)
     client = TestClient(app)
 
@@ -150,6 +279,4 @@ def test_the_task_api_does_ask_the_model_about_the_same_text(tmp_path: Path) -> 
     body = response.json()
     assert body["status"] == "SUCCEEDED"
     assert body["result"]["outcome"] == "NEEDS_HUMAN_REVIEW"
-    # The rules-only plan this stub returns is UNKNOWN, which is what a chat turn
-    # would have been if the chat path had ever created a task for it.
     assert "无法判断" in str(body["result"]["summary"])

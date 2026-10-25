@@ -7,8 +7,8 @@
 > 在编辑器里按符号跳转即可。文中路径均相对仓库根目录。
 >
 > **事实基准：2026-10-24 复跑（T4 渠道抽象、T4b 渠道溯源、T5 客户记忆与主动服务、T6 稠密检索护栏、T7 控制台与主动消息出口、T8 网页入口幂等收口、T9 记忆进答案、T10 主动规则可编辑面完成后）。**
-> 本机结果：默认 pytest 套件 **452 passed / 3 skipped**（收集 455 个用例，34 个测试文件；2026-10-25 复跑，
-> 比 10-24 的 447 多出 5 条——`tests/test_refunds.py` 里 1 条退款作用域用例，加 `tests/test_llm_gap.py` 4 条模型边界用例），
+> 本机结果：默认 pytest 套件 **455 passed / 3 skipped**（收集 458 个用例，34 个测试文件；2026-10-25 复跑，
+> 比 10-24 的 447 多出 8 条——`tests/test_refunds.py` 里 1 条退款作用域用例，加 `tests/test_llm_gap.py` 7 条模型边界用例），
 > Ruff 通过，`mypy app`（strict）零错误（134 个文件），任务路径 Golden Set **40/40**，只读路径支持集 **61/61**，
 > 回放自检 **REPLAY DIFF EMPTY**，离线检索评测基线门槛全过（`bm25` 与 `hybrid(hashing)` 两个通道都跑过；后者只证明编排不破契约，**不是生产召回结论**），
 > `alembic check` 无漂移（head `c3b8e5a71d29`，11 条迁移、23 张表），控制台 `npm run build` 通过，
@@ -18,7 +18,7 @@
 > `alembic upgrade head` + `alembic check` 在 SQLite 与 PostgreSQL 上均无漂移；
 > `docker compose up -d --build` 镜像构建通过，栈内 `/health/ready` 返回 `ready`、`/console/` 可访问，
 > 容器内 `scripts/seed.py` 与 `scripts/demo.py` 均跑通；
-> 真实模型调用、OIDC 登录和实时 SSE 仍未验证。
+> 真实模型调用已在本机 LM Studio（`qwen3-8b`）上验证，托管模型（Anthropic / OpenAI）仍未验证；OIDC 登录和实时 SSE 仍未实现。
 >
 > **数字口径**：测试总数只在 `README.md` 维护；Golden Set 的规模与执行方式只在
 > `docs/GOLDEN_SET.md` 维护。本文档只解释机制，不复述会随代码变化的计数。
@@ -293,15 +293,17 @@ TicketPilot 是一个**售后服务 Agent 演示项目**，用一句话概括它
 
 **未验证 / 未实现（不要夸大）：**
 
-- 真实模型调用：本机没有 `ANTHROPIC_API_KEY`；`AGENT_MODE=pydantic_ai` 只用
-  PydanticAI `TestModel` 离线测试过。
+- 真实模型调用：本机 LM Studio（OpenAI 兼容端点，`AGENT_MODEL=openai:qwen/qwen3-8b`）实测跑通
+  任务槽位抽取与对话入口的缺口兜底；托管模型（Anthropic / OpenAI）仍未验证，
+  `AGENT_MODEL` 默认值 `anthropic:claude-sonnet-4-5` 那条路需要 `ANTHROPIC_API_KEY`。
 - 生产身份：OIDC 适配器未实现，`create_app` 在 `IDENTITY_ADAPTER=oidc` 时拒绝启动。
 - 真实退款：HTTP 渠道未实现，`REFUND_PROVIDER=http` 时拒绝启动。
 - 实时 SSE：当前是持久化事件回放后关闭，不是长连接实时订阅。
-- 真实稠密向量：生产 embedding 端点未接入，`scripts/embed_policies.py` 只在
-  `--offline` 下用哈希占位向量把编排跑通；`hybrid` 通道的检索数字**不是生产召回结论**，
-  且 `recall@5` 相对 `bm25` 是退化的（0.971 → 0.912）。生产 `RETRIEVAL_DENSE_ENABLED=true`
-  会直接拒绝启动，除非显式声明已灌入真向量。
+- 生产稠密向量端点：本机用 LM Studio 的 `bge-m3` 跑出过真实检索数字（`recall@5` 0.971、MRR 0.927，
+  见 `README.md` 的通道对比表），但生产 embedding 端点仍未接入，CI 里没有端点时
+  `scripts/embed_policies.py` 用离线哈希替身把编排跑通——那一行**不是生产召回结论**
+  （哈希把词面重叠当相似度，`recall@5` 反而从 0.971 掉到 0.912）。生产
+  `RETRIEVAL_DENSE_ENABLED=true` 会直接拒绝启动，除非显式声明已灌入真向量。
 - 主动服务的出站投递：`proactive.confirmed` 由 `app/channels/outbound.py` 的 `ProactiveSender` 消费，
   通知能走到 `SENT`；但只有 `none`（默认，拒绝一切发送）与 `local_file`（写本地文件，仅演示）两种传输，
   **没有 SMTP / 微信 / 短信服务商协议**，所以 `SENT` 只等于"已交给配置的出站通道"，不等于服务商送达回执。
@@ -1155,6 +1157,12 @@ class RoutePlan:
 - 命中 `nature: collaboration` 的行（例如 `HUMAN_HANDOFF`）**优先于写路径**——要人 ≠ 要工单；
 - 规则路由 `classify` 判定的 `REFUND_REQUEST` / `TICKET_CREATE` 只有在消息不是提问时
   （`blocks_write_action`）才成立。
+- 2026-10-25 起，规则没读懂的轮次可以问一次模型：`_consult_model` 只在
+  「规则 `UNKNOWN`，或规则 `UNKNOWN` 而目录仅因消息带订单号回了 `ORDER_QUERY`」、
+  `AGENT_MODE=pydantic_ai`、且不是问句时才调用 `IntentBrain.plan`，并且**只采纳
+  `REFUND_REQUEST` 的意图**（外加模型补的 `order_id`）；金额、读意图、`TICKET_CREATE`
+  都不采纳。台账不接受入口的结论：`TaskRuntime._run` 会重新规划并写
+  `planning_source`。取舍见 [ADR-020](adr/ADR-020-chat-model-gap.md)。
 
 第 1 条让「能不能退款？」这类**问规则**的句子不被误判成退款申请；反过来，
 「我要申请退款，订单 1001，129 元」不含资格问句，会正确落到 `REFUND_REQUEST`。
@@ -1195,10 +1203,13 @@ amount   = rule_plan.amount_cents if not None else output.amount_cents
 
 1. **规则结果优先。** 模型只能在规则识别为 `UNKNOWN` 时改意图，不能推翻一个已命中的规则。
 2. **模型可以补槽位。** 规则没抽到订单号/金额时，模型的输出会被采用。
-3. **模型每次都会被调用。** `AGENT_MODE=pydantic_ai` 下 `plan` 无条件调用
+3. **任务路径上模型每次都会被调用。** `AGENT_MODE=pydantic_ai` 下 `plan` 无条件调用
    `IntentAgent.parse`，即使规则已经识别得很完整；它不是「只在 UNKNOWN 时调用」。
    ADR-002 已按这个事实写明，测试
    `test_pydantic_ai_mode_calls_the_model_without_short_circuit` 用计数桩把「不短路」钉住。
+   注意区分两个层次：**对话入口**只在缺口上调用 `plan`（§6.3 第三条），但一旦调用，
+   `plan` 本身仍按这段代码无条件问模型；所以一次对话退款在入口与任务台账各问一次，
+   共两次调用。
 
 ### 6.5 PydanticAI 节点的边界
 
@@ -1214,18 +1225,24 @@ amount   = rule_plan.amount_cents if not None else output.amount_cents
 `OrderService.require_order` 也会按租户/归属校验拒绝。模型输出的 `confidence` 与
 `decision_summary` 当前**没有参与任何决策**，只存在于返回值里；不要把它当成风险分。
 
-### 6.6 真实模型未验证
+### 6.6 真实模型的验证范围
 
-本机没有配置模型密钥，`AGENT_MODE=pydantic_ai` 只通过 PydanticAI 的 `TestModel`
-做过离线测试。以下行为没有在真实模型上验证：
+本机用 LM Studio 的 OpenAI 兼容端点（`OPENAI_BASE_URL=http://127.0.0.1:1234/v1`、
+`AGENT_MODEL=openai:qwen/qwen3-8b`）实测跑过两条路径：49 段模拟会话的 12 次任务路由
+（`scripts/llm_boundary_diff.py`，重放显示它一次也没有改变路由结果），以及 11 句规则
+词表外说法（`scripts/llm_gap_probe.py`，模型按人读法捞回 6 句，`order_id` 编造 0 次）。
+所以「已实现可选的受限模型节点」可以写成「已在本机开源模型上实测」，但仍有边界：
 
-- 中文槽位抽取的稳定性；
-- 结构化输出在超时/限流下的重试行为；
-- 模型把 `order_id` 从上下文中抄错时的实际概率；
-- 真实 token 成本与延迟。
+- **托管模型未验证**（Anthropic / OpenAI）；`AGENT_MODEL` 默认值仍是托管模型，
+  换成本地模型靠 `.env` 里的三行配置；
+- 中文槽位抽取只在 `qwen3-8b` 上跑过，样本是 11 句手写说法，不是真实工单语料；
+- 结构化输出在超时/限流下的重试行为只有 `TestModel` 与桩件覆盖；
+- 真实 token 成本与延迟只对本机模型成立（11 次调用、7303 token、83.0 秒）；
+- 模型把 `order_id` 从上下文中抄错时的实际概率没有语料可测，只有「编造即非零退出」
+  这条脚本断言在每次运行时守住。
 
-因此对外表述只能写「已实现可选的受限模型节点，并用 TestModel 验证了结构」，不能写
-「已接入真实大模型」。
+因此对外表述应写「受限模型节点已在本机 LM Studio 上实测，托管模型与真实工单语料未验证」，
+不要写「已接入生产大模型」。
 
 ### 6.7 本地客服 Agent（`SupportAgent`）
 
@@ -2464,7 +2481,7 @@ PUT /api/v1/memory/rules/{event_type}（坐席，需 support 角色）
 
 ### 14.1 测试分层
 
-`tests/` 下收集 455 个测试用例（34 个测试文件，另有 `conftest.py`），按主题平铺成单文件，
+`tests/` 下收集 458 个测试用例（34 个测试文件，另有 `conftest.py`），按主题平铺成单文件，
 没有 unit/integration 分层（pytest marker 已声明但未实际使用）：
 
 | 文件 | 关注点 |
@@ -2476,7 +2493,7 @@ PUT /api/v1/memory/rules/{event_type}（坐席，需 support 角色）
 | `test_approval_queue.py` | 审批队列权限、租户隔离、详情摘要、筛选、未知状态、任务列表归属 |
 | `test_governance.py` | 网关审批闸、未知工具、重复注册、摘要规范化、生产配置 fail-closed、文档关闭 |
 | `test_pydantic_agent.py` | 结构化输出、规则优先、UNKNOWN 补齐、rules 模式不调模型、pydantic_ai 模式不短路、模型失败回退 |
-| `test_llm_gap.py` | 4 条（2026-10-25）：规则把三句人一眼能读懂的退款诉求读成 `UNKNOWN`、桩件补位时 `IntentBrain` 采纳该意图而规则已读懂的句子不采纳、`UNKNOWN` 的对话轮**既不碰模型也不建任务**、同一句直接走 `POST /api/v1/tasks` 会碰一次模型并留下澄清终态 |
+| `test_llm_gap.py` | 7 条（2026-10-25）：规则把 10 句人一眼能读懂的诉求读成 `UNKNOWN`、桩件补位时 `IntentBrain` 只在缺口上采纳、`rules` 模式对话**一次也不碰模型**、模型也读不懂时不建任务、问句不花调用、采纳退款后任务仍等人工审批且 `task.routed` 来源是 `pydantic_ai`、同一句直接走 `POST /api/v1/tasks` 会碰一次模型 |
 | `test_support.py` | 客服问答意图路由、卡片元数据与章节按需加载、政策引用、跨租户订单/政策 404、写意图转交任务链路 |
 | `test_support_conversation.py` | 会话槽位承接、澄清后自动续跑、个性化资格结论、异常诉求意图、跨用户不继承、只读不建任务 |
 | `test_intent_catalog.py` | 目录加载、枚举对齐、动作绑定、槽位校验、重复行拒绝、**字段拼写拒绝**、新增行即可用 |
@@ -2505,7 +2522,7 @@ PUT /api/v1/memory/rules/{event_type}（坐席，需 support 角色）
 | `test_personalization.py` | 18 条：无档案不个性化、**答案路径不建档案行也不写 `memory.*` 审计**、称呼只在开场那一轮、`memory.personalize` span 排在 `support.reply` 之前、`history_summary` 与 `contact_window` 一个字都不进回复（且 `fields` 只点名 `preferred_name`）、目录认不出的兴趣完全惰性、认得出的兴趣只产一条追问且用目录名、本轮已在讲这个商品时不加追问、`tone=concise` 只裁追问不动回答、卡片重排两条纯函数用例（含"本来就在第一位不算重排"）、澄清轮只改 `reply`、个性化不写档案也不产生审计、开关关掉逐字回落朴素回答、删档案后回答回到原样、**接管静默轮 `personalization` 为 `null` 而触发了接管的那一轮照常带称呼** |
 | `test_proactive_rules.py` | 21 条（T10）：坐席可改 / 客户 403、未知事件类型 422、模板引用白名单外字段 → 422 且规则行逐字不变、花括号不配对 → 422、位置参数 `{}` → 422、带属性或下标的占位符 → 422、超长模板 → 422、请求体带 `requires_confirmation` → 422、冷却越界 → 422、改文案后**下一条**通知逐字是新文案且旧文案消失、改动**不回溯**已落库的通知、停用后 `emit` 抑制 `NO_RULE` 再启用恢复、冷却 60 → 0 后同一事件立即可再发、审计行只带 `template_sha256` 与字段名（断言模板原文不在 detail 序列化结果里）、跨租户既看不见也改不到、`GET /rules` 的 `required_context` 列出模板字段 |
 
-默认运行 452 passed / 3 skipped：跳过的是 PostgreSQL 专项测试（并发与 Outbox 共 3 个），
+默认运行 455 passed / 3 skipped：跳过的是 PostgreSQL 专项测试（并发与 Outbox 共 3 个），
 需要 `TICKETPILOT_TEST_POSTGRES_URL`。这些测试会临时创建数据库、跑完删除，不能指向共享库。
 
 ### 14.2 Golden Set
@@ -2648,7 +2665,7 @@ FastAPI（信任 Header 之前必须先认证）
 | 审批完整性 | 自批/越权/并发双批 | 角色 + 租户 + 行锁 + 自审批校验 | 无 MFA、无会签 |
 | 审计 | 抵赖/篡改 | 追加式 `audit_events` | 无防篡改哈希链、无导出 |
 | 政策内容 | 跨租户泄露/过期政策 | 租户 + 状态 + 有效期过滤 | 无内容审核、无版本冲突检测 |
-| 模型 | 提示注入/越权动作 | 模型无工具、输出结构化、规则优先、输入注入检测与留痕、输出无来源断言替换 | 注入检测是规则库、无真实模型验证 |
+| 模型 | 提示注入/越权动作 | 模型无工具、输出结构化、规则优先、输入注入检测与留痕、输出无来源断言替换 | 注入检测是规则库、托管模型未验证、无真实工单语料 |
 | 自助统计 | 自然语言转 SQL 越权读或写 | 守卫三重校验（形状/作用域/绑定）+ 作用域由执行器注入 + 只读连接 | 无模型规划、无租户级 SQL 配额（仅全局限流） |
 | 人工接管 | 坐席越权看他人案件 | `support` 角色 + 租户过滤 + 跨租户 404 | 只读访问无审计留痕 |
 | 部署 | 密钥/调试端点暴露 | prod 强制关 docs、非 root 容器 | 无密钥管理、无网络策略 |
@@ -3133,7 +3150,7 @@ VERIFIED_SUCCESS。
 
 未验证 / 未实现：
 
-- 真实模型调用（无密钥）；
+- 真实模型调用（本机 LM Studio 已验证任务抽取与对话缺口兜底；托管模型无密钥）；
 - OIDC 登录（未实现，prod 拒绝启动）；
 - 真实退款渠道（未实现，prod 拒绝启动）；
 - 实时 SSE（只有回放）；
@@ -3429,8 +3446,9 @@ VERIFIED_SUCCESS。
 > 「TicketPilot 是我做的一个售后 Agent 演示。核心不是让模型自主办事，而是把模型
 > 限制在意图与槽位抽取，让确定性代码负责资格、审批、幂等和对账。退款链路上有四道
 > 防线：服务端规则、四眼审批与摘要绑定、订单级唯一约束与行锁、权威记录验证。
-> 我用 PostgreSQL 并发测试验证了两个审批同时通过时只会产生一笔退款；也如实标注了
-> 真实模型、OIDC、实时 SSE 尚未接入。这个项目的价值在于边界清晰、失败路径可测试，
+> 我用 PostgreSQL 并发测试验证了两个审批同时通过时只会产生一笔退款；模型只在本机
+> LM Studio 上实测、托管模型与真实工单语料未验证；OIDC 登录、实时 SSE 与真实退款渠道
+> 尚未接入。这个项目的价值在于边界清晰、失败路径可测试，
 > 而不是功能多。」
 
 ### 20.6 读代码时的五个陷阱

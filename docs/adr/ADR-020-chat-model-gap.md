@@ -1,0 +1,70 @@
+# ADR-020：对话入口只在规则读不懂时问模型，而且只买一张待审退款单
+
+- 状态：Accepted
+- 日期：2026-10-25
+- 关联：[ADR-002](ADR-002-pydanticai-bounded-agent.md)（PydanticAI 只做受限抽取）、[ADR-003](ADR-003-server-side-refund-rules.md)（退款资格由服务端规则判定）、[ADR-004](ADR-004-approval-binding.md)（审批：钱的动作要人点头）、[ADR-009](ADR-009-intent-catalog-single-source.md)（意图目录是唯一事实源）、`docs/NEXT_STEPS.md` 开头「下一步的五件事」第 5 条
+
+## 背景
+
+上一轮把「模型边界」从一句断言变成了可检查的事实：`scripts/llm_gap_probe.py` 用 11 句**规则词表外**的说法量出，规则把 10 句读成 `UNKNOWN`，本机 `qwen3-8b` 能按人读法捞回 6 句（退款 5 句 + 物流 1 句），中文数字金额补位 2/2，`order_id` 编造 0 次。同一批句子走对话入口（`POST /api/v1/support/messages`，`AGENT_MODE=rules`），**0/11 轮产生写动作**——模型的这项能力在对话里一次也用不上。
+
+原因是一条明确的分流：`classify_support`（`app/agent/support_agent.py:85-114`）只在**规则**读出 `REFUND_REQUEST` / `TICKET_CREATE` 时才把这一轮交给写路径；`UNKNOWN` 的轮次直接回通用菜单，`IntentBrain.plan` 根本不被调用。`IntentBrain` 的「只在缺口上采纳模型」因此只在 `POST /api/v1/tasks` 这条路上成立。这不是 bug，是上一轮有意留下的边界（T5 之前写动作的进门权没有交给模型），但既然探针已经证明「读不懂的说法确实存在、模型确实能捞回一部分」，把这条能力永远锁在任务 API 后面就说不通了。
+
+真正要回答的是：**开门开多大。** 让对话入口每次都问模型，等于把写动作的进门权交给它；让模型直接决定金额与资格，等于把 ADR-003 的确定性拆掉；让模型填满槽位直接建单，等于把追问流程交给它。本轮只开一条缝，边界写成可执行的三个条件，并用实测数字说明缝开在哪里、代价是多少。
+
+## 决策
+
+### 1. 唯一入口是 `_consult_model`，排在目录与槽位恢复之后
+
+新方法 `SupportAgent._consult_model`（`app/agent/support_agent.py:948`）是该服务里**唯一**能碰模型的地方。它排在一起处理后：意图目录读完（所以规则读懂的句子永远不问）、上一轮被打断的槽位恢复完（所以「129 元」这种补槽轮不会重新分类）。只有同时满足三件事才问：
+
+| 条件 | 判断 | 不满足时 |
+|---|---|---|
+| 规则没读懂 | `plan.intent is UNKNOWN`，或 `route.intent is UNKNOWN and plan.intent is ORDER_QUERY` | 直接用目录答案，零调用 |
+| 模型被允许 | `settings.agent_mode == "pydantic_ai"` | `rules` 模式在碰模型前返回，确定性路径一行未改 |
+| 不是问句 | `blocks_write_action(message.lower())` 为假 | 「运费谁出？」不花调用 |
+
+第二条里那个 `ORDER_QUERY` 是实测撞出来的：`ORD-DEMO-1001 那笔钱给我退回来` 不含任何退款词，但目录里 `match_order_id: true` 的那一行会先命中，于是 `classify()` 给 `UNKNOWN`、`classify_support()` 给 `ORDER_QUERY`。订单号不是语义，这句话不该只换来一张订单卡——所以「规则 `UNKNOWN` + 只是带了订单号」也算缺口。这个判断只放行**咨询**，不放行反问：`blocks_write_action` 仍然先挡一道。
+
+### 2. 只采纳退款意图，金额不采纳
+
+模型可以在缺口上读出十种意图，本轮只采纳 `REFUND_REQUEST`，而且只采纳**意图**（外加模型抽出、且规则没抽到的 `order_id`）：
+
+- **退款可以采纳**，因为后面还有两道确定性闸：资格校验（ADR-003）与人工审批（ADR-004）。模型改变的是「这句请求进不进队列」，不是「钱出不出得去」。
+- **金额不采纳。** 客户没打的数字不能进追问话术（「请补 129 元」会被当成客户已经确认过这个数）；金额只由任务台账使用，并在审批记录里再次显示（实测 `approval_amount=12900`）。
+- **读意图不采纳。** 探针里 `运费谁出？` 被判成 `LOGISTICS_QUERY`，按 `runtime.py:296-302` 会回一句「请提供订单号」——答错比不答更糟。
+- **`TICKET_CREATE` 不采纳。** 建工单会落持久记录并触发通知，值得单独设计，而不是搭这次便车。转人工的三种说法模型本来就一句没接住，这条暂时也没有收益。
+
+### 3. 台账不接受调用方递进来的结论
+
+对话入口的 `SupportPlan` **不会**被传进 `create_task`。任务进 `_run` 后用同一份请求与上下文**重新**跑一次 `brain.plan`（`app/services/runtime.py:206`），`task.routed` 记的是这一次的 `planning_source`（`runtime.py:215`）。所以一次对话退款会问两次模型（实测 `calls=2`、20.3 秒）。这是故意的：入口那道门若写错（比如将来有人放宽采纳范围），最坏情况是多追问一轮，而不是一张被入口指定了意图的退款单。台账的来源仍是它自己算出来的，不是别人告诉它的。
+
+### 4. 决策留痕在 `understand` span，不是一个控制信号
+
+`_consult_model` 返回的 dict（`source` / `intent` / `adopted`）被写进 `understand` span 的 `model_gap` 属性（`support_agent.py:239`）。回放时能看到这一轮问没问、问出了什么、采纳没有。它**只**用于观测：没有任何分支读这个 dict 来决定下一步，分支只看返回的 `plan`。
+
+### 5. 模型失败等于没问
+
+`IntentBrain.plan` 已经处理了失败：异常时记 warning、返回 `rules` 计划并标 `rules_fallback`。`_consult_model` 在 `source != "pydantic_ai"` 时原样返回目录的计划。所以模型端点掉线时，对话退化成本轮不采纳——与上一轮的行为逐字相同，不会变成 500 或空回复。
+
+## 后果
+
+- **同一批 11 句的对话入口前后对照**（`--chat --chat-model`，本机 8 次调用 / 4941 token / 48.9 秒）：意图改变 **5/11**，6 句退款全部进入目录的追问流程；单轮写动作仍是 **0**（都缺槽位）。模型把请求送到队列门口，不把槽位填满。
+- **端到端一条**（`--chat-task "ORD-DEMO-1001 那笔钱给我退回来"`，同一次运行）：两轮对话后任务 `task_d64f417d95db41c0` 落 `WAITING_APPROVAL`，`routed=REFUND_REQUEST source=pydantic_ai`，`approval_amount=12900`，事件停在 `approval.requested`——没有 `approval.approved`。这段对话代价 2 次调用 / 918+645 token / 20.3 秒。
+- **`AGENT_MODE=rules` 的确定性被一条更硬的断言钉住**：`tests/test_llm_gap.py` 把 `IntentAgent` 换成「被调用就失败」的桩，整段规则模式对话跑完桩一次没响。「不说话」比「说了但被忽略」更难被未来的重构破坏。
+- 用例从 4 条增到 7 条，全部离线、不依赖模型服务：规则读不懂这些句子；`IntentBrain` 只在缺口上采纳；`rules` 模式一次不问；问了但模型也读不懂时不建任务；问句不花调用；采纳退款后任务仍等审批且来源是 `pydantic_ai`；直接调任务接口会问一次。全量 **455 passed / 3 skipped**（收集 458，34 个测试文件），ruff 干净，mypy strict 134 文件零错误。
+- 每轮缺口对话多一次模型调用（约 6–8 秒）。这不是「只在必要时花」的严格证明——`order_id` 回退那条会为「只带了订单号的问句」付费，只是被 `blocks_write_action` 挡住了一部分。没有按会话的模型预算，也没有缓存同一句话；重复问同一句话会重复付费。
+- **没有设置信度阈值。** `IntentOutput` 带 `confidence`，但没有真实工单语料能告诉我阈值该定在哪；拍一个数只是把「我选的」伪装成「算出来的」。所有 `pydantic_ai` 的采纳都发生在规则 `UNKNOWN` 的缺口上，这本身就是比任何阈值更硬的门。
+- **那 11 句是我按词表外手写的说法，不是真实工单。** 本轮证明的是「这类说法存在、模型能捞回一部分、接上入口后能送进待审队列」，**不**证明它在真实队列里有多常见。真实语料仍是缺口。
+- 本轮新增的 3 条用例只有 SQLite 证据，未在 PostgreSQL 上复跑（T2 起新增的 9 个测试文件 141 条 + `test_llm_gap.py` 7 条，共 10 个文件、148 条待 PG 复跑）。
+- 托管模型（Anthropic / OpenAI）依然没有验证过；本轮实测只在本地 LM Studio（`AGENT_MODEL=openai:qwen/qwen3-8b`）上。
+
+## 备选方案
+
+- **每轮都问模型（不给缺口条件）**：写动作的进门权直接交给模型，`rules` 模式的确定性也只剩一句配置；而且对规则已经读懂的句子重复付费。否决。
+- **把入口的 `SupportPlan` 传给 `create_task`（省掉第二次调用）**：账本变成「调用方说什么就记什么」，入口写错时没有任何一层能纠正；还让 `task.routed` 的 `planning_source` 失去意义。否决，宁可多付一次调用。
+- **采纳模型的金额**：客户没打的数字会进追问话术，等于让模型代替客户确认金额；资格校验只能校验「这个数有没有超额」，不能校验「这是不是客户要的数」。否决。
+- **采纳读意图（POLICY/LOGISTICS）**：探针已经给出错判实例；读路径答错没有审批兜底。否决。
+- **采纳 `TICKET_CREATE`**：建单是持久副作用 + 通知，需要独立的幂等与通知设计。本轮不做，留作后续。
+- **用 `confidence` 阈值代替「规则缺口」**：阈值没有语料依据，且模型在规则能读懂的句子上也会自信地给出答案——两者叠加会把确定性路径也卷进来。否决。
+- **`rules` 模式下失败自动降级到模型**：把「配置决定谁说话」变成「配置只决定先后」，`rules` 的确定性承诺（ExplodingAgent 那条断言）就没了。否决。

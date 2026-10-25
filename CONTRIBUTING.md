@@ -27,7 +27,7 @@ uvicorn app.asgi:app --reload --port 8000
 ```bash
 ruff check app tests scripts evals alembic
 python -m mypy app                        # strict 模式，零错误（134 个文件）
-python -m pytest                          # 452 passed, 3 skipped（收集 455、34 个测试文件；跳过的 3 条需要 PostgreSQL）
+python -m pytest                          # 455 passed, 3 skipped（收集 458、34 个测试文件；跳过的 3 条需要 PostgreSQL）
 python evals/run.py                       # 40/40 任务路径 Golden Set
 python evals/support_run.py               # 61/61 只读路径（含多轮澄清）
 python evals/retrieval_metrics.py         # 检索/路由评测基线，门槛全过
@@ -47,9 +47,10 @@ TICKETPILOT_TEST_POSTGRES_URL=postgresql+psycopg://... python -m pytest   # 上�
 这些用例会临时创建数据库、跑完删除，不能指向共享库。
 
 > **Postgres 覆盖范围要说清**：T2 起新建的 9 个测试文件（当前共 141 条，含 `tests/test_personalization.py` 18 条、
-> `tests/test_proactive_rules.py` 21 条）**还没有在 PostgreSQL 上复跑**。本机装了 Docker，上一轮的
+> `tests/test_proactive_rules.py` 21 条）加上 2026-10-25 的 `tests/test_llm_gap.py` 7 条（共 10 个文件、148 条）
+> **还没有在 PostgreSQL 上复跑**。本机装了 Docker，上一轮的
 > PostgreSQL 16.15 一次性容器就是用它跑出来的（基线 `323 passed`），所以缺的是这一轮的执行而不是环境；
-> 最近一轮收尾时守护进程没有运行，容器没有再起。默认 `pytest` 的读数就是 SQLite 基线；把 `452 passed`
+> 最近一轮收尾时守护进程没有运行，容器没有再起。默认 `pytest` 的读数就是 SQLite 基线；把 `455 passed`
 > 换成新数字时，不要顺手把它写成「Postgres 上也是这个数」。
 
 CI 会跑 ruff、mypy、后端测试、Golden Set、Alembic 迁移与 `alembic check`、以及控制台构建，

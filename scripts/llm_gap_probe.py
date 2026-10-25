@@ -17,13 +17,17 @@ Two boundaries to keep in view while reading the output:
 * **the labels are mine.** These are hand-written phrasings that deliberately
   avoid the rule vocabulary, not real tickets from a tenant's queue. A non-zero
   row proves the gap exists in principle, not that it is common;
-* **the rescue is only reachable through ``POST /api/v1/tasks``.** On the chat
-  path ``classify_support`` (``app/agent/support_agent.py:108-111``) hands a
-  message to the write path only when the *rules* read it as ``REFUND_REQUEST``
-  / ``TICKET_CREATE``, so an ``UNKNOWN`` turn never becomes a task and the model
-  is never asked about it. ``--chat`` shows what the customer gets instead, and
-  ``--live-task`` runs the API route where it does matter and prints the
-  difference in the ledger. ``tests/test_llm_gap.py`` pins both halves.
+* **the chat path now asks the model too, but only for a refund.** Since
+  ``SupportAgent._consult_model`` (``app/agent/support_agent.py``) an
+  ``UNKNOWN`` turn (or one the catalog only matched through the order-id
+  fallback) is passed to ``IntentBrain`` under ``AGENT_MODE=pydantic_ai``, and
+  only a ``REFUND_REQUEST`` reading is adopted — the write action that still
+  waits for eligibility and a human approval. ``--chat`` shows the deterministic
+  answer, ``--chat-model`` the same turns with the gate on, ``--chat-task`` the
+  end-to-end refund (slots filled, task in ``WAITING_APPROVAL``), and
+  ``--live-task`` the task API, where the model was always reachable. With
+  ``AGENT_MODE=rules`` nothing calls a model; ``tests/test_llm_gap.py`` pins all
+  of it.
 
 The fabrication check is not decoration: ``INSTRUCTIONS`` tells the extractor to
 copy an order id verbatim and never invent one, so an order id in the merged plan
@@ -32,7 +36,8 @@ aimed at an order the customer never mentioned. The script exits non-zero if tha
 ever happens.
 
     OPENAI_BASE_URL=http://127.0.0.1:1234/v1 OPENAI_API_KEY=lmstudio \\
-      python scripts/llm_gap_probe.py --chat
+      python scripts/llm_gap_probe.py --chat --chat-model \\
+      --chat-task "ORD-DEMO-1001 那笔钱给我退回来"
 
     OPENAI_BASE_URL=http://127.0.0.1:1234/v1 OPENAI_API_KEY=lmstudio \\
       python scripts/llm_gap_probe.py --live-task "ORD-DEMO-1001 退一百二十九元"
@@ -45,6 +50,7 @@ from __future__ import annotations
 import argparse
 import io
 import json
+import logging
 import sys
 import tempfile
 import uuid
@@ -206,12 +212,12 @@ def run_probe(
     return rows, summary
 
 
-def build_settings(database_url: str) -> Settings:
+def build_settings(database_url: str, *, agent_mode: str = "rules") -> Settings:
     return Settings(
         environment="test",
         database_url=database_url,
         auto_create_tables=True,
-        agent_mode="rules",
+        agent_mode=agent_mode,
     )
 
 
@@ -268,18 +274,35 @@ def dispose(app: Any, scratch: Path) -> None:
 
 
 def run_chat(
-    cases: tuple[Case, ...], tenant_id: str, user_id: str, as_json: bool
-) -> list[dict[str, Any]]:
+    cases: tuple[Case, ...],
+    tenant_id: str,
+    user_id: str,
+    as_json: bool,
+    *,
+    model: str | None = None,
+) -> dict[str, Any]:
     """What the customer actually got: the same sentences through the chat path.
 
-    No model is involved — ``AGENT_MODE`` cannot change a single one of these
-    answers, because none of these turns reaches ``IntentBrain``.
+    With ``model=None`` the app runs ``AGENT_MODE=rules``; with a model string it
+    runs ``AGENT_MODE=pydantic_ai``, where ``SupportAgent._consult_model`` asks
+    the model on a turn the catalog cannot read. Either way this is a single
+    turn per sentence: a refund that gets a clarification is not followed up,
+    so the task count stays 0 unless a sentence already carried both slots.
+    ``chat_task`` runs the follow-ups.
     """
     scratch = Path(tempfile.gettempdir()) / f"ticketpilot-gap-chat-{uuid.uuid4().hex}.db"
-    app = create_app(build_settings(f"sqlite+pysqlite:///{scratch.as_posix()}"))
+    agent = IntentAgent(model_name=model) if model else None
+    app = create_app(
+        build_settings(
+            f"sqlite+pysqlite:///{scratch.as_posix()}",
+            agent_mode="pydantic_ai" if agent else "rules",
+        ),
+        brain=IntentBrain(mode="pydantic_ai", agent=agent) if agent else None,
+    )
     seed_all(app.state.session_factory)
     client = TestClient(app)
     headers = {"X-Tenant-Id": tenant_id, "X-User-Id": user_id}
+    mode = "pydantic_ai" if agent else "rules"
     rows: list[dict[str, Any]] = []
     try:
         for case in cases:
@@ -293,7 +316,8 @@ def run_chat(
                     "label": case.intent,
                     "chat_intent": data.get("intent"),
                     "handoff": bool(data.get("handoff")),
-                    "clarification": data.get("clarification"),
+                    "clarification": (data.get("clarification") or {}).get("expected_slot"),
+                    "task_status": (data.get("task") or {}).get("status"),
                     "reply": (data.get("reply") or "").strip(),
                 }
             )
@@ -301,26 +325,123 @@ def run_chat(
             tasks = int(session.scalar(select(func.count()).select_from(Task)) or 0)
     finally:
         dispose(app, scratch)
+    usage = agent.usage.as_dict() if agent else None
     if as_json:
-        print(json.dumps({"chat": rows, "tasks_created": tasks}, ensure_ascii=False, indent=2))
+        print(
+            json.dumps(
+                {"mode": mode, "chat": rows, "tasks_created": tasks, "usage": usage},
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
     else:
-        print("\n同样这些句子走对话入口（POST /api/v1/support/messages，不经过模型）：")
+        print(f"\n同样这些句子走对话入口（POST /api/v1/support/messages，AGENT_MODE={mode}）：")
         for row in rows:
             mark = (
-                "handoff" if row["handoff"] else ("clarify" if row["clarification"] else "answer")
+                "handoff"
+                if row["handoff"]
+                else (
+                    f"clarify:{row['clarification']}"
+                    if row["clarification"]
+                    else (row["task_status"] or "answer")
+                )
             )
             print(
-                f"  label={row['label']:16} chat={row['chat_intent']:16} {mark:8} "
+                f"  label={row['label']:16} chat={row['chat_intent']:16} {mark:22} "
                 f"{row['text'][:26]:30} | {row['reply'][:42]}"
             )
         print(f"\n这些对话轮产生的写动作（任务/审批）：{tasks} / {len(rows)} 轮")
-    return rows
+        if usage:
+            print(
+                f"模型代价：calls={usage['calls']} failures={usage['failures']} "
+                f"tokens={usage['input_tokens']}+{usage['output_tokens']} "
+                f"wall={usage['latency_ms']:.0f} ms avg={usage['avg_latency_ms']:.0f} ms"
+            )
+    return {"mode": mode, "rows": rows, "tasks_created": tasks, "usage": usage}
+
+
+def chat_task(text: str, model: str, tenant_id: str, user_id: str) -> dict[str, Any]:
+    """One sentence through the chat path, filling the slots it asks for.
+
+    This is the end-to-end claim: the model rescues the reading in
+    ``_consult_model``, the catalog asks for the slot it still lacks, and the
+    refund that follows lands in the ledger as ``WAITING_APPROVAL`` with
+    ``planning_source=pydantic_ai``.
+    """
+    scratch = Path(tempfile.gettempdir()) / f"ticketpilot-gap-chat-{uuid.uuid4().hex}.db"
+    agent = IntentAgent(model_name=model)
+    app = create_app(
+        build_settings(f"sqlite+pysqlite:///{scratch.as_posix()}", agent_mode="pydantic_ai"),
+        brain=IntentBrain(mode="pydantic_ai", agent=agent),
+    )
+    seed_all(app.state.session_factory)
+    client = TestClient(app)
+    headers = {"X-Tenant-Id": tenant_id, "X-User-Id": user_id}
+    steps: list[dict[str, Any]] = []
+    conversation: str | None = None
+    message = text
+    task: dict[str, Any] | None = None
+    try:
+        for _ in range(3):
+            response = client.post(
+                "/api/v1/support/messages",
+                headers=headers,
+                json={"message": message, "conversation_id": conversation},
+            )
+            response.raise_for_status()
+            data = response.json()
+            conversation = data["conversation_id"]
+            clarification = data.get("clarification") or {}
+            task = data.get("task")
+            steps.append(
+                {
+                    "message": message,
+                    "intent": data.get("intent"),
+                    "reply": (data.get("reply") or "").strip(),
+                    "expected_slot": clarification.get("expected_slot"),
+                    "task_status": (task or {}).get("status"),
+                }
+            )
+            if task:
+                break
+            slot = clarification.get("expected_slot")
+            if slot == "amount_cents":
+                message = "129 元"
+            elif slot == "order_id":
+                message = "ORD-DEMO-1001"
+            else:
+                break
+        routed: dict[str, Any] = {}
+        events: list[str] = []
+        if task:
+            with app.state.session_factory() as session:
+                rows = session.execute(
+                    select(TaskEvent.event_type, TaskEvent.payload)
+                    .where(TaskEvent.task_id == task["task_id"])
+                    .order_by(TaskEvent.created_at)
+                ).all()
+            events = [name for name, _ in rows]
+            routed = next((dict(payload) for name, payload in rows if name == "task.routed"), {})
+        usage = agent.usage.as_dict()
+    finally:
+        dispose(app, scratch)
+    return {
+        "text": text,
+        "steps": steps,
+        "task": task,
+        "routed": routed,
+        "events": events,
+        "usage": usage,
+    }
 
 
 def main() -> int:
     if isinstance(sys.stdout, io.TextIOWrapper):
         # The candidates are Chinese; a cp936 console would otherwise mojibake them.
         sys.stdout.reconfigure(encoding="utf-8")
+    # The probe's output is the evidence; per-request httpx INFO lines are noise.
+    for name in ("httpx", "httpx2"):
+        logging.getLogger(name).setLevel(logging.WARNING)
 
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
@@ -338,10 +459,22 @@ def main() -> int:
     parser.add_argument(
         "--chat",
         action="store_true",
-        help="Also send every candidate through the chat endpoint (no model involved).",
+        help="Send every candidate through the chat endpoint under AGENT_MODE=rules.",
     )
     parser.add_argument(
-        "--no-model", action="store_true", help="Skip the model pass; needs --chat or --live-task."
+        "--chat-model",
+        action="store_true",
+        help="Same chat pass under AGENT_MODE=pydantic_ai (one model call per unreadable turn).",
+    )
+    parser.add_argument(
+        "--chat-task",
+        metavar="TEXT",
+        help="Chat E2E: one sentence, fill the slots it asks for, print the task ledger.",
+    )
+    parser.add_argument(
+        "--no-model",
+        action="store_true",
+        help="Skip the direct brain pass; --chat-model/--chat-task still call the model.",
     )
     parser.add_argument("--json", action="store_true", help="Print JSON instead of a table.")
     args = parser.parse_args()
@@ -353,8 +486,65 @@ def main() -> int:
             print(f"规则读不懂的句式，模型能不能捞回来（模型：{args.model}）\n")
         rows, summary = run_probe(args.model, CANDIDATES, as_json=bool(args.json))
 
+    passes: list[dict[str, Any]] = []
     if args.chat:
-        run_chat(CANDIDATES, args.tenant, args.user, as_json=bool(args.json))
+        passes.append(run_chat(CANDIDATES, args.tenant, args.user, as_json=bool(args.json)))
+    if args.chat_model:
+        passes.append(
+            run_chat(
+                CANDIDATES,
+                args.tenant,
+                args.user,
+                as_json=bool(args.json),
+                model=args.model,
+            )
+        )
+    if len(passes) == 2 and not args.json:
+        before, after = passes
+        print("\n对话入口前后对照（同样的句子，AGENT_MODE=rules -> pydantic_ai）：")
+        changed = 0
+        for old, new in zip(before["rows"], after["rows"], strict=True):
+            marker = ""
+            if old["chat_intent"] != new["chat_intent"]:
+                changed += 1
+                marker = "  <- 变了"
+            print(f"  {new['label']:16} {old['chat_intent']:16} -> {new['chat_intent']:16}{marker}")
+        print(
+            f"  意图改变：{changed}/{len(after['rows'])} 句；"
+            f"单轮写动作：rules {before['tasks_created']} 个，"
+            f"pydantic_ai {after['tasks_created']} 个"
+        )
+
+    if args.chat_task:
+        flow = chat_task(args.chat_task, args.model, args.tenant, args.user)
+        if args.json:
+            print(json.dumps({"chat_task": flow}, ensure_ascii=False, indent=2))
+        else:
+            print(
+                f"\n一句话走完整的对话入口（{args.tenant}/{args.user}，AGENT_MODE=pydantic_ai）："
+            )
+            for step in flow["steps"]:
+                slot = step["expected_slot"]
+                extra = f" 缺口={slot}" if slot else ""
+                print(
+                    f"  用户：{step['message']}\n"
+                    f"    意图={step['intent']} 状态={step['task_status'] or '-'}{extra}\n"
+                    f"    客服：{step['reply'][:90]}"
+                )
+            task = flow["task"] or {}
+            routed = flow["routed"]
+            print(
+                f"  任务：{task.get('task_id')} status={task.get('status')} "
+                f"routed={routed.get('intent')} source={routed.get('planning_source')} "
+                f"approval_amount={(task.get('pending_approval') or {}).get('amount_cents')}"
+            )
+            print(f"  事件：{' -> '.join(flow['events'])}")
+            usage = flow["usage"]
+            print(
+                f"  模型代价（这句对话）：calls={usage['calls']} "
+                f"tokens={usage['input_tokens']}+{usage['output_tokens']} "
+                f"wall={usage['latency_ms']:.0f} ms"
+            )
 
     if args.live_task:
         outcomes = live_task(args.live_task, args.model, args.tenant, args.user)

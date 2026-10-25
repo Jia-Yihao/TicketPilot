@@ -223,6 +223,7 @@ class SupportAgent:
                 order_id=resolved_order,
             )
             plan, resumed = self._resume_pending(plan, carried, message)
+            plan, model_gap = self._consult_model(plan, route, message, context)
 
             catalog = get_catalog()
             trace = TraceRecorder(
@@ -235,6 +236,7 @@ class SupportAgent:
                 attributes={
                     "intent": plan.intent.value,
                     "route_intent": route.intent.value,
+                    "model_gap": model_gap,
                     "order_id": resolved_order,
                     "amount_cents": resolved_amount,
                     "resumed": resumed,
@@ -943,6 +945,64 @@ class SupportAgent:
         )
 
     # ------------------------------------------------------------- helpers
+    def _consult_model(
+        self, plan: SupportPlan, route: RoutePlan, message: str, context: dict[str, Any]
+    ) -> tuple[SupportPlan, dict[str, Any] | None]:
+        """The one place a chat turn may reach the model, and what it may buy.
+
+        The intent catalog decides first. A turn is a gap when the rule table
+        reads it as ``UNKNOWN`` *and* the catalog has no cue for it; the row
+        that only fires because the message carried an order id
+        (``ORDER_QUERY``) is not a reading, so it counts as a gap too —
+        "ORD-... 那笔钱给我退回来" should not be answered with an order card
+        just because of the id.
+
+        Only a *refund* reading is adopted. That is deliberate:
+
+        * the refund it opens still has to pass eligibility and a human
+          approval before any money moves, so the model changes *whether a
+          request enters the queue*, never whether money is paid;
+        * every other model reading (policy, logistics, ticket) is dropped:
+          answering from a wrong reading or creating a ticket on one is not
+          worth the sentence it would rescue yet;
+        * the amount is not adopted here. A number the customer did not type
+          must not reach a clarification prompt; it is only used by the task
+          runtime, where eligibility and the approval record show it again.
+
+        ``AGENT_MODE=rules`` returns before the model is touched, so the
+        deterministic path is unchanged. A model failure comes back as
+        ``rules_fallback`` and leaves the plan as the catalog read it.
+
+        The returned dict is the trace record of the decision, not a control
+        signal: it lands in the ``understand`` span so a replay can show that
+        the turn was asked, what came back, and whether it was adopted.
+        """
+        gap_readable = plan.intent is SupportIntent.UNKNOWN or (
+            route.intent is Intent.UNKNOWN and plan.intent is SupportIntent.ORDER_QUERY
+        )
+        if not gap_readable:
+            return plan, None
+        if self.settings.agent_mode != "pydantic_ai":
+            return plan, None
+        if blocks_write_action(message.lower()):
+            return plan, {"source": "rules", "intent": "UNKNOWN", "adopted": False}
+        routed, source = self.runtime.brain.plan(message, context)
+        gap: dict[str, Any] = {
+            "source": source,
+            "intent": routed.intent.value,
+            "adopted": False,
+        }
+        if source != "pydantic_ai" or routed.intent is not Intent.REFUND_REQUEST:
+            return plan, gap
+        gap["adopted"] = True
+        return (
+            SupportPlan(
+                SupportIntent(Intent.REFUND_REQUEST.value),
+                routed.order_id or plan.order_id,
+            ),
+            gap,
+        )
+
     def _resume_pending(
         self, plan: SupportPlan, carried: ConversationSlots, message: str
     ) -> tuple[SupportPlan, bool]:

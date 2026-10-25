@@ -81,19 +81,19 @@ seed complete: {'orders': 4, 'policies_created': 5, 'rules': 3}
     客服：…该订单当前不符合退款条件（NO_REFUNDABLE_BALANCE、ALREADY_REFUNDED、AMOUNT_EXCEEDS_REFUNDABLE），未创建退款申请。
 ```
 
-⑤ 是面试里最能引出讨论的一条。它把 11 句**规则词表外**的说法分别喂给规则、模型和对话入口；`--no-model` 那半句不需要模型端点，本机实测 1.4 秒（含解释器启动），输出只有一行是重点：
+⑤ 是面试里最能引出讨论的一条。它把 11 句**规则词表外**的说法分别喂给规则、模型和对话入口。第一半不需要模型端点，本机实测 1.4 秒（含解释器启动），`AGENT_MODE=rules` 下输出只有一行是重点：
 
 ```text
 这些对话轮产生的写动作（任务/审批）：0 / 11 轮
 ```
 
-人一眼能读出来的诉求（「ORD-DEMO-1001 那笔钱给我退回来」「我申请退一部分款」「别跟我绕了，叫个活人来」），在这套配置下换到的是订单查询结果或一句通用菜单，**没有一句走到写路径**。同一组命令加上模型那一半（需要本机 LM Studio，约 73 秒）是
+人一眼能读出来的诉求（「ORD-DEMO-1001 那笔钱给我退回来」「我申请退一部分款」「别跟我绕了，叫个活人来」），在规则模式下换到的是订单查询结果或一句通用菜单，**没有一句走到写路径**。第二半打开模型门（需要本机 LM Studio，约两分钟）：
 
 ```bash
-python scripts/llm_gap_probe.py --chat --live-task "ORD-DEMO-1001 退一百二十九元"
+python scripts/llm_gap_probe.py --chat --chat-model --chat-task "ORD-DEMO-1001 那笔钱给我退回来"
 ```
 
-它测出模型能捞回 6/10 句（11 次调用、本机实测 72.9 秒），也测出模型的话语权只在直接调 `POST /api/v1/tasks` 时才生效——完整读数、口径，以及这个架构问题是我有意留下的还是没看见的，都在「[规则读不懂的 11 句：模型能捞回 6 句，但对话入口听不到它](#规则读不懂的-11-句模型能捞回-6-句但对话入口听不到它)」。
+它先量模型单独能捞回多少（6/10 句、11 次调用、本机实测 83.0 秒），再把同一批句子送进对话入口做前后对照：**5 句意图改变、6 句退款全部进入追问**；最后一句把缺口补齐，台账落在 `WAITING_APPROVAL`、`planning_source=pydantic_ai`、审批金额 12900。完整读数、三个刻意不采纳的东西、以及"为什么一次对话要问两次模型"，都在「[规则读不懂的 11 句：模型捞回 6 句，对话入口只买一张待审退款单](#规则读不懂的-11-句模型捞回-6-句对话入口只买一张待审退款单)」和 [ADR-020](docs/adr/ADR-020-chat-model-gap.md)。
 
 想在本机把**稠密通道**和**模型槽位抽取**也打开（只需要 LM Studio，仍然没有云调用），代价是多少，见「[端到端数字：延迟、token 与稠密通道的代价](#端到端数字延迟token-与稠密通道的代价)」——那一段就是这套配置的命令与实测结果。
 
@@ -255,8 +255,8 @@ python scripts/llm_gap_probe.py --chat --live-task "ORD-DEMO-1001 退一百二�
 
 | 位置 | 谁在决定 | 模型能改什么 |
 |---|---|---|
-| `app/agent/routing.py:208` 的 `classify()`，被 `app/agent/support_agent.py:210` 调用 | 12 类意图的规则表 | 只读轮**根本不经过模型** |
-| `app/services/runtime.py:206`：`plan, planning_source = self.brain.plan(task.request, task.context)` | 写路径的任务路由 | 只有这里会调模型 |
+| `app/agent/routing.py:208` 的 `classify()`，被 `app/agent/support_agent.py:210` 调用 | 12 类意图的规则表 | 规则先读；规则读不懂的那一轮、且 `AGENT_MODE=pydantic_ai` 时才问模型（范围见下一节），`rules` 模式下完全不碰 |
+| `app/services/runtime.py:206`：`plan, planning_source = self.brain.plan(task.request, task.context)` | 写路径的任务路由 | 每个任务在这里**重新**规划一次，来源写进 `task.routed`；对话入口的结论不会被递进来 |
 | `IntentBrain.plan()`（`app/agent/pydantic_agent.py:150-182`） | 合并规则与模型的输出 | 模型的 `intent` 只在规则判为 `UNKNOWN` 时才采纳；`order_id` / `amount_cents` 只在规则没抽到时补位；抛异常则整条退回规则并记成 `rules_fallback` |
 
 模型的输出类型是 `IntentOutput`：`intent` 是 `Literal[...]` 枚举，两个槽位字段带 pydantic 校验，`UsageLimits(request_limit=2)` + 20 s 超时（`pydantic_agent.py:93-94、106、123`）。**它产不出"动作"，只能产三个字段**；动作由 `TaskRuntime` 的资格校验、审批门和策略引擎决定。
@@ -279,59 +279,98 @@ model cost: calls=16 failures=0 requests=16 tokens=6947+2559 wall=95567 ms avg=5
 
 - **付得起**：52 段流量里只有 12 个任务真的问了模型。上面那 16 个写路径轮为什么对不上 12？因为 4 句「别绕了，转人工吧」落在已经被坐席接管的会话上，`support_agent.py:181-192` 的接管分支在分流之前就返回了（实跑响应里那句的 `intent` 是 `HUMAN_HANDOFF`，脚本里显示 `TICKET_CREATE` 是因为它脱离会话状态重放）——任务不创建，模型也不被调用。这 4 次是 `llm_boundary_diff.py` 自己多付的，真实流量不付。只读轮根本不进这条路径；全部数字与口径在「端到端数字：延迟、token 与稠密通道的代价」。
 - **坏情况有界**：模型如果胡说一个 `order_id`，撞上的首先是身份作用域——`app/services/orders.py:18-24` 对非本人、非本租户的订单直接 `Order not found.`，任务落 `FAILED`、不生成审批、不写 tool_execution 行（`tests/test_refunds.py::test_refund_of_another_customers_order_never_reaches_approval` 断言的就是这条）。最坏情况是"白跑 6 秒 + 一条失败任务"，不是"钱退给了别人"。
-- **可追溯、可切换**：每次路由的来源都写进 `task.routed` 台账（`rules` / `pydantic_ai` / `rules_fallback`），控制台任务时间线看得到；`AGENT_MODE` 换回来不用改一行业务代码。反过来，如果一开始就让模型分这 12 类意图，452 条测试、Golden 40、Support 61 里断言 `intent` 精确值的那些用例就全部得改成"测分布"——这是我把模型挡在意图分流外面的第一个理由，不是性能。
+- **可追溯、可切换**：每次路由的来源都写进 `task.routed` 台账（`rules` / `pydantic_ai` / `rules_fallback`），控制台任务时间线看得到；`AGENT_MODE` 换回来不用改一行业务代码。反过来，如果一开始就让模型分这 12 类意图，455 条测试、Golden 40、Support 61 里断言 `intent` 精确值的那些用例就全部得改成"测分布"——这是我把模型挡在意图分流外面的第一个理由，不是性能。
 
-### 规则读不懂的 11 句：模型能捞回 6 句，但对话入口听不到它
+### 规则读不懂的 11 句：模型捞回 6 句，对话入口只买一张待审退款单
 
 上面那个 `0/16` 只说了一半，而且它掩盖了更值得看的东西。要检验"模型到底有没有用"，起点不该是我照着规则词表写的句子，而该是**规则读不懂的句子**。所以我按词表外的说法造了 11 句（`scripts/llm_gap_probe.py`），先确认规则读不懂，再问模型能不能捞回人一眼就读得到的那个意思：
 
 ```text
 RECOVERED     label=REFUND_REQUEST   ORD-DEMO-1001 那笔钱给我退回来              intent UNKNOWN -> REFUND_REQUEST (pydantic_ai)
+RECOVERED     label=REFUND_REQUEST   我上周买的那个杯子收到就碎了…                intent UNKNOWN -> REFUND_REQUEST (pydantic_ai)
 RECOVERED     label=REFUND_REQUEST   我申请退一部分款                            intent UNKNOWN -> REFUND_REQUEST (pydantic_ai)
+RECOVERED     label=REFUND_REQUEST   东西根本没法用，我不想留了…                  intent UNKNOWN -> REFUND_REQUEST (pydantic_ai)
 SLOT          label=REFUND_REQUEST   订单 ORD-DEMO-1001，金额一百二十九元，我要申请退款   intent REFUND_REQUEST -> REFUND_REQUEST  amount None -> 12900
 RECOVERED     label=REFUND_REQUEST   ORD-DEMO-1001 退一百二十九元                 intent UNKNOWN -> REFUND_REQUEST  amount None -> 12900
 MISSED        label=TICKET_CREATE    别跟我绕了，叫个活人来                        intent UNKNOWN -> UNKNOWN (pydantic_ai)
+MISSED        label=TICKET_CREATE    我要找你们负责人，机器人在糊弄我                  intent UNKNOWN -> UNKNOWN (pydantic_ai)
+MISSED        label=TICKET_CREATE    这事儿我忍了三次了，给我找个真人                  intent UNKNOWN -> UNKNOWN (pydantic_ai)
 MISSED        label=POLICY_QA        运费谁出？                                intent UNKNOWN -> LOGISTICS_QUERY (pydantic_ai)
 RECOVERED     label=LOGISTICS_QUERY  我买的东西还没到，能等到几号                    intent UNKNOWN -> LOGISTICS_QUERY (pydantic_ai)
-…（11 行，全在这条命令里）
 rules could not read 10/11 of these sentences; the model landed on the labelled intent for 6 of them.
 amount gaps: 2, filled correctly: 2; order ids invented: 0
-model cost: calls=11 failures=0 tokens=4723+2162 wall=72916 ms avg=6629 ms
+model cost: calls=11 failures=0 tokens=4723+2580 wall=82963 ms avg=7542 ms
 ```
 
 三层读数，各自都能被反驳：
 
 - **规则确实读不懂**：11 句里 10 句 `UNKNOWN`。「那笔钱给我退回来」不含 `退钱` / `申请退款` / `我要退款` 里任何一个；「我申请退一部分款」把动词拆开了；「一百二十九元」是汉字数字，而 `_AMOUNT`（`routing.py:12`）只吃 `\d`。
 - **模型能捞回一部分，但不是全部**：6 句退款类里规则本来就读懂 1 句，模型把其余 **5 句**从 `UNKNOWN` 捞成 `REFUND_REQUEST`，两处中文数字金额补位 2/2 正确——这一类到最后 6 句的意图与金额都和标签对得上；转人工的三种说法它一句都没接住（`UNKNOWN -> UNKNOWN`）；`运费谁出？` 被我标成 `POLICY_QA`，它判成 `LOGISTICS_QUERY`——按 `runtime.py:296-302`，这个错判的代价是回一句"请提供订单号"这种答非所问，不是无害。`order_id` 编造 0 次，这条每次跑都验（脚本发现编造就非零退出）。
-- **代价**：11 次调用、6885 个 token、72.9 秒，均 6.6 秒。
+- **代价**：11 次调用、7303 个 token、83.0 秒，均 7.5 秒。
 
-**真正的发现在下一步**：同样这 11 句走对话入口（`--chat`），模型一次也没被问到——
+**上一轮读数暴露的问题**：同样这 11 句走对话入口（`--chat`，`AGENT_MODE=rules`），模型一次也没被问到——
 
 ```text
 label=REFUND_REQUEST   chat=ORDER_QUERY      answer   ORD-DEMO-1001 那笔钱给我退回来      | 订单 ORD-DEMO-1001 当前状态为 DELIVERED，订单金额 129.
+label=REFUND_REQUEST   chat=UNKNOWN          answer   我申请退一部分款                 | 我可以帮你查商品信息、售后条款、订单与物流…
 label=REFUND_REQUEST   chat=REFUND_REQUEST   clarify  订单 ORD-DEMO-1001，金额一百二十九元…  | 请提供退款金额，例如 129 元。订单号 ORD-DEMO-1001 我已经记住了。
-label=TICKET_CREATE    chat=UNKNOWN          answer   别跟我绕了，叫个活人来             | 我可以帮你查商品信息、售后条款、订单与物流，也可以按你的订单判断退款资格…
 label=TICKET_CREATE    chat=HUMAN_HANDOFF    handoff  这事儿我忍了三次了，给我找个真人        | 已为你转接人工客服，我会把你已经说过的内容一起交给同事，你不用重复描述。
 …（11 行）
 这些对话轮产生的写动作（任务/审批）：0 / 11 轮
 ```
 
-门在规则手里：`classify_support`（`app/agent/support_agent.py:108-111`）只在**规则**判成 `REFUND_REQUEST` / `TICKET_CREATE` 时才把这一轮交给写路径，`UNKNOWN` 的轮次不创建任务，`IntentBrain` 就没有机会对这句话表态度。「给我找个真人」能转人工，靠的是意图目录里那条 `真人` 提示词（`app/agent/intents.yaml:67`）——同一件事，词表里有的说法走通了，词表里没有的没走通；而"退一百二十九元"这种句子，客户收到的是订单查询结果。
+门在规则手里：`classify_support`（`app/agent/support_agent.py:108-111`）只在**规则**判成 `REFUND_REQUEST` / `TICKET_CREATE` 时才把这一轮交给写路径，`UNKNOWN` 的轮次不创建任务，`IntentBrain` 就没有机会对这句话表态度。「给我找个真人」能转人工，靠的是意图目录里那条 `真人` 提示词（`app/agent/intents.yaml:67`）——同一件事，词表里有的说法走通了，词表里没有的没走通。
 
-模型的话语权只在直接调 `POST /api/v1/tasks` 时生效，效果是台账里两行不同的终态（`--live-task`，同一句 `ORD-DEMO-1001 退一百二十九元`，两份独立临时库、同一身份 `demo/alice`）：
+**这一轮把这道门开了一条缝**，位置是 `SupportAgent._consult_model`（`app/agent/support_agent.py`），排在「意图目录已经给过答案、上一轮的槽位已经恢复」之后。它只在同时满足三件事时才问模型：
+
+1. 这一轮规则给的是 `UNKNOWN`；或者规则 `UNKNOWN`、目录只是因为消息里带了订单号才回 `ORDER_QUERY`——订单号不是语义，`ORD-DEMO-1001 那笔钱给我退回来` 不该只换来一张订单卡；
+2. `AGENT_MODE=pydantic_ai`。`rules` 模式在碰模型之前就返回，确定性路径一行没变；
+3. `blocks_write_action` 为假——问句不算请求，不会为一句「运费谁出？」付一次调用。
+
+采纳范围只有 `REFUND_REQUEST`，而且只采纳**意图**（外加模型补的 `order_id`）。三个刻意不采纳的东西：**金额**不采纳（客户没打的数字不能进追问话术，它只由任务台账使用，并在审批记录里显示）；读意图不采纳（「运费谁出？」被判成 `LOGISTICS_QUERY`，答错比不答更糟）；`TICKET_CREATE` 不采纳（建工单会落一条持久记录并通知，值得单独设计）。
+
+开了之后，同一批句子的对话入口前后对照（`--chat --chat-model`，本机 8 次调用、4941 个 token、48.9 秒）：
 
 ```text
-AGENT_MODE=rules        intent=UNKNOWN         source=rules        status=SUCCEEDED        outcome=NEEDS_HUMAN_REVIEW  approval_amount=None
-  summary: 我暂时无法判断这个请求属于售后范围。请补充订单号、具体问题，或选择转人工。
-AGENT_MODE=pydantic_ai  intent=REFUND_REQUEST  source=pydantic_ai  status=WAITING_APPROVAL  outcome=WAITING_APPROVAL    approval_amount=12900
-  summary: 已查询订单并完成资格校验。退款 129.00 CNY 需要人工审批，审批通过后才会执行。
+REFUND_REQUEST   ORDER_QUERY      -> REFUND_REQUEST    <- 变了
+REFUND_REQUEST   UNKNOWN          -> REFUND_REQUEST    <- 变了
+REFUND_REQUEST   UNKNOWN          -> REFUND_REQUEST    <- 变了
+REFUND_REQUEST   UNKNOWN          -> REFUND_REQUEST    <- 变了
+REFUND_REQUEST   REFUND_REQUEST   -> REFUND_REQUEST
+REFUND_REQUEST   ORDER_QUERY      -> REFUND_REQUEST    <- 变了
+TICKET_CREATE    UNKNOWN          -> UNKNOWN
+TICKET_CREATE    UNKNOWN          -> UNKNOWN
+TICKET_CREATE    HUMAN_HANDOFF    -> HUMAN_HANDOFF
+POLICY_QA        UNKNOWN          -> UNKNOWN
+LOGISTICS_QUERY  UNKNOWN          -> UNKNOWN
+意图改变：5/11 句；单轮写动作：rules 0 个，pydantic_ai 0 个
 ```
 
-这三件事都钉成了测试（`tests/test_llm_gap.py`，4 条，桩件离线跑、不依赖模型服务）：`UNKNOWN` 的对话轮不碰模型且不产生任务；直接调任务接口会碰一次；规则读得懂的句子，模型反对也不改。
+5 句的意图变了，6 句退款全部变成 `REFUND_REQUEST` 并进入目录的追问流程（还缺哪个槽位就问哪个）。单轮任务仍是 0，因为它们都缺槽位——这正是要的状态：**模型只把请求送进队列门口，不把槽位填满**。注意第 5 句「金额一百二十九元」在对话入口仍然被问了一遍金额：汉字数字的补位只发生在任务台账里，不在追问话术里。
 
-我没有顺手把对话路径改成"规则读不懂就去问模型"，因为那是把**写动作的进门权**交给模型，而今天这道门是规则的，452 条测试里断言 `intent` 精确值的用例都建在这上面。真要做，边界得是这三条：只在规则给 `UNKNOWN` 时问、来源照样记成 `pydantic_ai`、并且只允许打开一条**待审**任务（退款仍然过资格校验与人工审批）。这三条在现在的代码里都成立，缺的只是让对话轮走到那一步的一行调用。这是本项目里我认为最值得被追问的一处，也是我留下的那道题。
+补齐槽位之后的端到端一条（`--chat-task "ORD-DEMO-1001 那笔钱给我退回来"`，同一次运行）：
 
-标签是我自己打的：这 11 句证明"词表外的说法确实存在、模型确实能捞回一部分、而对话入口用不上它"，**不**证明这类说法在真实队列里有多常见。真实工单语料仍然是缺口。
+```text
+用户：ORD-DEMO-1001 那笔钱给我退回来
+  意图=REFUND_REQUEST 状态=- 缺口=amount_cents
+  客服：请提供退款金额，例如 129 元。订单号 ORD-DEMO-1001 我已经记住了。
+用户：129 元
+  意图=REFUND_REQUEST 状态=WAITING_APPROVAL
+  客服：已把这条请求交给确定性工作流。退款已通过资格校验，正在等待人工审批…
+任务：task_d64f417d95db41c0 status=WAITING_APPROVAL routed=REFUND_REQUEST source=pydantic_ai approval_amount=12900
+事件：task.created -> task.running -> task.routed -> tool.call_started -> tool.call_completed -> approval.requested
+模型代价（这句对话）：calls=2 tokens=918+645 wall=20251 ms
+```
+
+`approval_amount=12900` 是审批记录里的金额，`source=pydantic_ai` 是台账自己写的来源，事件停在 `approval.requested`——没有 `approval.approved`，钱没动。三件事一起看才完整：模型改了"这句话算什么"，没改"钱能不能出去"。
+
+**为什么是两次调用**：对话入口的结论不会被递给任务台账。`create_task` 进 `_run` 之后，`brain.plan` 用同一份请求和槽位**重新**算一次，`task.routed` 记的是这一次的 `planning_source`。一次对话退款因此问两次模型（上一条实测正是 `calls=2`、20.3 秒）。这是故意的：台账不接受调用方递进来的结论，入口那道门写错时，最坏情况是多追问一轮，而不是一条被入口指定了意图的退款单。
+
+`AGENT_MODE=rules` 的确定性用一条更硬的断言钉住：测试里把 `IntentAgent` 换成一个"被调用就失败"的桩，整段规则模式对话跑完，桩一次没响。`tests/test_llm_gap.py` 现在 7 条（离线、不依赖模型服务）：规则读不懂这些句子、`IntentBrain` 只在缺口上采纳模型、`rules` 模式一次不问、问了但模型也读不懂时不建任务、问句不花调用、采纳退款后任务仍等人工审批且台账来源是 `pydantic_ai`、直接调任务接口会问一次。全量 **455 passed / 3 skipped**。
+
+我没有采纳读意图，也没有设置信度阈值：`IntentOutput` 里虽然带 `confidence`，但没有一份真实工单语料能告诉我阈值该是多少，拍一个数只是把"我选的"伪装成"算出来的"。这两个缺口和"11 句是我写的、不是真实工单"一起，写在 [ADR-020](docs/adr/ADR-020-chat-model-gap.md) 的后果段里。
+
+标签是我自己打的：这 11 句证明"词表外的说法确实存在、模型确实能捞回一部分、接上对话入口后能把它送进待审队列"，**不**证明这类说法在真实队列里有多常见。真实工单语料仍然是缺口。
 
 ### 会话记忆与澄清追问
 
@@ -350,7 +389,7 @@ AGENT_MODE=pydantic_ai  intent=REFUND_REQUEST  source=pydantic_ai  status=WAITIN
 
 用户补上订单号后，上一轮被打断的意图自动续跑。控制台右栏的「会话槽位 / SLOTS」卡实时显示订单号、退款金额与待补槽位。
 
-> `AGENT_MODE=pydantic_ai` 是**任务路径**上的可选槽位抽取，不会接管只读问答，也不会接管资格与金额判断。本机没有真实 API Key，该模式仅通过 PydanticAI `TestModel` 离线测试。
+> `AGENT_MODE=pydantic_ai` 仍然是**受限**的：任务路径上用模型补槽位；对话入口只在规则读不懂（`UNKNOWN` 或只靠订单号回 `ORDER_QUERY`）且不是问句时问它，且只采纳退款意图——资格、金额与审批都不归模型。见「[规则读不懂的 11 句](#规则读不懂的-11-句模型捞回-6-句对话入口只买一张待审退款单)」与 [ADR-020](docs/adr/ADR-020-chat-model-gap.md)。默认 `AGENT_MODE=rules` 不触碰任何模型。
 
 实现位置：[`app/agent/support_agent.py`](app/agent/support_agent.py)（意图路由与回复）、[`app/services/support.py`](app/services/support.py)（卡片与章节）、[`app/services/catalog.py`](app/services/catalog.py)（商品目录检索）。
 
@@ -1014,8 +1053,8 @@ X-Roles: approver        # 仅审批时需要，可为空
 ## 测试与评测
 
 ```bash
-python -m pytest               # 452 passed, 3 skipped（收集 455；34 个测试文件；Postgres-only 跳过）
-TICKETPILOT_TEST_POSTGRES_URL=postgresql+psycopg://... python -m pytest  # 上一轮基线 323 passed；T2 起新增的 9 个测试文件（141 条）与四张新表未在 Postgres 复跑
+python -m pytest               # 455 passed, 3 skipped（收集 458；34 个测试文件；Postgres-only 跳过）
+TICKETPILOT_TEST_POSTGRES_URL=postgresql+psycopg://... python -m pytest  # 上一轮基线 323 passed；T2 起新增的 9 个测试文件（141 条）+ test_llm_gap.py 7 条（共 148 条）与四张新表未在 Postgres 复跑
 ruff check app tests scripts evals alembic   # 与 CI 同一套目标（`ruff format --check` 不是门禁）
 python -m mypy app             # strict 类型检查，134 个文件零错误
 python evals/run.py            # 40/40 任务路径 + 轨迹断言（临时 SQLite）
@@ -1029,7 +1068,7 @@ python evals/business_metrics.py                             # 模拟一轮售�
 python evals/business_metrics.py --agent-mode pydantic_ai    # 同一份流量走模型路由（本机 LM Studio，见"端到端数字"）
 python scripts/llm_boundary_diff.py                          # 模型到底改了几次决策（0/16；需模型端点，非门禁）
 python scripts/llm_gap_probe.py --no-model --chat             # 规则读不懂的 11 句在对话入口得到什么（不需要模型端点）
-python scripts/llm_gap_probe.py --chat --live-task "ORD-DEMO-1001 退一百二十九元"  # 加上模型那一半（需 LM Studio）
+python scripts/llm_gap_probe.py --chat --chat-model --chat-task "ORD-DEMO-1001 那笔钱给我退回来"  # 加上模型那一半（需 LM Studio）
 python scripts/demo_latency.py --base-url http://127.0.0.1:8000 --repeat 12   # 真实 HTTP 单轮延迟，按轮类型分列
 python evals/replay.py --self-check  # 录制→回放，要求 REPLAY DIFF EMPTY
 python scripts/sample_traces.py      # 分层抽样 bad case 队列（只读）
@@ -1116,7 +1155,7 @@ docs/             范围、架构、API、安全、评测、说明书与 ADR
 
 - **控制台仍是开发身份**：页面使用可切换的 Header 身份预设；生产身份必须由 OIDC 提供，而 OIDC 适配器尚未实现。
 - **不能以 prod 模式对外服务**：OIDC 身份适配器与真实退款渠道未实现，`create_app` 会拒绝启动（刻意的 fail-closed）。
-- **模型调用只在本机 LM Studio 上验证过**：`AGENT_MODE=pydantic_ai` 走 OpenAI 兼容端点（`OPENAI_BASE_URL=http://127.0.0.1:1234/v1` + `AGENT_MODEL=openai:qwen/qwen3-8b`）实测跑通，49 段模拟会话里 12 次任务路由全部记成 `pydantic_ai` 来源、0 次回落；但重放显示**它一次也没有改变路由结果**（`scripts/llm_boundary_diff.py`：0/16 轮，代价 9506 token / 95.6 秒），数字与口径见「模型在哪一层：LLM 只被允许填空」。换成规则读不懂的句子再测，它**确实能捞回 6/10**（`scripts/llm_gap_probe.py`：中文数字金额补位 2/2、编造 `order_id` 0 次、转人工的三种说法全没接住），**但对话入口一次也用不上**——写动作的门在规则手里，模型的意图权只在直接调 `POST /api/v1/tasks` 时生效，细节与四条离线测试见「规则读不懂的 11 句：模型能捞回 6 句，但对话入口听不到它」。那 11 句仍是我按词表外造的句式，不是真实工单语料。托管模型（Anthropic / OpenAI）没有验证过，`AGENT_MODEL` 默认值仍是 `anthropic:claude-sonnet-4-5`，换过去需要 `ANTHROPIC_API_KEY`；单元测试仍用 `TestModel` 与桩件离线跑，CI 不依赖任何模型服务。
+- **模型调用只在本机 LM Studio 上验证过**：`AGENT_MODE=pydantic_ai` 走 OpenAI 兼容端点（`OPENAI_BASE_URL=http://127.0.0.1:1234/v1` + `AGENT_MODEL=openai:qwen/qwen3-8b`）实测跑通，49 段模拟会话里 12 次任务路由全部记成 `pydantic_ai` 来源、0 次回落；但重放显示**它一次也没有改变路由结果**（`scripts/llm_boundary_diff.py`：0/16 轮，代价 9506 token / 95.6 秒），数字与口径见「模型在哪一层：LLM 只被允许填空」。换成规则读不懂的句子再测，它**不仅能捞回 6/10**（`scripts/llm_gap_probe.py`：中文数字金额补位 2/2、编造 `order_id` 0 次、转人工的三种说法全没接住），**对话入口现在也只在这类缺口上问它**：`_consult_model` 只在规则 `UNKNOWN`（或只靠订单号回 `ORDER_QUERY`）、`AGENT_MODE=pydantic_ai`、且不是问句时调用，只采纳退款意图，台账仍自己重算并记 `planning_source=pydantic_ai`。实测 5/11 句意图改变、6 句退款进入追问，端到端落在 `WAITING_APPROVAL`；`rules` 模式一次都不问（「被调用就失败」的桩验过）。细节与七条离线测试见「规则读不懂的 11 句：模型捞回 6 句，对话入口只买一张待审退款单」，取舍见 [ADR-020](docs/adr/ADR-020-chat-model-gap.md)。那 11 句仍是我按词表外造的句式，不是真实工单语料。托管模型（Anthropic / OpenAI）没有验证过，`AGENT_MODEL` 默认值仍是 `anthropic:claude-sonnet-4-5`，换过去需要 `ANTHROPIC_API_KEY`；单元测试仍用 `TestModel` 与桩件离线跑，CI 不依赖任何模型服务。
 - **SSE 是回放后关闭**：实时订阅未实现，控制台读取的是持久化事件回放。
 - **Trace 演示数据多为扁平 span**：种子数据的 span 没有父子关系，回放页会如实显示为同级；树形缩进只在 `parent_span_id` 真实存在时生效。
 - **统计台账不保存结果行**：卡片展示查询计划、只读 SQL、行数、耗时与状态；结果集按设计不落账本，页面不会重新执行 SQL。
