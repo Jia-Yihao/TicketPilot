@@ -69,6 +69,8 @@ CI 会跑 ruff、mypy、后端测试、Golden Set、Alembic 迁移与 `alembic c
 
 ```bash
 make guard
+# 没装 make（Windows 上常见）就直接跑：
+python -m pytest tests/test_architecture_guard.py tests/test_docs_consistency.py
 ```
 
 - **架构依赖守卫**：`tests/test_architecture_guard.py`，规则源是 `docs/architecture-guard.yaml`。

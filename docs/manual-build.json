@@ -1,8 +1,8 @@
 {
-  "bytes": 226290,
+  "bytes": 226384,
   "pandoc": "3.8",
-  "paragraphs": 3625,
+  "paragraphs": 3626,
   "source": "docs/PROJECT_SPEC.md",
-  "source_sha256": "b667d885a01b000a1a12e33b961db79359511627271a25715e73b642285a5525",
+  "source_sha256": "523f8e7298acbb21064a34fb9005dc08faa94a9d69056a1d222e04efe4cd3d70",
   "tables": 79
 }

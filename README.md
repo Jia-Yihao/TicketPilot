@@ -1003,6 +1003,7 @@ POST /api/v1/support/messages  ← 两条 web 入口都经网关，旧入口不�
 
 ```bash
 make guard        # 只跑这两个守卫（约 4 秒）
+python -m pytest tests/test_architecture_guard.py tests/test_docs_consistency.py   # 没装 make 就跑这条
 python -m pytest  # 全量 519 条里已经包含它们，CI 的主 job 自然会跑
 ```
 

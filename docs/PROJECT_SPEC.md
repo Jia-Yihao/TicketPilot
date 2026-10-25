@@ -4087,6 +4087,9 @@ python scripts/outbox_worker.py --once     # 单轮后退出
 本项目把「诚实标注」这句话从**承诺**变成**测试**。两个守卫都是 `pytest` 里的普通用例：
 不新增运行时依赖，不改一行业务代码，规则写在 YAML 里、事实从代码现算。
 
+单独跑一遍（`make guard`，或者没有 make 时直接 `python -m pytest
+tests/test_architecture_guard.py tests/test_docs_consistency.py`），约 4 秒。
+
 ### 25.1 架构依赖守卫（`tests/test_architecture_guard.py`）
 
 规则源是 `docs/architecture-guard.yaml`，**不在测试代码里**——改规则等于改架构，必须走 ADR。
