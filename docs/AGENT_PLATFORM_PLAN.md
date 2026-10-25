@@ -141,7 +141,7 @@
 | 25 | **渠道抽象与入站（T4）** | `app/channels/{base,registry,gateway,store,render}.py` + 四个适配器、`channel_messages` 表、`GET /api/v1/channels` 矩阵 | `tests/test_channels.py` 现为 **20 条**（T4 落 13 条，T4b 与 T7 补到 14 条，T8 再加 6 条）：验签 401、身份映射 403、数据库级幂等（重放读回 / 换内容 409 / 在途 409 / 陈旧认领接管）、渲染降级、关闭渠道 404 | ✅ |
 | 26 | **渠道溯源（T4b）** | `SupportAgent.handle(channel=...)` → 移交包 `bundle.channel`、放弃事件、队列行与 `abandon_by_channel` | 同一批请求邮件记 `EMAIL`、网页记 `WEB`；队列行与移交包同源 | ✅ |
 | 27 | **客户记忆与主动服务（T5）** | `app/services/{memory,proactive}.py`、`customer_profiles` / `proactive_rules` / `notifications`、`app/api/v1/memory.py` 10 个操作（T5 当时 9 个，T10 加 `PUT /memory/rules/{event_type}`） | `tests/test_memory.py` 21 条：默认视图不落档、部分合并、PII 两类处置、七道抑制闸、确认/取消状态机、跨用户 404、导出只有计数 | ✅ |
-| 28 | **稠密检索护栏与多通道评测（T6）** | `app/retrieval/{build,dense,hybrid,fusion,rerank}.py`（`store_embeddings` 是 `dense.py` 里的函数）、`scripts/embed_policies.py`、`evals/retrieval_metrics.py --channels` | `tests/test_retrieval_channels.py` 20 条 + bm25/hybrid 对比行实测；prod 缺 embedding 配置启动即拒 | ✅ |
+| 28 | **稠密检索护栏与多通道评测（T6）** | `app/retrieval/{build,dense,hybrid,fusion,rerank}.py`（`store_embeddings` 是 `dense.py` 里的函数）、`scripts/embed_policies.py`、`evals/retrieval_metrics.py --channels` | `tests/test_retrieval_channels.py` 20 条 + bm25/dense/hybrid/rerank 四通道真实端点实测；prod 缺 embedding 配置启动即拒 | ✅ |
 | 29 | **主动通知的出站投递（T7-4）** | `app/channels/outbound.py`（`ProactiveSender` + `OutboundTransport` 协议 + `none` / `local_file` + 地址反向查找）、`app/services/runtime.py::_outbox_sink` 按事件类型分派、`render_notice` 复用 T4 能力表 | `tests/test_outbound.py` 17 条：默认 `none` 拒发、未同意 / 已退订 / 静音 / 未确认各有拒绝码、渠道取档案偏好且 `payload` 改不动去向、`local_file` 下 `SENT` 首次可达、审计只存 `address_digest`；另在真实 HTTP 与浏览器走完「选渠道 → 确认 → 投递 → 已推送」 | ✅ |
 | 30 | **新能力的控制台页面（T7-1/2/3，T10 加第 10 页）** | `web/src/pages/ChannelMatrix.tsx`、`MemoryPage.tsx`、`ProactiveRules.tsx`、`App.tsx` 路由与门禁 | 10 个业务页面；渠道矩阵只对 `support` / `admin` 可见，「我的记忆」是客户视角（读写删导出 + 待确认通知同意 / 取消 + 推送渠道只列真能送到的三个）；「通知规则」页只对 `support` / `admin` 可见，只能改文案 / 冷却 / 启停且改完当场看到字段校验结果；真跑确认删除按钮连带取消排队通知、页面文案标注「已推送 ≠ 服务商送达回执」 | ✅ |
 | 31 | **网页入口并入同一道幂等闸（T8）** | 改 `app/api/v1/support.py`（委托 `ChannelGateway.accept_web`）、`app/api/deps.py`、`web/src/api.ts`、`web/src/pages/ConversationPage.tsx` | `tests/test_channels.py` 新增 6 条：旧入口带键去重、旧入口不带键不留一行、同一个键跨两条路由只受理一次、旧入口换内容 409、在途 409 且零新任务、陈旧认领被接管（`attempts` 变 2）；真实浏览器「丢掉一次响应 → 原话重发」拿到 `X-Channel-Deduplicated: true`、同一个 `task_id`、任务总数不变，坐席视角的渠道矩阵 `WEB` 计数随控制台发送 +1 | ✅ |
@@ -159,7 +159,7 @@
 |---|---|---|---|---|
 | **1 接入** | HTTP JSON + React 控制台 + 渠道抽象 | 🟡 | `ChannelAdapter` / `ChannelGateway` / 渲染矩阵 / 数据库级幂等（T4）、渐进式披露、渠道溯源（T4b） | 真实平台协议对接（微信/企微/邮件服务商各自验签与回调）、流式、附件、APP/WhatsApp/Voice/SMS 四类只有能力声明没有适配器 |
 | **2 理解决策** | 目录 + 规则路由 + 单槽澄清 | 🟡 | 统一意图目录、升级触发表、策略引擎、槽位承接、受控 text-to-sql 意图 | 多槽乱序/取消/超时状态机、意图置信度与候选、统计计划的模型化规划器 |
-| **3 知识记忆** | 混合检索 + 会话槽位 + 客户档案 | 🟡 | BM25 + 稠密 + 重排 + RRF、引用、无依据门控、客户自持档案（读写删 + 审计 + 导出，T5）、主动服务七道抑制闸、档案进答案（四种模板效果 + 原因码可见，T9 / ADR-018）、规则自助配置（文案 / 冷却 / 启停的写接口 + 写时校验 + 控制台第 10 页，T10 / ADR-019） | 记忆进答案的**模型侧**用法（把档案注入提示词、由模型决定怎么用——当前刻意不做）、规则的**删除**与版本表 / 一键回滚 / 双人复核 / 按租户灰度（T10 明确不做）、真实 embedding 端点上的稠密评测 |
+| **3 知识记忆** | 混合检索 + 会话槽位 + 客户档案 | 🟡 | BM25 + 稠密 + 重排 + RRF、引用、无依据门控、客户自持档案（读写删 + 审计 + 导出，T5）、主动服务七道抑制闸、档案进答案（四种模板效果 + 原因码可见，T9 / ADR-018）、规则自助配置（文案 / 冷却 / 启停的写接口 + 写时校验 + 控制台第 10 页，T10 / ADR-019） | 记忆进答案的**模型侧**用法（把档案注入提示词、由模型决定怎么用——当前刻意不做）、规则的**删除**与版本表 / 一键回滚 / 双人复核 / 按租户灰度（T10 明确不做）、向量检索的 ANN / pgvector 与服务化重排的延迟预算（当前稠密是全表余弦、重排每次约 2.3 秒） |
 | **4 执行** | 台账 + 幂等 + 对账 + 审批 | 🟡 | 六段网关、Manifest v2、六工具、幂等、对账、受控 text-to-sql、执行器（超时预算/重试/熔断/降级链）、回执模板、事务性 Outbox（两种事件都有消费者，`proactive.confirmed` 自 T7-4 起真投递并回写 `SENT`） | reserve/settle 独立段、真实服务商协议与送达回执（`SENT` 只说明"交给配置的传输并写成功"） |
 | **5 人机协同** | 触发 + 移交包 + 接管 + 工作台 | 🟡 | 8 信号、`HandoffBundle`、状态机、坐席 API、坐席工作台（claim / release / close）、移交包与放弃事件带渠道（T4b） | 正确转人工率采集、Abandon 自动化巡检 |
 | **6 安全合规** | 租户隔离 + 审批 + 审计 + fail-closed | 🟡 | 身份、角色、租户、审计、fail-closed、脱敏 redaction、输入/输出护栏、租户+IP 限流、体积上限、`security_events`、入站验签与身份映射、PII 两类处置（拒绝 / 掩码） | 附件白名单/EXIF 剥离、权限 scope 交集显式化、跨进程配额、标准 PII 识别器（当前是显式标签 + 正则） |
@@ -548,7 +548,7 @@ SpanKind = Literal["guard", "understand", "retrieve", "generate",
 **失败路径**：稠密端点超时/报错 → 退化为纯 BM25（`hybrid._dense_ranked` 捕获全部异常后返回空，**Trace 里没有 `dense_unavailable` 这一标记**，降级只表现为结果集变窄，不留可查证据）；重排连续失败 3 次 → 熔断 30 秒（`rerank.py` 的 `failure_threshold=3`、`cooldown_seconds=30.0`，与规划一致）；全部通道无命中 → 无依据路径；记忆写入失败 → 不影响主链路。
 **验收标准**：政策类用例引用率 100%，无依据用例 0 幻觉；混合检索相对纯 BM25 的 Recall@5 有可量化提升（`evals/retrieval_metrics.py` 直接对比）；记忆接口可读可删可导出且全部脱敏；档案进答案只产生四种模板效果，且无档案客户的 101 条评测与 `REPLAY DIFF EMPTY` 逐字不变（T9 已达成，Recall@5 那条见下方实测结论）。
 
-> **本条已实测，结论与目标相反**：2026-10-24 的对比是 recall@1 0.7941 → 0.8529、MRR 0.8745 → 0.9020 **上升**，但 **recall@5 0.9706 → 0.9118 退化**——RRF 融合把原本能进前 5 的相关章节挤了出去。且 hybrid 那列用的是本机哈希 embedder 替身，只在 SQLite 上跑过，**不构成「混合检索召回更好」的结论**。门槛仍只套 `bm25`，没有为了放行 hybrid 调低标准。详见 `docs/EVALS.md`。
+> **本条已实测（2026-10-25 真实端点）**：稠密 `bge-m3` 把 recall@1 0.7941 → 0.8529、MRR 0.8745 → 0.9265，recall@5 不变；hybrid 把 recall@3 0.9118 → 0.9706；rerank（Docker Infinity 的 `bge-reranker-v2-m3`）把 recall@1 抬到 0.9118、MRR 0.9559，但 **recall@3 回落到 0.9118**，每次约 2.3 秒。三行都只在 17 条标注的演示语料上，门槛仍只套 `bm25`，不构成「混合检索普遍更好」的结论。详见 `docs/EVALS.md` 与 `PROJECT_SPEC.md` §11.5。
 
 ### 4.4 层 4：任务执行层 🟡（执行器、回执、Outbox 已落地，待补 reserve/settle 独立段与外部推送）
 
@@ -851,7 +851,7 @@ SpanKind = Literal["guard", "understand", "retrieve", "generate",
 `web` job：`npm ci` + `npm run build`（内含 `tsc --noEmit`）— ✅。
 
 `postgres-migration` job：在 `postgres:16-alpine` 服务上 `alembic upgrade head` + `alembic check` — ✅。
-**它只验迁移链，不跑 pytest**，所以「Postgres 上测试全绿」不是 CI 结论，只有本地一次性容器那轮（323 passed 版本）是。
+**它只验迁移链，不跑 pytest**，所以「Postgres 上测试全绿」不是 CI 结论；2026-10-25 本地 PostgreSQL 16.15 一次性容器上的全量是 **458 passed / 0 skipped**（Golden 40/40、支持集 61/61 同轮），但那是一次手工复跑，不是 CI 门禁。
 
 > **纪律**：所有命令用 `.venv/Scripts/...` 执行；CI 与本地用同一套命令，避免「本地过了线上红」。
 

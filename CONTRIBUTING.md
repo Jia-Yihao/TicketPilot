@@ -38,20 +38,20 @@ cd web && npm run build                   # 控制台类型检查 + 构建
 
 这九条与 `.github/workflows/ci.yml` 的主 job 一一对应；CI 的 Postgres job 只验迁移链，不跑 pytest。
 
-只有需要真实 PostgreSQL 的用例（并发锁与 Outbox 认领竞态）才要指过去：
+只有需要真实 PostgreSQL 的用例（并发锁与 Outbox 认领竞态）才要指过去；指过去之后它们会真的执行，不再是 3 个 skip：
 
 ```bash
-TICKETPILOT_TEST_POSTGRES_URL=postgresql+psycopg://... python -m pytest   # 上一轮基线 323 passed
+TICKETPILOT_TEST_POSTGRES_URL=postgresql+psycopg://... python -m pytest   # 2026-10-25：458 passed / 0 skipped（109.92 s）
 ```
 
 这些用例会临时创建数据库、跑完删除，不能指向共享库。
 
-> **Postgres 覆盖范围要说清**：T2 起新建的 9 个测试文件（当前共 141 条，含 `tests/test_personalization.py` 18 条、
-> `tests/test_proactive_rules.py` 21 条）加上 2026-10-25 的 `tests/test_llm_gap.py` 7 条（共 10 个文件、148 条）
-> **还没有在 PostgreSQL 上复跑**。本机装了 Docker，上一轮的
-> PostgreSQL 16.15 一次性容器就是用它跑出来的（基线 `323 passed`），所以缺的是这一轮的执行而不是环境；
-> 最近一轮收尾时守护进程没有运行，容器没有再起。默认 `pytest` 的读数就是 SQLite 基线；把 `455 passed`
-> 换成新数字时，不要顺手把它写成「Postgres 上也是这个数」。
+> **Postgres 覆盖范围（2026-10-25）**：T2 起新建的 10 个测试文件（148 条，含 `test_personalization.py` 18 条、
+> `test_proactive_rules.py` 21 条、`test_llm_gap.py` 7 条）与四张新表已经在 PostgreSQL 16.15 容器上跑过：
+> 全量 **458 passed / 0 skipped**，同一容器上 Golden **40/40**、支持集 **61/61**、11 条迁移 + `alembic check` 无漂移。
+> 默认 `pytest` 的 455 passed / 3 skipped 是 SQLite 基线，两个读数不要混写。
+> **仍未在 PG 上跑**的是四通道检索指标脚本（`retrieval_metrics.py` 的 dense / hybrid / rerank 三列），
+> PG 侧只有 `test_retrieval_eval.py` 的门槛断言。
 
 CI 会跑 ruff、mypy、后端测试、Golden Set、Alembic 迁移与 `alembic check`、以及控制台构建，
 见 [.github/workflows/ci.yml](.github/workflows/ci.yml)。
@@ -111,6 +111,11 @@ evals/             Golden Set、只读评测集、检索指标与回放脚本
 
 控制台视觉有变化时请重拍受影响截图（`docs/assets/screenshots/`），
 README 只引用该目录下的图片。文档里的测试数量、端点数量必须与实际命令输出一致。
+
+`docs/TicketPilot项目说明书.docx` 是 `docs/PROJECT_SPEC.md` 的 Pandoc 渲染，**不要手工编辑**。
+改完 spec 后跑 `python scripts/build_manual.py`（或 `make manual`）：它渲染到临时文件、校验
+`U+FFFD` 计数 0、段落数与表格数非零、体积不低于 50 KB，全部通过才替换旧 docx，
+失败时旧文件原样保留并打印是哪一项没过。
 
 改动**会影响回复文本的生成路径**（个性化效果、输出护栏、模板措辞）时，除了
 `docs/API.md` 的响应示例，还要同步 `README.md` 的对照段、`docs/PROJECT_SPEC.md` §6.7

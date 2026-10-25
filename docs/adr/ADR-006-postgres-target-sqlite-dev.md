@@ -31,6 +31,12 @@
 > **修订（2026-10-24）**：上面「本机未实际启动 PostgreSQL」是 2026-10-23 当天的读数。此后本机用 Docker 起过
 > PostgreSQL 16.15 一次性容器，迁移链与当时那批用例（320 用例版本）跑通——**323 passed**，默认跳过的三项全部执行。
 > 未被这次复跑覆盖的是此后新增的用例与四张新表（见 `docs/PROJECT_SPEC.md` §1.7）。
+>
+> **修订（2026-10-25）**：上面那句「未被覆盖」现在过时了。同一个容器上带 `TICKETPILOT_TEST_POSTGRES_URL`
+> 跑了全量：**458 passed / 0 skipped（109.92 s）**，T2 起的 10 个新文件（148 条，含 `test_llm_gap.py`）
+> 与四张新表（`channel_messages`、记忆 / 通知三张）都在内；同一容器上 Golden **40/40**、支持集 **61/61**，
+> `alembic upgrade head` 走完 11 条迁移、`alembic check` 无漂移。仍未在 PG 上跑的是四通道检索指标脚本
+> （PG 侧只有 `test_retrieval_eval.py` 的门槛断言）。
 
 ## 后果
 

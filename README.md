@@ -279,7 +279,7 @@ model cost: calls=16 failures=0 requests=16 tokens=6947+2559 wall=95567 ms avg=5
 
 - **付得起**：52 段流量里只有 12 个任务真的问了模型。上面那 16 个写路径轮为什么对不上 12？因为 4 句「别绕了，转人工吧」落在已经被坐席接管的会话上，`support_agent.py:181-192` 的接管分支在分流之前就返回了（实跑响应里那句的 `intent` 是 `HUMAN_HANDOFF`，脚本里显示 `TICKET_CREATE` 是因为它脱离会话状态重放）——任务不创建，模型也不被调用。这 4 次是 `llm_boundary_diff.py` 自己多付的，真实流量不付。只读轮根本不进这条路径；全部数字与口径在「端到端数字：延迟、token 与稠密通道的代价」。
 - **坏情况有界**：模型如果胡说一个 `order_id`，撞上的首先是身份作用域——`app/services/orders.py:18-24` 对非本人、非本租户的订单直接 `Order not found.`，任务落 `FAILED`、不生成审批、不写 tool_execution 行（`tests/test_refunds.py::test_refund_of_another_customers_order_never_reaches_approval` 断言的就是这条）。最坏情况是"白跑 6 秒 + 一条失败任务"，不是"钱退给了别人"。
-- **可追溯、可切换**：每次路由的来源都写进 `task.routed` 台账（`rules` / `pydantic_ai` / `rules_fallback`），控制台任务时间线看得到；`AGENT_MODE` 换回来不用改一行业务代码。反过来，如果一开始就让模型分这 12 类意图，455 条测试、Golden 40、Support 61 里断言 `intent` 精确值的那些用例就全部得改成"测分布"——这是我把模型挡在意图分流外面的第一个理由，不是性能。
+- **可追溯、可切换**：每次路由的来源都写进 `task.routed` 台账（`rules` / `pydantic_ai` / `rules_fallback`），控制台任务时间线看得到；`AGENT_MODE` 换回来不用改一行业务代码。反过来，如果一开始就让模型分这 12 类意图，458 个测试用例、Golden 40、Support 61 里断言 `intent` 精确值的那些用例就全部得改成"测分布"——这是我把模型挡在意图分流外面的第一个理由，不是性能。
 
 ### 规则读不懂的 11 句：模型捞回 6 句，对话入口只买一张待审退款单
 
@@ -647,9 +647,41 @@ app/resources/
 
 结论要老实说：**k 在这份语料上不敏感**——召回全列一模一样，只有 MRR/nDCG 在 k=1 时高 0.01，因为候选池只有 20、两个通道的前五重合度很高，`1/(k+rank)` 的斜率差异不足以翻盘。所以 README 不把 k=60 讲成"调参成果"，它是可配置项加一条实测：在这个规模上调 k 没有可复现收益，值得调的前提是候选池变大、通道分歧变多。
 
-### 重排：实现有，证据没有
+### 重排：bge-reranker 抬了头部命中，也花了 2.3 秒
 
-`app/retrieval/rerank.py` 是 Cohere 风格的 `/rerank` 客户端，带超时、熔断（连续 3 次失败进 30s cooldown）与 **fail-open**——重排端点挂了就用融合顺序，不会让答案出不来。但**没有实测召回增益**：本机 LM Studio 把 `bge-reranker-v2-m3` 注册成 embedding 类型，`POST /v1/rerank`、`/v1/score`、`/rerank` 全部返回 `Unexpected endpoint or method`（2026-10-25 复测），退化成"比较两个 1024 维池化向量"，相关与不相关之间的余弦差没有排序意义。要么换成 Cohere/TEI 风格的 rerank 服务再测，要么就不声称它有效。
+`app/retrieval/rerank.py` 是 Cohere 风格的 `/rerank` 客户端，带超时、熔断（连续 3 次失败进 30s cooldown）与 **fail-open**——重排端点挂了就用融合顺序，不会让答案出不来。
+
+LM Studio 本身不提供重排端点（`POST /v1/rerank`、`/v1/score` 返回 `Unexpected endpoint or method`，2026-10-25 复测），所以这一轮把模型换成本机 Docker 里的 Infinity（`michaelf34/infinity:latest-cpu`）服务 `bge-reranker-v2-m3`，仍然没有云端调用：
+
+```bash
+docker run -d --name ticketpilot-reranker -p 127.0.0.1:7998:7997 \
+  -v E:/My-Agentix/reranker-cache:/app/.cache:ro \
+  michaelf34/infinity:latest-cpu v2 --engine torch \
+  --model-id /app/.cache/model --served-model-name text-embedding-bge-reranker-v2-m3 \
+  --port 7997 --batch-size 4
+
+EMBEDDING_BASE_URL=http://127.0.0.1:1234/v1 EMBEDDING_MODEL=text-embedding-bge-m3 \
+RETRIEVAL_RERANK_ENABLED=true RERANK_URL=http://127.0.0.1:7998/rerank \
+RERANK_MODEL=text-embedding-bge-reranker-v2-m3 \
+  python evals/retrieval_metrics.py --channels bm25,dense,hybrid,rerank
+```
+
+读数（同一份 17 块语料、61 条会话、17 条标注查询）：
+
+| 通道 | recall@1 | recall@3 | recall@5 | MRR | nDCG@5 |
+|---|---|---|---|---|---|
+| bm25 | 0.794 | 0.912 | 0.971 | 0.875 | 0.882 |
+| dense(bge-m3) | 0.853 | 0.912 | 0.971 | 0.926 | 0.922 |
+| hybrid(bge-m3, k=60) | 0.794 | 0.971 | 0.971 | 0.882 | 0.889 |
+| **rerank(bge-reranker-v2-m3)** | **0.912** | 0.912 | 0.971 | **0.956** | **0.944** |
+
+三件事要一起看：
+
+- **头部精度真的抬了**：recall@1 从 hybrid 的 0.794 到 0.912，MRR 0.882 → 0.956，nDCG@5 0.889 → 0.944。
+- **recall@3 反而从 0.971 掉到 0.912**：有一句的正确块被重排挤出了前三，而 recall@5 不变——重排买的是"第一条更对"，不是"覆盖更全"。这条和"重排一定更好"的直觉相反，所以我把它留在表里。
+- **代价是 2.3 秒/次**：61 次调用 0 失败，mean 2.28 s、p50 2.27 s、min 2.07 s、max 2.56 s（CPU 容器、17 个候选块）。BM25 单轮是 25 ms 量级，这个倍数在在线问答里不可接受，所以 `RETRIEVAL_RERANK_ENABLED` 默认仍是 `false`，端点挂了也 fail-open。
+
+语料只有 17 块、标注只有 17 条，这些数字证明"这条通道能跑、方向与代价都量出来了"，**不**证明它在真实政策库上一定有同样的增益。
 
 ## 受控 Text-to-SQL：客户的问题不会变成 SQL
 
@@ -791,7 +823,7 @@ python scripts/demo_latency.py --base-url http://127.0.0.1:8030 --repeat 8 --wit
 - **只有政策问答变慢**，因为只有它走向量检索；四类只读轮的两个端口都是同一量级（差异是负载噪声）。这一句 25.5 ms → 1059 ms 里多出来的 ≈1.03 s 几乎全是把问题编码成向量的一次往返：绕开应用直接打端点，单句 8 次实测 **770 / 775 / 869 / 907 / 917 / 918 / 966 / 1030 ms**。17 个块的余弦扫描本身是微秒级，全表扫描的账要等语料大了才会出现（见「已知边界」）。
 - **这句的答案没变，但召回确实变了**——分开说才诚实。把同一句话分别发给 8020 和 8011：`reply` 逐字相同（`same_reply = True`），第一张上下文卡也完全一致（`doc_47738dcde21647e5` v3 § 退款条件，答案就是从它拼出来的）；差异在第二张卡——同一份 `policies/return-v1.md`，BM25 选中的章节是「退货与退款的区别」，稠密通道换成「七天无理由退货」。所以稠密通道在这份 17 块语料上买到的是排序鲁棒性（recall@3 从 0.912 抬到 0.971，上一节那张表）和次要章节选择的位移，**不是这一句更好的回答。这就是它默认关闭的全部理由**，也是"关掉更慢的通道"在这份代码里不是偷懒而是配置正确的证据。
 - 索引是一次性成本：`scripts/embed_policies.py` 整轮 real **1.732 s**（含解释器启动与写库），其中批量编码 17 块 **1270 ms**，≈74.7 ms/块——比单句一次 ≈0.9 s 便宜一个数量级，因为一次请求带了 17 条文本。为什么打包、打多大的包，这份测量里只到这一步；端点侧的批处理行为没有证据。换 embedding 模型必须 `--rebuild`，同一索引只允许一个向量宽度。
-- 重排通道仍然没有真实数字（LM Studio 不提供 `/rerank` 端点），那条路径的实现状态与证据缺口见「重排：实现有，证据没有」。
+- 重排通道已有真实数字（本机 Docker 的 `bge-reranker-v2-m3`）：头部精度上升、recall@3 反而下降、每次约 2.3 秒，见「重排：bge-reranker 抬了头部命中，也花了 2.3 秒」。默认仍然关闭。
 
 ### 模型只出现在写路径，且只有 12/60 轮付钱
 
@@ -1054,7 +1086,7 @@ X-Roles: approver        # 仅审批时需要，可为空
 
 ```bash
 python -m pytest               # 455 passed, 3 skipped（收集 458；34 个测试文件；Postgres-only 跳过）
-TICKETPILOT_TEST_POSTGRES_URL=postgresql+psycopg://... python -m pytest  # 上一轮基线 323 passed；T2 起新增的 9 个测试文件（141 条）+ test_llm_gap.py 7 条（共 148 条）与四张新表未在 Postgres 复跑
+TICKETPILOT_TEST_POSTGRES_URL=postgresql+psycopg://... python -m pytest  # 2026-10-25 PostgreSQL 16.15：458 passed / 0 skipped（109.92 s；Golden 40/40、支持集 61/61 同轮）
 ruff check app tests scripts evals alembic   # 与 CI 同一套目标（`ruff format --check` 不是门禁）
 python -m mypy app             # strict 类型检查，134 个文件零错误
 python evals/run.py            # 40/40 任务路径 + 轨迹断言（临时 SQLite）
@@ -1080,8 +1112,9 @@ python -m alembic check        # 模型与迁移无漂移
 | 通道 | recall@1 | recall@3 | recall@5 | MRR | nDCG@5 | 过期政策命中 | 跨租户命中 |
 |---|---|---|---|---|---|---|---|
 | `bm25`（默认，唯一设门槛的基线，`gate_channel = bm25`） | 0.794 | 0.912 | 0.971 | 0.875 | 0.882 | 0 | 0 |
-| `dense`（bge-m3，本机 LM Studio） | 0.853 | 0.912 | 0.971 | 0.927 | 0.922 | 0 | 0 |
+| `dense`（bge-m3，本机 LM Studio） | 0.853 | 0.912 | 0.971 | 0.926 | 0.922 | 0 | 0 |
 | `hybrid`（bm25 + bge-m3，RRF k=60） | 0.794 | 0.971 | 0.971 | 0.882 | 0.889 | 0 | 0 |
+| `rerank`（hybrid + bge-reranker-v2-m3，本机 Docker） | 0.912 | 0.912 | 0.971 | 0.956 | 0.944 | 0 | 0 |
 
 **测量口径**（数字离开口径就没有意义）：
 
@@ -1089,9 +1122,9 @@ python -m alembic check        # 模型与迁移无漂移
 - 语料是随包的 5 份政策 Markdown（含一份已过期旧版），切块与融合规则见下面的「政策检索：切块、融合与重排」；跑在临时 SQLite 上，每次由 `store_embeddings()` 现场重建稠密索引，模型 `bge-m3`（1024 维）由本机 LM Studio 提供（`EMBEDDING_BASE_URL=http://127.0.0.1:1234/v1`），单条 embedding ≈ 375 ms，一次全量建索引几十秒。
 - `dense` 这一行不是另写一套检索：它复用生产的 `HybridPolicySearch`，只把 BM25 通道的 `ranked()` 置空，`visible_chunks()` 照常跑，所以租户隔离、`ACTIVE` 状态与有效期过滤完全一致。
 - 17 条标注、单租户演示语料——这个量级不足以支撑"稠密通道优于 BM25"的普适结论，只能说在这份语料上：bge-m3 单独把首位命中从 0.794 抬到 0.853、MRR 抬 0.05；融合把 recall@3 从两个单通道的 0.912 抬到 0.971（两个通道各漏过对方能捞回的那一条），recall@5 与 `dense` 持平。
-- 没有 embedding 端点时（CI 就是这样，跑 `--channels bm25,hybrid`）稠密通道退回离线哈希替身，那一行**不作为可引用数字**：哈希把词面重叠当相似度，recall@5 反而从 0.971 掉到 0.912。真实端点跑出来的三行如上表。
+- 没有 embedding 端点时（CI 就是这样，跑 `--channels bm25,hybrid`）稠密通道退回离线哈希替身，那一行**不作为可引用数字**：哈希把词面重叠当相似度，recall@5 反而从 0.971 掉到 0.912。真实端点跑出来的四行如上表。
 
-`rerank` 通道仍然没有实测数字：本机 LM Studio 把 `bge-reranker-v2-m3` 注册成 embedding 类型，`/v1/rerank`、`/v1/score` 等端点一律返回 `Unexpected endpoint or method`，退化成"比较两个 1024 维池化向量"，相关与不相关对的余弦差小到没有排序意义。要么换成 Cohere/TEI 风格的 rerank 服务再测，要么就别说它有效——代码里的重排是失败即放开（fail-open），这条路径有熔断与降级测试，但没有召回增益的证据。
+`rerank` 行的口径单独说：它需要本机 Docker 起的 Infinity 端点（LM Studio 没有 `/rerank`），17 块候选全量重排，61 次调用 0 失败，每次约 **2.3 秒**；recall@1/MRR/nDCG 都升，但 recall@3 掉回 0.912。命令、逐项读数与代价见「[重排：bge-reranker 抬了头部命中，也花了 2.3 秒](#重排bge-reranker-抬了头部命中也花了-23-秒)」。
 
 
 CI 包含三个 job：Python 测试 + ruff + mypy + Golden（40）+ 支持路径（61）+ 检索评测 + 回放自检 + Alembic、前端构建、PostgreSQL 迁移校验。Golden、支持路径、检索指标或回放任一项回归都会阻断合并。

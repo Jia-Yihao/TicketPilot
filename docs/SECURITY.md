@@ -150,7 +150,7 @@ DATABASE_URL=postgresql+psycopg://...       # SQLite 会被拒绝
 - 余额扣减用条件更新：`refundable_cents >= amount` 才扣减并递增订单版本，输家不会覆盖赢家结果。
 - 审批新增 `CONSUMED` 终态：明确成功或明确失败后消费审批，释放订单级额度；`UNKNOWN` 对账期间保持 `APPROVED`，继续阻塞第二笔退款。
 
-验证：`tests/test_postgres_concurrency.py` 在真实 PostgreSQL 上先断言同订单重复申请被订单级索引挡下（第二个任务 `FAILED`、开放审批仍只有一条），再让两个审批人并发审批**同一个任务**，断言恰好一个成功、另一个抛 `ConflictError`（HTTP 409），只有一条退款记录、余额只扣一次、订单版本只递增一次；`refund-waits-for-approval` 与 `refund-approved-and-verified` 使用不同订单，当前 Golden Set 在 SQLite 上 40/40（上一轮 10 条版本在 PostgreSQL 亦为 10/10）。
+验证：`tests/test_postgres_concurrency.py` 在真实 PostgreSQL 上先断言同订单重复申请被订单级索引挡下（第二个任务 `FAILED`、开放审批仍只有一条），再让两个审批人并发审批**同一个任务**，断言恰好一个成功、另一个抛 `ConflictError`（HTTP 409），只有一条退款记录、余额只扣一次、订单版本只递增一次；`refund-waits-for-approval` 与 `refund-approved-and-verified` 使用不同订单，当前 Golden Set 在 SQLite 与 PostgreSQL 16.15 上均为 **40/40**（2026-10-25）。
 
 ### 2. 审批权限与自批
 

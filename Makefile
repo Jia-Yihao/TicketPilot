@@ -1,4 +1,4 @@
-.PHONY: install run seed test lint eval eval-support eval-retrieval eval-replay eval-business sample-bad-cases migrate compose-up compose-down
+.PHONY: install run seed test lint eval eval-support eval-retrieval eval-replay eval-business sample-bad-cases migrate compose-up compose-down manual
 
 install:
 	python -m pip install -e ".[dev]"
@@ -41,3 +41,6 @@ compose-up:
 
 compose-down:
 	docker compose down
+
+manual:
+	python scripts/build_manual.py
