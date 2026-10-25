@@ -17,19 +17,22 @@ Hard constraints
 Channels
     ``--channels`` compares retrieval channels on the same labelled set:
 
-    bm25      the shipped baseline (sparse BM25 only);
+    bm25      the shipped sparse baseline (sparse BM25 only);
     dense     the dense channel alone, measured through the same hybrid search
               with its sparse channel silenced; it is an evaluation view, not a
               deployment the product offers;
     hybrid    sparse + dense, fused with RRF. Without ``EMBEDDING_BASE_URL``
               the dense channel uses the offline hashing stand-in, which adds
               a character level view but no semantics;
+    gated     the shipped dense deployment: sparse always runs, dense only on
+              a query where ``DenseGate`` says BM25 is blind or poorly covered;
     rerank    hybrid plus the rerank endpoint; it needs ``RERANK_URL`` and is
               skipped when none is configured.
 
     The gate thresholds are applied to the first channel in the list, which is
     the one the deployment ships; the other channels are reported as
-    comparison numbers.
+    comparison numbers. ``dense_trigger_rate`` says how often the gated channel
+    actually called the embedder.
 """
 
 from __future__ import annotations
@@ -62,7 +65,7 @@ from app.retrieval.dense import (
     OpenAICompatibleEmbedder,
     store_embeddings,
 )
-from app.retrieval.hybrid import HybridPolicySearch
+from app.retrieval.hybrid import DenseGate, HybridPolicySearch
 from app.retrieval.rerank import RerankClient
 from app.retrieval.search import (
     PolicySearch,
@@ -75,7 +78,7 @@ from app.services.catalog import CatalogService
 
 DATASET_PATH = Path(__file__).with_name("support_set.json")
 DEFAULT_K = (1, 3, 5)
-CHANNELS = ("bm25", "dense", "hybrid", "rerank")
+CHANNELS = ("bm25", "dense", "hybrid", "gated", "rerank")
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,6 +94,7 @@ class CaseResult:
     retrieved: tuple[str, ...]
     stale_hits: int
     cross_tenant_hits: int
+    dense_decision: str | None = None
 
 
 @dataclass(slots=True)
@@ -199,6 +203,7 @@ def evaluate(
             hits: list[RetrievedChunk] = retriever.search(
                 identity, case["query"], limit=max_k
             )
+            dense_decision = getattr(retriever, "last_dense_decision", None)
             gains = [1 if hit.chunk_id in relevant else 0 for hit in hits]
 
             recall: dict[int, float] = {}
@@ -237,10 +242,17 @@ def evaluate(
                     ),
                     stale_hits=stale_hits,
                     cross_tenant_hits=cross_tenant_hits,
+                    dense_decision=dense_decision,
                 )
             )
 
     retrieval_cases = [case for case in report.cases if case.recall]
+    dense_ran = [
+        case
+        for case in retrieval_cases
+        if case.dense_decision
+        and case.dense_decision not in {"sparse_confident", "no_embedder"}
+    ]
     for k in k_values:
         values = [case.recall[k] for case in retrieval_cases]
         report.metrics[f"recall@{k}"] = sum(values) / len(values) if values else 0.0
@@ -263,6 +275,9 @@ def evaluate(
     report.metrics["cross_tenant_hits"] = float(
         sum(case.cross_tenant_hits for case in report.cases)
     )
+    report.metrics["dense_trigger_rate"] = (
+        len(dense_ran) / len(retrieval_cases) if retrieval_cases else 0.0
+    )
     return report
 
 
@@ -282,20 +297,31 @@ def check_thresholds(report: Report, thresholds: dict[str, Any]) -> list[str]:
     return failures
 
 
+def _dense_marker(decision: str | None) -> str:
+    if decision is None:
+        return "-"
+    if decision in {"sparse_confident", "no_embedder"}:
+        return "skip"
+    return "run"
+
+
 def format_report(report: Report, thresholds: dict[str, Any]) -> str:
     lines: list[str] = []
     lines.append(f"channel: {report.channel}")
-    lines.append("case                          intent          recall@1  recall@3  mrr    ndcg@5")
-    lines.append("-" * 78)
+    lines.append(
+        "case                          intent          dense  recall@1  recall@3  mrr    ndcg@5"
+    )
+    lines.append("-" * 86)
     for case in report.cases:
         if not case.recall:
             lines.append(
                 f"{case.case_id:<29} {case.intent_actual:<15} "
-                f"{'(intent only)':<32}"
+                f"{'(intent only)':<39}"
             )
             continue
         lines.append(
             f"{case.case_id:<29} {case.intent_actual:<15} "
+            f"{_dense_marker(case.dense_decision):<6} "
             f"{case.recall[1]:<10.2f} {case.recall[3]:<10.2f} "
             f"{case.mrr:<6.2f} {case.ndcg:<6.2f}"
         )
@@ -318,7 +344,7 @@ def format_report(report: Report, thresholds: dict[str, Any]) -> str:
 
 def format_comparison(reports: list[Report]) -> str:
     lines = [
-        "channel                recall@1  recall@3  recall@5   mrr  ndcg@5  stale  x-tenant"
+        "channel                recall@1  recall@3  recall@5   mrr  ndcg@5 dense  stale  x-tenant"
     ]
     for report in reports:
         metrics = report.metrics
@@ -329,6 +355,7 @@ def format_comparison(reports: list[Report]) -> str:
             f"{metrics.get('recall@5', 0.0):<10.2f}"
             f"{metrics.get('mrr', 0.0):<6.2f}"
             f"{metrics.get('ndcg@5', 0.0):<6.2f}"
+            f"{metrics.get('dense_trigger_rate', 0.0):<7.2f}"
             f"{metrics.get('stale_hits', 0.0):<7.0f}"
             f"{metrics.get('cross_tenant_hits', 0.0):<9.0f}"
         )
@@ -409,8 +436,13 @@ def _hybrid_factory(
     provider: EmbeddingProvider | None,
     max_k: int,
     reranker: RerankClient | None = None,
+    dense_gate: DenseGate | None = None,
 ) -> Callable[[Session], PolicySearch]:
-    """Sparse plus dense, optionally followed by the rerank endpoint."""
+    """Sparse plus dense, optionally gated and optionally reranked.
+
+    ``dense_gate=None`` is the always-on comparison channel; the shipped
+    deployment passes the gate from settings.
+    """
 
     def factory(session: Session) -> PolicySearch:
         return HybridPolicySearch(
@@ -422,9 +454,21 @@ def _hybrid_factory(
             max_results=max_k,
             candidate_pool=settings.retrieval_candidate_pool,
             dense_min_score=settings.retrieval_dense_min_score,
+            dense_gate=dense_gate,
         )
 
     return factory
+
+
+def _gated_factory(
+    settings: Settings, provider: EmbeddingProvider | None, max_k: int
+) -> Callable[[Session], PolicySearch]:
+    """The shipped dense deployment: dense only where the gate opens."""
+    gate = DenseGate(
+        min_top1_score=settings.retrieval_dense_gate_min_top1_score,
+        min_coverage=settings.retrieval_dense_gate_min_coverage,
+    )
+    return _hybrid_factory(settings, provider, max_k, dense_gate=gate)
 
 
 def _run(
@@ -449,7 +493,7 @@ def _run(
         max_k = max(k_values)
         provider: EmbeddingProvider | None = None
         provider_label = ""
-        if any(channel in {"dense", "hybrid", "rerank"} for channel in channels):
+        if any(channel in {"dense", "hybrid", "gated", "rerank"} for channel in channels):
             provider, provider_label = _dense_provider(settings)
             with session_factory() as session:
                 try:
@@ -472,6 +516,9 @@ def _run(
             elif channel == "hybrid":
                 search_factory = _hybrid_factory(settings, provider, max_k)
                 label = f"hybrid({provider_label})"
+            elif channel == "gated":
+                search_factory = _gated_factory(settings, provider, max_k)
+                label = f"gated({provider_label})"
             elif channel == "rerank":
                 reranker = build_reranker(settings)
                 if reranker is None:
@@ -494,6 +541,16 @@ def _run(
         return reports, skipped
     finally:
         engine.dispose()
+
+
+def _decision_counts(report: Report) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for case in report.cases:
+        if not case.recall:
+            continue
+        key = case.dense_decision or "-"
+        counts[key] = counts.get(key, 0) + 1
+    return counts
 
 
 def main() -> int:
@@ -549,6 +606,7 @@ def main() -> int:
                         {
                             "channel": report.channel,
                             "metrics": report.metrics,
+                            "dense_decisions": _decision_counts(report),
                             "failures": check_thresholds(report, thresholds),
                             "routing_gaps": [
                                 {

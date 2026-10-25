@@ -106,7 +106,14 @@ class PolicySearchService:
     def visible_chunks(
         self, identity: Identity, *, today: date | None = None
     ) -> list[tuple[DocumentChunk, Document]]:
-        """Chunks the identity may read: same tenant, active, inside the effective window."""
+        """Chunks the identity may read: same tenant, active, inside the effective window.
+
+        The rows come back in a fixed order (``chunk id``), not in whatever
+        order the database happens to return them. BM25 ties are broken by
+        that order, so an unspecified order would make the ranking — and the
+        candidate list handed to the reranker — differ between SQLite and
+        PostgreSQL for the very same corpus.
+        """
         today = today or utcnow().date()
         rows = self.session.execute(
             select(DocumentChunk, Document)
@@ -117,6 +124,7 @@ class PolicySearchService:
                 Document.effective_from <= today,
                 (Document.effective_to.is_(None)) | (Document.effective_to >= today),
             )
+            .order_by(DocumentChunk.id)
         ).all()
         return [(chunk, document) for chunk, document in rows]
 

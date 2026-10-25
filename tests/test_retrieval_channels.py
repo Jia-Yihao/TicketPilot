@@ -6,9 +6,11 @@ import httpx
 import pytest
 from sqlalchemy import select
 
+from app.core.config import Settings
 from app.core.security import Identity
 from app.db.session import build_engine, build_session_factory, create_all
 from app.models.document import Document, DocumentChunk
+from app.retrieval.build import build_policy_search
 from app.retrieval.dense import (
     HashingEmbedder,
     cosine_similarity,
@@ -16,7 +18,7 @@ from app.retrieval.dense import (
     store_embeddings,
 )
 from app.retrieval.fusion import rrf_fuse, zscore_fuse
-from app.retrieval.hybrid import HybridPolicySearch
+from app.retrieval.hybrid import DenseGate, HybridPolicySearch
 from app.retrieval.rerank import RerankClient
 from app.retrieval.search import PolicySearchService, tokenize
 from app.seed import seed_all
@@ -27,6 +29,16 @@ ALICE = Identity(tenant_id="demo", user_id="alice", roles=frozenset())
 class _BrokenEmbedder:
     def embed(self, texts: list[str]) -> list[list[float]]:
         raise RuntimeError("embedding endpoint is down")
+
+
+class _CountingEmbedder:
+    def __init__(self, inner: HashingEmbedder) -> None:
+        self.inner = inner
+        self.calls = 0
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        self.calls += 1
+        return self.inner.embed(texts)
 
 
 @pytest.fixture
@@ -277,3 +289,136 @@ def test_hybrid_never_returns_another_tenants_chunks(seeded) -> None:
 
     assert hits
     assert all(documents[hit.document_id].tenant_id == "demo" for hit in hits)
+
+
+# ------------------------------------------------------------ dense gate
+def test_dense_gate_skips_the_embedder_when_bm25_is_confident(seeded) -> None:
+    provider = _CountingEmbedder(HashingEmbedder(128))
+    with seeded() as session:
+        store_embeddings(session, provider)
+        session.commit()
+        provider.calls = 0
+        sparse = PolicySearchService(session, max_results=3, min_score=0.01)
+        hybrid = HybridPolicySearch(
+            session,
+            sparse=sparse,
+            embedder=provider,
+            max_results=3,
+            dense_gate=DenseGate(),
+        )
+
+        # BM25 reads this question from its vocabulary and its top-1 section
+        # covers the query terms, so the gate keeps the endpoint unused.
+        hits = hybrid.search(ALICE, "退款申请需要谁审批", limit=3)
+        expected = [
+            hit.chunk_id for hit in sparse.search(ALICE, "退款申请需要谁审批", limit=3)
+        ]
+
+    assert hybrid.last_dense_decision == "sparse_confident"
+    assert provider.calls == 0
+    assert [hit.chunk_id for hit in hits] == expected
+
+
+def test_dense_gate_opens_when_bm25_top1_does_not_cover_the_query(seeded) -> None:
+    provider = _CountingEmbedder(HashingEmbedder(128))
+    with seeded() as session:
+        store_embeddings(session, provider)
+        session.commit()
+        provider.calls = 0
+        hybrid = HybridPolicySearch(
+            session,
+            sparse=PolicySearchService(session, max_results=3, min_score=0.01),
+            embedder=provider,
+            max_results=3,
+            dense_gate=DenseGate(),
+        )
+
+        # A labelled BM25 rank-1 miss: the query shares little with the chunk
+        # BM25 ranks first, even though its score is high.
+        hybrid.search(ALICE, "什么情况下要创建最高优先级的工单", limit=3)
+
+    assert hybrid.last_dense_decision == "low_coverage"
+    assert provider.calls == 1
+
+
+def test_dense_gate_opens_when_sparse_finds_nothing(seeded) -> None:
+    provider = _CountingEmbedder(HashingEmbedder(128))
+    with seeded() as session:
+        store_embeddings(session, provider)
+        session.commit()
+        provider.calls = 0
+        hybrid = HybridPolicySearch(
+            session,
+            sparse=PolicySearchService(session, max_results=3, min_score=99.0),
+            embedder=provider,
+            max_results=3,
+            dense_gate=DenseGate(),
+        )
+
+        hits = hybrid.search(ALICE, "zzzz", limit=3)
+
+    assert hybrid.last_dense_decision == "no_sparse_hits"
+    assert provider.calls == 1
+    assert hits
+
+
+def test_dense_gate_can_be_switched_off(seeded) -> None:
+    provider = _CountingEmbedder(HashingEmbedder(128))
+    with seeded() as session:
+        store_embeddings(session, provider)
+        session.commit()
+        provider.calls = 0
+        hybrid = HybridPolicySearch(
+            session,
+            sparse=PolicySearchService(session, max_results=3, min_score=0.01),
+            embedder=provider,
+            max_results=3,
+            dense_gate=None,
+        )
+
+        hybrid.search(ALICE, "退款申请需要谁审批", limit=3)
+
+    assert hybrid.last_dense_decision == "always_on"
+    assert provider.calls == 1
+
+
+def test_build_policy_search_passes_the_configured_dense_gate() -> None:
+    settings = Settings(
+        environment="test",
+        retrieval_dense_enabled=True,
+        embedding_base_url="http://127.0.0.1:1234/v1",
+        embedding_model="text-embedding-bge-m3",
+        retrieval_dense_gate_min_coverage=0.4,
+    )
+
+    engine = build_engine("sqlite+pysqlite:///:memory:")
+    create_all(engine)
+    session_factory = build_session_factory(engine)
+    try:
+        with session_factory() as session:
+            search = build_policy_search(session, settings)
+            assert isinstance(search, HybridPolicySearch)
+            assert search.dense_gate == DenseGate(min_coverage=0.4)
+    finally:
+        engine.dispose()
+
+
+def test_build_policy_search_can_restore_the_always_on_channel() -> None:
+    settings = Settings(
+        environment="test",
+        retrieval_dense_enabled=True,
+        retrieval_dense_gate_enabled=False,
+        embedding_base_url="http://127.0.0.1:1234/v1",
+        embedding_model="text-embedding-bge-m3",
+    )
+
+    engine = build_engine("sqlite+pysqlite:///:memory:")
+    create_all(engine)
+    session_factory = build_session_factory(engine)
+    try:
+        with session_factory() as session:
+            search = build_policy_search(session, settings)
+            assert isinstance(search, HybridPolicySearch)
+            assert search.dense_gate is None
+    finally:
+        engine.dispose()

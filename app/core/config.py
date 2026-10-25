@@ -55,6 +55,11 @@ class Settings(BaseSettings):
     retrieval_rrf_k: int = 60
     retrieval_candidate_pool: int = 20
     retrieval_dense_min_score: float = 0.0
+    # Once dense is on, ask it only where BM25 is blind or poorly covered.
+    # Set the flag to false to restore the always-on channel.
+    retrieval_dense_gate_enabled: bool = True
+    retrieval_dense_gate_min_top1_score: float = 5.0
+    retrieval_dense_gate_min_coverage: float = 0.35
     embedding_base_url: str = ""
     embedding_model: str = ""
     embedding_api_key: SecretStr | None = None

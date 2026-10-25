@@ -5,12 +5,16 @@ only one channel found can still reach the top. The optional reranker runs on
 the fused candidates and fails open, so the retrieval chain keeps working when
 the reranker is unreachable.
 
-The hybrid path is opt-in: without a dense provider and stored embeddings the
-service degrades to the sparse channel, which is the default deployment.
+The dense channel is opt-in and, once enabled, gated per query: a confident
+BM25 top-1 skips the embedding call, while a blind or poorly covered top-1
+opens it. ``DenseGate`` documents the thresholds and why a score cutoff alone
+is not enough on this corpus.
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import date
 
 from sqlalchemy.orm import Session
@@ -24,7 +28,49 @@ from app.retrieval.dense import (
 )
 from app.retrieval.fusion import rrf_fuse
 from app.retrieval.rerank import RerankClient
-from app.retrieval.search import PolicySearchService, RetrievedChunk, ScoredChunk
+from app.retrieval.search import (
+    PolicySearchService,
+    RetrievedChunk,
+    ScoredChunk,
+    tokenize,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class DenseGate:
+    """Whether this query needs the dense channel, decided before embedding.
+
+    A BM25 top-1 score cutoff was the first candidate, but on
+    ``evals/support_set.json`` the three rank-1 misses all scored >= 12.9:
+    BM25 was *confidently* wrong, so a low-score rule would never fire on the
+    cases dense can fix. The three misses were instead the three queries with
+    the lowest share of their terms present in the top-1 chunk (0.26-0.35),
+    which is what this gate measures. Both thresholds were calibrated on that
+    17-case labelled set and should be re-tuned when the corpus changes.
+    """
+
+    min_top1_score: float = 5.0
+    min_coverage: float = 0.35
+
+    def reason(self, query: str, sparse_hits: Sequence[ScoredChunk]) -> str | None:
+        """Return why dense should run, or ``None`` when BM25 is confident."""
+        if not sparse_hits:
+            return "no_sparse_hits"
+        top = sparse_hits[0]
+        if top.score < self.min_top1_score:
+            return "weak_sparse"
+        if self.coverage(query, top.chunk) <= self.min_coverage:
+            return "low_coverage"
+        return None
+
+    @staticmethod
+    def coverage(query: str, chunk: DocumentChunk) -> float:
+        """Share of the query's tokens that appear in the top-1 chunk."""
+        query_terms = set(tokenize(query))
+        if not query_terms:
+            return 0.0
+        chunk_terms = set(tokenize(f"{chunk.section}\n{chunk.content}"))
+        return len(query_terms & chunk_terms) / len(query_terms)
 
 
 class HybridPolicySearch:
@@ -41,6 +87,7 @@ class HybridPolicySearch:
         max_results: int = 3,
         candidate_pool: int = 20,
         dense_min_score: float = 0.0,
+        dense_gate: DenseGate | None = None,
     ) -> None:
         self.session = session
         self.sparse = sparse
@@ -50,6 +97,10 @@ class HybridPolicySearch:
         self.max_results = max_results
         self.candidate_pool = max(max_results, candidate_pool)
         self.dense_min_score = dense_min_score
+        self.dense_gate = dense_gate
+        # Diagnostics for one request: the search instance is built per call.
+        # "always_on" means no gate; "sparse_confident" means the gate skipped.
+        self.last_dense_decision = "not_called"
 
     def search(
         self,
@@ -64,7 +115,21 @@ class HybridPolicySearch:
         sparse_hits = self.sparse.ranked(
             identity, query, today=today, limit=self.candidate_pool
         )
-        dense_hits = self._dense_ranked(identity, query, today=today)
+        if self.embedder is None:
+            self.last_dense_decision = "no_embedder"
+            dense_hits: list[ScoredChunk] = []
+        else:
+            reason = (
+                "always_on"
+                if self.dense_gate is None
+                else self.dense_gate.reason(query, sparse_hits)
+            )
+            self.last_dense_decision = reason or "sparse_confident"
+            dense_hits = (
+                []
+                if reason is None
+                else self._dense_ranked(identity, query, today=today)
+            )
         if not sparse_hits and not dense_hits:
             return []
 

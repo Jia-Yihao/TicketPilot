@@ -15,7 +15,7 @@ from app.retrieval.dense import (
     HashingEmbedder,
     OpenAICompatibleEmbedder,
 )
-from app.retrieval.hybrid import HybridPolicySearch
+from app.retrieval.hybrid import DenseGate, HybridPolicySearch
 from app.retrieval.rerank import RerankClient
 from app.retrieval.search import PolicySearch, PolicySearchService
 
@@ -77,6 +77,14 @@ def build_policy_search(
     reranker = build_reranker(settings)
     if embedder is None and reranker is None:
         return sparse
+    dense_gate = (
+        DenseGate(
+            min_top1_score=settings.retrieval_dense_gate_min_top1_score,
+            min_coverage=settings.retrieval_dense_gate_min_coverage,
+        )
+        if settings.retrieval_dense_gate_enabled
+        else None
+    )
     return HybridPolicySearch(
         session,
         sparse=sparse,
@@ -86,4 +94,5 @@ def build_policy_search(
         max_results=results,
         candidate_pool=settings.retrieval_candidate_pool,
         dense_min_score=settings.retrieval_dense_min_score,
+        dense_gate=dense_gate,
     )
