@@ -4140,5 +4140,5 @@ python scripts/outbox_worker.py --once     # 单轮后退出
 | 修改质量门禁（ruff/mypy/CI） | `pyproject.toml`、`.github/workflows/ci.yml`、CONTRIBUTING 门禁清单、本文 §14.3/§19.2、附录 C |
 | 新增真实依赖 | README「尚未验证」清单、本文 §19、CI |
 
-> 本文档到此结束。它描述的是 **2026-10-24 的代码事实**，不是产品愿景。
+> 本文档到此结束。它描述的是 **2026-10-25 的代码事实**，不是产品愿景。
 > 如果代码与本文冲突，以代码为准，并把漂移补进 §19.2。

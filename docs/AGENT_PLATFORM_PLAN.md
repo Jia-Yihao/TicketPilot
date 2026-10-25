@@ -149,7 +149,7 @@
 
 | 33 | **主动规则的可编辑面（T10）** | `app/services/proactive.py::update_rule` + `_template`（写时校验）、`app/schemas/memory.py::ProactiveRuleUpdateRequest`（`extra="forbid"`，不暴露 `requires_confirmation`）、`app/api/v1/memory.py` 的 `PUT /rules/{event_type}`（`_require_seat`）、`web/src/pages/ProactiveRules.tsx` + `App.tsx` 的 `/rules` 路由 | `tests/test_proactive_rules.py` 21 条（九种 422 形态、`requires_confirmation` 被拒、事件类型越界、upsert 不新建表、审计只存 `template_sha256`、失败后规则行逐字不变）+ 真实 HTTP 52 项断言（`127.0.0.1:8135`、`.tmp/t10_live.db`）+ 浏览器 DOM 走查；ADR-019 | ✅ |
 
-**规模事实**：Python 代码 `app/` 134 个文件；34 个测试文件（收集 455 条用例，452 通过 + 3 skipped）；23 张表；41 个 API 路径 / 44 个操作（含 2 个健康检查）；18 篇 ADR（缺 ADR-012）；10 个控制台页面；离线用例 101 条（40 任务 + 61 只读）+ 以 `evals/support_set.json` 为源的检索评测。
+**规模事实**：Python 代码 `app/` 134 个文件；34 个测试文件（收集 458 条用例，455 通过 + 3 skipped）；23 张表；41 个 API 路径 / 44 个操作（含 2 个健康检查）；19 篇 ADR（缺 ADR-012）；10 个控制台页面；离线用例 101 条（40 任务 + 61 只读）+ 以 `evals/support_set.json` 为源的检索评测。
 
 ### 1.2 八层差距矩阵
 
@@ -1032,6 +1032,7 @@ SpanKind = Literal["guard", "understand", "retrieve", "generate",
 | ADR-017 | 主动通知的出站接缝——去向由服务端拼，`SENT` 只到通道边界（T7-4 落地） | 已接受 |
 | ADR-018 | 记忆进答案只允许四种模板效果，读路径不走 `MemoryService`（T9 落地，收 ADR-014 自己点名的后果） | 已接受 |
 | ADR-019 | 主动规则的开写接口与写时校验（T10 落地，收 ADR-014 自己点名的后果） | 已接受 |
+| ADR-020 | 对话入口只在规则读不懂时问模型，而且只买一张待审退款单（「对话入口接通模型」轮落地） | 已接受 |
 
 **待写 ADR（1 篇）**：
 
@@ -1042,8 +1043,8 @@ SpanKind = Literal["guard", "understand", "retrieve", "generate",
 > 编号说明：ADR-013 与 ADR-015 在 Phase 1 落地时分别占用 Outbox 与执行器失败模型两个编号位；
 > ADR-012（策略灰度）仍预留，编号不回收；ADR-014（记忆模型）与 ADR-016（渠道抽象）已分别在
 > T5、T4 落地时补齐，ADR-017（出站接缝）随 T7-4 落地，ADR-018（记忆进答案）随 T9 落地，
-> ADR-019（规则写面）随 T10 落地。
-> 当前 `docs/adr/` 共 18 个文件（缺 ADR-012）。
+> ADR-019（规则写面）随 T10 落地，ADR-020（对话入口的模型缺口）随「对话入口接通模型」轮落地。
+> 当前 `docs/adr/` 共 19 个文件（缺 ADR-012）。
 
 ---
 
