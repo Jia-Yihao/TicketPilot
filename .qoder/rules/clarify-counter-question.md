@@ -1,6 +1,6 @@
 # 问句与丢弃读数的单轮反问（F-1）：项目级口径
 
-本文件是 TicketPilot 对 `docs/下一步规划.md` §0.2 条目 F-1「意图采纳策略太窄」（`docs/下一步规划.md:45`，展开见 §15.5.2 `docs/下一步规划.md:2774-2782`，裁定见 §15.7 `docs/下一步规划.md:2805-2814`）的项目级声明，只规定术语、契约、配置项与验收口径，不含实现。流程仍遵循用户级协作规则。凡本文中「当前事实」均以 `文件:行` 给出实地读过的证据；行号为**工作树读数**（本轮实测：`app/agent/support_agent.py`、`app/agent/routing.py`、`app/agent/candidates.py`、`app/agent/pydantic_agent.py`、`app/services/conversations.py`、`app/services/escalation.py`、`app/core/config.py` 的工作树与 git HEAD 逐字相同——R9 系列已随 `b5044f7`/`235c3cb` 入库，故本文行号即 HEAD 行号；引用仍以符号名为主，行号只作定位提示，相对旧台账（如 §10.2 的 `:1002`/`:1066-1074`）的漂移登记见 §14.1；`docs/下一步规划.md` 台账本轮仍在被编辑、行号会随修订漂移——凡引台账，以章节号 §15.5.2/§15.7/§10.2/§0.2 加引文原文短句为主，行号只作定位提示，本文给出的台账行号已按现盘读数重对）。「待实现」标记的条目是本口径生效前必须完成的工作。
+本文件是 TicketPilot 对 `docs/下一步规划.md` §0.2 条目 F-1「意图采纳策略太窄」（`docs/下一步规划.md:45`，展开见 §15.5.2 `docs/下一步规划.md:2774-2782`，裁定见 §15.7 `docs/下一步规划.md:2805-2814`）的项目级声明，只规定术语、契约、配置项与验收口径，不含实现。流程仍遵循用户级协作规则。凡本文中「当前事实」均以 `文件:行` 给出实地读过的证据；行号为**工作树读数**（含现盘未提交改动，可能与 git HEAD 的行号不同——`app/agent/support_agent.py`、`app/agent/routing.py`、`app/agent/candidates.py`、`app/agent/pydantic_agent.py`、`app/services/conversations.py`、`app/services/escalation.py`、`app/core/config.py` 的工作树与 HEAD 是否一致**未经机器核对**（守卫只扫 `docs/**/*.md`，`.qoder/rules/*.md` 的行号引用无机器核对，靠每次人工对照）；引用仍以符号名为主，行号只作定位提示，行号漂移债登记为**随 R12 统一 re-cite**（级联纪律见 `.qoder/rules/task-order.md` §3/§4），相对旧台账（如 §10.2 的 `:1002`/`:1066-1074`）的漂移登记见 §14.1；`docs/下一步规划.md` 台账本轮仍在被编辑、行号会随修订漂移——凡引台账，以章节号 §15.5.2/§15.7/§10.2/§0.2 加引文原文短句为主，行号只作定位提示，本文给出的台账行号已按现盘读数重对）。「待实现」标记的条目是本口径生效前必须完成的工作。
 
 来源冲突的裁定顺序：§15.5.2 与 §15.7（定稿）> §10.2（旧建议，其「按代价分级」已被取代，见 §14.1 登记）> §0.2 行。
 
@@ -13,7 +13,7 @@
 | 问句门（question gate） | `model_gate()` 的三出口之一：`blocks_write_action()` 为真时返回 `"question"`（`app/agent/support_agent.py:116-134`，`model_gate` 定义 :116；门函数 `app/agent/routing.py:237-245`）。现状：该出口**不问模型**，直接返回固定 gap（`app/agent/support_agent.py:1493-1508`）。F-1 把它改为「可以问，但只能换来一次反问」（§15.5.2「做什么」原文，`docs/下一步规划.md:2779`）。 |
 | 三出口（`model_gate` 三级） | `rules_hit` / `question` / `consult`（`app/agent/support_agent.py:116-134`；ADR-024，`docs/spec/项目规格.md`）。`rules_hit` 出口不产生模型读数，**不在 F-1 范围内，逐字不变**。 |
 | 候选选项（option） | 反问句里呈现的意图候选。来源是当前轮 `CandidateSet`（`app/agent/candidates.py:60-87`），形状与上限见 §4。 |
-| 续跑（resume） | 客户回答澄清后接着处理原意图的既有机制：`Draft.clarification["resumable_intent"]` → `ConversationSlots.pending_intent` → `_resume_pending`（`app/agent/support_agent.py:1170-1213`、`:551-555`、`:1594-1611`）。F-1 的反问**不使用**该机制（无反问轮没有「已确认的待办意图」，见 §6）。 |
+| 续跑（resume） | 客户回答澄清后接着处理原意图的既有机制：`Draft.clarification["resumable_intent"]` → `ConversationSlots.pending_intent` → `_resume_pending`（`app/agent/support_agent.py:1170-1213`、`:551-555`、`:1594-1611`）。F-1 的反问**不使用**该机制（反问轮没有「已确认的待办意图」，见 §6）。 |
 | 采纳面（adoption surface） | 唯一载体 `ADOPTABLE_INTENTS = frozenset({Intent.REFUND_REQUEST})`（`app/agent/pydantic_agent.py:39`）。F-1 不触碰它（§2.1）。 |
 | 四计数键 | `model_adopted` / `model_redirect` / `model_redirect_rejected` / `model_redirect_kind`（`app/agent/pydantic_agent.py`，`ModelTrace` 字段 :186-189；默认 `None` 不落盘 :196-219, :242；口径见 `.qoder/rules/adoption-surface.md` §2.3）。 |
 | 丢弃读数（discarded reading） | §15.5.2 现状「模型读出的非退款意图全部丢弃」（`docs/下一步规划.md:2778`）：consult 出口上合法非退款读数经 `decide_adoption` 判为不采纳后路由不变、回落通用菜单（`app/agent/pydantic_agent.py:581`；采纳门 `app/agent/support_agent.py:1557`）。F-1 把「丢弃后沉默」改为「丢弃后换来一次反问」。 |
@@ -91,13 +91,13 @@
 - **置位**：反问产生的那一轮，在既有回合写回阶段随其他槽位一并写回（handle 回合写回 `app/agent/support_agent.py:564-602`，`clarification_count` 的写回在 :594，同处新增 `counter_question_asked` 的写回）。置位时机 = 反问文本已生成，不是模型读数成功——读数成功但未成反问（被开关/上限拦掉）不置位。
 - **判定**：§3.1 条件 3。**如实登记当前事实：仓库不存在任何会话级互斥**——`grep -rn "lock" app/services/conversations.py app/api/v1/support.py` 均 0 命中；槽位是整列覆盖写（`save_slots`，`app/services/conversations.py:141`），无版本列、无 SELECT FOR UPDATE、无队列；`app/agent/support_agent.py:422-424` 的注释反而明确禁止跨调用持写锁（原文 "Holding a write lock across that call would deadlock on SQLite and block on PostgreSQL"，:423-424）。因此本状态位是**尽力（best-effort）语义**，不承诺原子互斥。
 - **裁定（采纳 (b)；(a) 为被否决备选，防止实现时回头）**：「检查—置位」不做独立的原子操作，**置位并入回合既有的那一次槽位保存**——新字段随回合末的 `ConversationSlots` 构造写入（`app/agent/support_agent.py:564-602`，`clarification_count` 写回在 :594，同处新增），由既有的 `conversations.save_slots(turn.conversation, slots)`（:603）同一次落库。**理由**：不新增锁、不新增表、不新增事件、不复用既有写路径之外的任何机制，满足简报「裁定 (b) 不得引入新机制」；且置位与反问文本同次写入，天然不产生「置了位但没问出口」或反过来的中间态。**被否决备选 (a)**（纯尽力、允许置位与保存分开的独立 UPDATE）：会产生状态位与本轮可见回复不一致的窗口，破坏 §10.2 回退等价范围的可判定性，否决。
-- **残余竞态窗口与最坏表现（登记为代价，不掩盖）**：真原子的「检查—置位」需要行锁或条件更新，属新机制、本裁定禁止；残余窗口 = 「回合开始读到未置位的 carried 槽位 → 回合末才保存」的时间差。最坏表现：同一会话两个并发回合都在开始时读到未置位，**各反问一次**——两回合都写回 True 后，第三次起必然拦下，故最坏封顶恰 2 次而非无限。代价有界、不触及写路径（§7 判据不受影响），接受。若实现发现该代价不可接受，回报 organizer 补裁定，不得自行加锁扩面。
-- **可判定语义**：同一会话第二次满足触发条件时**必然不反问**（前一满足触发的回合已完成槽位写回后，即顺序回合；上限已置位），行为逐字回落到 F-1 落地前。并发请求下最坏 2 次，见上文竞态段，登记为代价（§13.4），不构成对本条的放宽。这是 §12.3 反用例的锚点。
+- **残余竞态窗口与最坏表现（登记为代价，不掩盖；本文件并发情形的唯一完整真实现）**：真原子的「检查—置位」需要行锁或条件更新，属新机制、本裁定禁止；残余窗口 = 「回合开始读到未置位的 carried 槽位 → 回合末才保存」的时间差。并发情形的机制事实：`resolve` 在回合开始裸读槽位 JSON（`app/services/conversations.py:105-115`），`to_dict` 全量键覆盖（`app/services/conversations.py:41-56`），`save_slots` 是整列覆盖写、后写者胜、无版本列、无锁（`app/services/conversations.py:141-145`），置位随其他槽位在回合末构造并经既有的那一次保存落库（`app/agent/support_agent.py:596-603`），且 `app/agent/support_agent.py:422-424` 注释明确禁止跨模型调用持写锁。据此：反问回合 T1 开始时读到 `False`、回合末写回 `True`；与它并发、不触发反问的回合 T2 同样在开始时读到 `False`，其回合末的整列覆盖会把已置位的 `True` **抹回 `False`**；于是在所有并发都结束之后的回合 T3 仍读到 `False`，可以再反问。因此**并发情形不承诺任何上界，也不承诺收敛时点**——此处此前登记的「最坏封顶恰 2 次」与「反问次数 ≤ 同一竞态窗口内的并发回合数（随首个写回后收敛，不随时域累积）」均不成立（整列覆盖可把置位抹回，连「并发回合数」这个天花板也不成立），显式更正作废。代价维持登记、不予量化、不再主张有界——不触及写路径（§7 判据不受影响）、不放宽顺序回合上限（§1、本节「可判定语义」条）、不因此引入新机制（无锁、无版本列、无条件更新、无新增配置项）。若实现发现该代价不可接受，回报 organizer 补裁定，不得自行加锁扩面。
+- **可判定语义**：同一会话第二次满足触发条件时**必然不反问**（前一满足触发的回合已完成槽位写回后，即顺序回合；上限已置位），行为逐字回落到 F-1 落地前。并发情形不设上界（见上文竞态段），登记为代价（§13.4），不构成对本条的放宽。这是 §12.3 反用例的锚点。
 
 ### 5.2 与既有澄清预算的关系（定死）
 
 - 反问轮复用 `Draft.clarification` 键集（§6.1），因此 `clarified=True` → `EscalationEngine.count_outcome` 把 `clarification_count` 递增 1、封顶于 `clarification_rounds` 预算（`app/services/escalation.py:109-133`；预算默认 3，`app/core/config.py:57`）。
-- 与 `repeated_clarification` 信号（`app/agent/escalation.yaml:171-190`，`counter: clarification_count`、`takeover: true`）的关系：**共享预算，不新设计数器，不为 F-1 放宽或收紧该信号**。注意当前事实：该信号 `intents` 列表（:178-184）不含 `UNKNOWN`，问句轮规则读数即 `UNKNOWN`，故反问轮的递增会照常、信号是否命中仍由既有 intent 匹配决定（`app/services/escalation.py:222-223` `if intent in signal.intents`）——F-1 **不改**信号覆盖面；「不死锁」的保证来自单轮上限本身（反问在**顺序回合**上至多一次，第二次起行为与今天逐字相同，判定域见 §1、§5.1；并发最坏 2 次属 §13.4 代价登记，不改变本条结论——而今天不死锁：通用菜单 + 客户随时可说转人工），不来自这个计数器。此解读为补充裁定（§14.2）。
+- 与 `repeated_clarification` 信号（`app/agent/escalation.yaml:171-190`，`counter: clarification_count`、`takeover: true`）的关系：**共享预算，不新设计数器，不为 F-1 放宽或收紧该信号**。注意当前事实：该信号 `intents` 列表（:178-184）不含 `UNKNOWN`，问句轮规则读数即 `UNKNOWN`，故反问轮的递增会照常、信号是否命中仍由既有 intent 匹配决定（`app/services/escalation.py:222-223` `if intent in signal.intents`）——F-1 **不改**信号覆盖面；「不死锁」的保证来自单轮上限本身（反问在**顺序回合**上至多一次，第二次起行为与今天逐字相同，判定域见 §1、§5.1；并发情形不设上界（§5.1 竞态段、§13.4 代价登记），不改变本条结论——而今天不死锁：通用菜单 + 客户随时可说转人工），不来自这个计数器。此解读为补充裁定（§14.2）。
 
 ## 6. 客户回答之后（定死）
 
@@ -203,9 +203,9 @@
 
 | # | 判据 | 验证方式 |
 |---|---|---|
-| 1 | 探针 11 句（`scripts/llm_gap_probe.py:86-105`）中转人工三句（:100-102「叫个活人来」「找你们负责人」「找个真人」）在 `AGENT_MODE=pydantic_ai` 下**至少一种**变成反问（回复为问句且 `suggestions` 含选项、伴随恰一条 `counter_question.asked`） | 探针重跑输出 + 新回归用例断言 |
+| 1 | 探针 11 句（`scripts/llm_gap_probe.py:86-105`）中转人工三句（:100-102「叫个活人来」「找你们负责人」「找个真人」）在 `AGENT_MODE=pydantic_ai` 下**至少一种**变成反问（回复为问句且 `suggestions` 含选项、伴随恰一条 `counter_question.asked`） | 探针重跑输出 + 新回归用例断言（实现轮以新回归用例满足，探针实跑读数归用户侧——本仓库评测指标由用户自行复跑；实现轮交付物中探针侧为「期望」而非「实测」） |
 | 2 | 写路径结果零变化：§7.2 的行数增量差 0 判据；`tests/test_llm_gap.py` 既有用例断言不改地通过 | 对照运行 |
-| 3 | 反问上限一轮：**正用例**第一次满足触发即反问；**反用例**同一会话**顺序执行**的两次满足触发（后一回合在前一反问回合完成槽位写回 §5.1 之后开始）时第二次**不反问**且行为与落地前逐字相同（trace/审计/回复 diff）；并发最坏 2 次属 §13.4 代价登记，不入本条验收 | 新增两条正反用例 |
+| 3 | 反问上限一轮：**正用例**第一次满足触发即反问；**反用例**同一会话**顺序执行**的两次满足触发（后一回合在前一反问回合完成槽位写回 §5.1 之后开始）时第二次**不反问**且行为与落地前逐字相同（trace/审计/回复 diff）；并发情形不设上界（见 §5.1 竞态段、§13.4 代价登记），不入本条验收 | 新增两条正反用例 |
 | 4 | `AGENT_MODE=rules` 逐字不变：§9 三不变 | §9 对照法 |
 | 5 | 反问轮不产生第二个计数键污染：问句门反问成功的轮次，四计数键 `None`（不落盘）；consult 出口轮次四键写值与落地前一致；全库无问句门轮产生的 `ModelDecision` 行 | trace/台账表断言 |
 | 6 | 选项契约：≤3+兜底句、顺序 = `CandidateSet` 返回序、文案 = YAML `labels`（模型输出文本 0 参与）；`labels` 缺键时不反问且该轮无审计事件 | 用例断言选项来源与缺键行为 |
@@ -220,7 +220,7 @@
 1. **升级预算消耗**：每次反问 `clarification_count` +1（§5.2），离 `clarification_rounds`（默认 3）更近；「转人工率」读数（`repeated_clarification` 命中数、takeover 计数）在 F-1 后可能上升——这是把「菜单打转」换成「一次确认」的预期代价，不是缺陷。会浮动的读数：`repeated_clarification` 命中数、转人工率、平均每会话轮数。
 2. **自结率**：反问成功→下一轮意图确定、自结路径更快；反问失败→更近升级、自结率降。报告口径须用 `clarify_reason=COUNTER_QUESTION_INTENT_AMBIGUOUS` 把反问轮单列（为 R10 的「问句/陈述分列」预埋，`docs/下一步规划.md:73`；R10 依赖 F-1，属 R10 范围，本文件不裁定 R10 怎么做）。§10.2 边界原文「二次确认是多一轮对话，要计入转人工率与自结率的口径说明」（`docs/下一步规划.md:1946`）在本节登记履行。
 3. **问句门新增模型调用**：现状 question 出口 0 次调用（`app/agent/support_agent.py:1493-1508` 直接返回），F-1 后每个满足触发条件的问句轮 1 次调用；`llm_usage` 行数与 token 成本上升，读数即成本证据（§9 要求 rules 模式此项不变）。
-4. **上限换耐心**：单轮上限放弃了「客户补充细节后第二次反问」的机会；补偿是 consult 出口的常规采纳/改道读数仍然照常生长（§2.2），信息没有丢，只是不再问第二遍。另登记：上限的判定域是顺序回合（§1、§5.1），并发窗口下最坏表现恰 2 次反问（§5.1 竞态段、§14.2）——此为已接受的有界代价，不进 §12.3 验收判据。
+4. **上限换耐心**：单轮上限放弃了「客户补充细节后第二次反问」的机会；补偿是 consult 出口的常规采纳/改道读数仍然照常生长（§2.2），信息没有丢，只是不再问第二遍。另登记：上限的判定域是顺序回合（§1、§5.1），并发情形**不设上界**、不承诺收敛时点（§5.1 竞态段、§14.2）——维持为已登记的代价，不进 §12.3 验收判据。
 5. **默认开启值与 P8 不退化门槛的关系裁定（§14.2 登记为补充裁定）**：
    - **先区分两种「不退化」**：`.qoder/rules/intent-candidates.md` §5 不退化门槛（:169-170）约束的是**意图读数**（11 句探针与 62 条支持集的 `intent_accuracy`）；F-1 在 `pydantic_ai` 模式下改变的是**问句轮可见回复文本**（兜底菜单→反问）。两者不是一个维度：反问轮的意图读数永不采纳、不进路由（§2.1、§3.2），分类语义不变。
    - **默认值裁定 = 维持 `true`（§10.1），且读数实际不退化**：仓库事实——`Settings.agent_mode` 默认 `"rules"`（`app/core/config.py:116`），而 `evals/support_run.py` 构造 Settings 只传 `environment/database_url/auto_create_tables`（:734-738）、`evals/replay.py` 的 `_new_app` 同样不传 `agent_mode`（:304-309）→ 62 条支持集与回放都在 **rules 模式**运行，F-1 在两道闸（`app/agent/support_agent.py:1491`、`app/agent/pydantic_agent.py:547-548`）下**不可达** → `intent_accuracy` 读数逐字不变。
@@ -251,7 +251,7 @@
 | `clarification` 复用 + `resumable_intent=None` + `reason=COUNTER_QUESTION_INTENT_AMBIGUOUS` | **补充裁定**（依据 §6.1 消费点证据） |
 | 「无副作用 = 业务表」解读、审计动作名与 detail 三键、零新增 trace 键 | **补充裁定**（原文只给「除 audit_events 外」） |
 | 开关 `counter_question_enabled` 默认开 + 回退等价范围 | **补充裁定**（原文无开关要求；简报允许「加与不加都要写理由」） |
-| 状态位尽力（best-effort）语义如实登记、置位并入回合末槽位的同一次保存（裁定 (b)，(a) 否决）、最坏并发 2 次封顶 | **补充裁定**（第 2 轮返工；第 3 轮明确判定域为顺序回合（§1、§5.1、§12.3、§13.4），并发最坏 2 次维持代价登记、不放宽上限；依据：仓库无会话级互斥、`save_slots` `app/services/conversations.py:141` 整列覆盖写、`app/agent/support_agent.py:422-424` 注释禁持锁） |
+| 状态位尽力（best-effort）语义如实登记、置位并入回合末槽位的同一次保存（裁定 (b)，(a) 否决）、并发情形不设上界（唯一完整真实现见 §5.1 竞态段） | **补充裁定**（第 2 轮返工：best-effort 语义与裁定 (b)/(a) 否决成立至今；第 3 轮：明确判定域为顺序回合（§1、§5.1、§12.3、§13.4）；第 6 轮：曾把「最坏封顶恰 2 次」更正为「反问次数 ≤ 同一竞态窗口内的并发回合数、随首个写回后收敛、不随时域累积」；第 7 轮：**撤回全部并发量化上界与收敛时点登记**（含第 6 轮该措辞）——理由：`save_slots` 整列覆盖写可把并发非反问回合读到的旧 `False` 写回、将已置位的 `True` 抹回，其后的回合仍会再反问，故第 6 轮的「≤ 并发回合数」天花板与「收敛」断言均被证伪；撤回后只维持三件事实：上限判定域为顺序回合、并发不设上界也不承诺收敛、代价维持登记且不引入新机制且不影响 §7 写路径判据。本轮缩小范围依据用户级规则「同一任务连续两轮被退回必须升级：缩小范围」。依据：仓库无会话级互斥、`save_slots` 整列覆盖写 `app/services/conversations.py:141-145`、`to_dict` 全量键覆盖 `app/services/conversations.py:41-56`、`resolve` 裸读槽位 JSON `app/services/conversations.py:105-115`、回合末构造 `ConversationSlots` 后经既有的单次 `save_slots` 落库 `app/agent/support_agent.py:596-603`、注释禁止跨模型调用持写锁 `app/agent/support_agent.py:422-424`） |
 | `IntentBrain.plan` 无只读入口的事实、新增只读问询通路（复用 `IntentAgent.parse`、上层不 `decide_adoption` 不入账） | **补充裁定**（第 2 轮返工；依据 `app/agent/pydantic_agent.py:476, :524, :581, :609-612`，§2.3） |
 | 反问轮模型调用成本落点（`llm_usage` 由 parse 自动记账、ModelTrace 挂 `understand` span 的 `model_gap`、四键 None 不落盘） | **补充裁定**（第 2 轮返工；依据 `app/agent/pydantic_agent.py:401-404, :419-424`，`app/agent/support_agent.py:347, :1535`，§8.4） |
 | 默认开启与 intent-candidates §5 不退化门槛相容的裁定（评测装配 rules 模式下 F-1 不可达、读数不变）、处置=随实现轮同步、评测轮再开为否决备选 | **补充裁定**（第 2 轮返工；依据 `app/core/config.py:116`、`evals/support_run.py:734-738`、`evals/replay.py:56-64, :304-309`，§13.5） |
