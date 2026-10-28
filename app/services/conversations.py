@@ -36,6 +36,10 @@ class ConversationSlots:
     # A detail follow-up reads it; a new statistic replaces it.
     last_analytics_query_id: str | None = None
     resolved: bool = False
+    # Whether this conversation has already used its counter-question. The
+    # hard cap is one per conversation, so a flag (not a counter) is what
+    # enforces it: a counter could be misread as "N more are allowed".
+    counter_question_asked: bool = False
     last_message_at: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -52,6 +56,7 @@ class ConversationSlots:
             "last_intent": self.last_intent,
             "last_analytics_query_id": self.last_analytics_query_id,
             "resolved": self.resolved,
+            "counter_question_asked": self.counter_question_asked,
             "last_message_at": self.last_message_at,
         }
 
@@ -77,6 +82,7 @@ class ConversationSlots:
             last_intent=_as_str(data.get("last_intent")),
             last_analytics_query_id=_as_str(data.get("last_analytics_query_id")),
             resolved=bool(data.get("resolved", False)),
+            counter_question_asked=bool(data.get("counter_question_asked", False)),
             last_message_at=_as_str(data.get("last_message_at")),
         )
 

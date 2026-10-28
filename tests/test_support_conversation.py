@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import timedelta
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from app.core.time import utcnow
 from app.models.commerce import Order, Refund
 from app.models.conversation import ConversationMessage
 from app.models.enums import OrderStatus, RefundStatus
+from app.services.conversations import ConversationSlots
 from tests.conftest import ALICE, CAROL
 
 
@@ -299,3 +301,76 @@ def test_support_agent_source_has_no_bare_outcome_literals() -> None:
 
     for literal in ('"HANDOFF"', '"CLARIFIED"', '"UNRESOLVED"', '"ANSWERED"', '"AGENT_SILENT"'):
         assert literal not in source, f"bare outcome literal {literal} left in support_agent.py"
+
+
+# ------------------------------------------- 单轮反问上限：槽位状态位与兼容
+def test_counter_question_asked_defaults_to_false() -> None:
+    """新建会话的槽位：状态位在对象层与 dict 层都是 False。"""
+    slots = ConversationSlots()
+
+    assert slots.counter_question_asked is False
+    assert slots.to_dict()["counter_question_asked"] is False
+
+
+def test_counter_question_asked_survives_the_json_round_trip() -> None:
+    """True / False 两个方向都能过 JSON 往返；全键位不丢。"""
+    for value in (True, False):
+        slots = ConversationSlots(
+            order_id="ORD-DEMO-1001", counter_question_asked=value
+        )
+
+        payload = json.loads(json.dumps(slots.to_dict()))
+
+        assert payload["counter_question_asked"] is value
+        restored = ConversationSlots.from_dict(payload)
+        assert restored.counter_question_asked is value
+        assert restored.to_dict() == slots.to_dict()
+
+
+def test_legacy_slot_rows_read_counter_question_asked_as_false_not_none() -> None:
+    """历史行没有这个键：读回 False，不是 None，其他字段照常读出。"""
+    empty = ConversationSlots.from_dict({})
+
+    assert empty.counter_question_asked is False
+    assert empty.counter_question_asked is not None
+    assert ConversationSlots.from_dict(None).counter_question_asked is False
+    assert (
+        ConversationSlots.from_dict({"counter_question_asked": None}).counter_question_asked
+        is False
+    )
+
+    legacy = ConversationSlots.from_dict(
+        {
+            "order_id": "ORD-DEMO-1001",
+            "amount_cents": 12900,
+            "refund_reason": "QUALITY",
+            "failed_intents": {"LOGISTICS_QUERY": 2},
+            "clarification_count": 1,
+            "resolved": True,
+        }
+    )
+
+    assert legacy.order_id == "ORD-DEMO-1001"
+    assert legacy.amount_cents == 12900
+    assert legacy.refund_reason == "QUALITY"
+    assert legacy.failed_intents == {"LOGISTICS_QUERY": 2}
+    assert legacy.clarification_count == 1
+    assert legacy.resolved is True
+    assert legacy.counter_question_asked is False
+    # 旧行被重新写回时，状态位以 False 进入全键 dict，不留缺键。
+    assert legacy.to_dict()["counter_question_asked"] is False
+
+
+def test_support_turn_exposes_the_counter_question_asked_slot(
+    client: TestClient,
+) -> None:
+    """回合响应的 slots 里能看到这个键，且普通回合保持 False（本任务不置位）。"""
+    first = _message(client, ALICE, "订单 ORD-DEMO-1001 到哪了")
+
+    assert first["slots"]["counter_question_asked"] is False
+
+    second = _message(
+        client, ALICE, "物流到哪了？", conversation_id=first["conversation_id"]
+    )
+
+    assert second["slots"]["counter_question_asked"] is False

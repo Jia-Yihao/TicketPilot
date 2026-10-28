@@ -1,0 +1,21 @@
+# F-1 单轮反问的数据载体。口径：.qoder/rules/clarify-counter-question.md §4.6。
+# 顶层键是封闭集合：version / prompt_template / labels / max_options。
+# loader 在 app/agent/counter_question.py，拒绝任何未知键。
+# 这是数据不是提示词：兜底句「你也可以直接说…」复用 _clarify 尾句（§4.5），
+# 故不写进本文件。
+version: "2026-10-29"
+prompt_template: "为了更快帮到您，请确认您想咨询的是下面哪一类："
+labels:
+  HUMAN_HANDOFF: "转人工"
+  REFUND_REQUEST: "申请退款"
+  TICKET_CREATE: "创建工单"
+  REFUND_STATUS: "查询退款进度"
+  REFUND_ELIGIBILITY: "咨询退款条件"
+  POLICY_QA: "政策咨询"
+  DELIVERY_ISSUE: "配送问题"
+  LOGISTICS_QUERY: "查询物流"
+  SELF_ANALYTICS: "我的订单和退款统计"
+  PRODUCT_QUERY: "商品咨询"
+  ORDER_QUERY: "查询订单"
+  UNKNOWN: "都不是"
+max_options: 3

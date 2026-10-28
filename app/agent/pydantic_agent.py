@@ -425,6 +425,47 @@ class IntentAgent:
         return cast("IntentOutput", result.output), trace
 
 
+# The closed set of internal decision codes for ``IntentBrain.probe_question``
+# (``.qoder/rules/clarify-counter-question.md`` §3.2). These ride on
+# ``QuestionProbe.reason`` only — they are not new ``ModelTrace`` keys and are
+# never customer-visible text.
+QUESTION_PROBE_REASONS = (
+    "rules_mode",
+    "no_candidates",
+    "model_failed",
+    "model_none",
+    "model_unknown",
+    "model_out_of_candidates",
+    "matches_rule",
+)
+
+
+@dataclass(frozen=True, slots=True)
+class QuestionProbe:
+    """What the read-only question-gate probe learned, and what it cost.
+
+    ``intent`` is a bare catalog row id — a *reading*, never a routing decision:
+    this path must not produce a ``ModelDecision`` and must not touch the four
+    adoption-count trace keys, so a probe reading can never be replayed by the
+    ledger-reuse branch of ``plan`` (``.qoder/rules/clarify-counter-question.md``
+    §2.2). ``trace`` is the agent's cost record untouched — ``as_dict`` omits
+    the four count keys because they stay ``None``, which is exactly why no
+    ``replace`` call appears on this path. ``reason`` is one of
+    ``QUESTION_PROBE_REASONS`` when no reading is returned, ``None`` when one
+    is; ``asks`` is the single question the caller asks.
+    """
+
+    intent: str | None
+    candidate_set: CandidateSet | None
+    trace: ModelTrace | None
+    source: str
+    reason: str | None
+
+    @property
+    def asks(self) -> bool:
+        return self.intent is not None
+
+
 class IntentBrain:
     """Deterministic routing first; PydanticAI only fills gaps or resolves UNKNOWN."""
 
@@ -613,3 +654,89 @@ class IntentBrain:
                 )
             ),
         )
+
+    def probe_question(
+        self,
+        request: str,
+        context: dict[str, Any] | None = None,
+        *,
+        order_state: str | None = None,
+    ) -> QuestionProbe:
+        """Ask the model what the rules could not read — and record nothing.
+
+        The question gate's read-only probe (``.qoder/rules/
+        clarify-counter-question.md`` §2.3/§3.2): it reuses the same candidate
+        kernel (``_candidates``) and the same agent entry (``parse``) as
+        ``plan``, then stops. This path must never write a ledger decision row
+        and never run the adoption surface — otherwise the ledger-reuse branch
+        of ``plan`` could replay a probe reading and the probe would have
+        opened refund adoption de facto. A legal new reading (including
+        ``REFUND_REQUEST``) comes back as a string for the gate to phrase one
+        counter-question around; acting on it stays the write-gate's job.
+
+        The ``trace`` is whatever the call cost, never dropped: a failed probe
+        still reaches the usage ledger through the existing ``ModelTrace``
+        writer. ``order_state`` is forwarded to the candidate kernel exactly as
+        ``plan`` forwards it; the kernel never fetches it itself.
+        """
+        rule_plan = classify(request, context)
+        # Same early-return position as ``plan``: rules mode computes no
+        # candidates and never reaches the model (§9 的零调用要求).
+        if self.mode != "pydantic_ai" or self.agent is None:
+            return QuestionProbe(None, None, None, "rules", "rules_mode")
+
+        candidate_set = self._candidates(
+            request, context, rule_plan, order_state=order_state
+        )
+        try:
+            output, trace = self.agent.parse(request, context, candidate_set)
+        except ModelCallError as exc:
+            logger.warning("question probe model call failed; the cost is still recorded")
+            return QuestionProbe(
+                None, candidate_set, exc.trace, "rules_fallback", "model_failed"
+            )
+        except Exception:
+            logger.warning("question probe model call failed; the cost is still recorded")
+            return QuestionProbe(
+                None,
+                candidate_set,
+                ModelTrace(status="FAILED"),
+                "rules_fallback",
+                "model_failed",
+            )
+
+        answer = output.intent
+        if answer == NONE_ANSWER:
+            # "None of these fit" is an answer, not a failure: no retry (§3.2).
+            return QuestionProbe(None, candidate_set, trace, "pydantic_ai", "model_none")
+        if candidate_set is None:
+            # Without a set the server cannot verify the reading against
+            # evidence, and an unverified reading must not drive a question.
+            return QuestionProbe(
+                None, None, trace, "pydantic_ai", "no_candidates"
+            )
+        if not candidate_set.allows(answer):
+            # Out of the set means the set was wrong, not the model misspoke —
+            # 越界不重试 (``.qoder/rules/intent-candidates.md`` §3.2). The gate is
+            # the candidate set built from catalog rows (``app/agent/intents.yaml``),
+            # not the ``Intent`` enum: a legal catalog row that is not an ``Intent``
+            # member (e.g. ``REFUND_STATUS``) is a legal reading and this method
+            # returns it verbatim. 探针侧不做任何枚举转换——是否把读数转成
+            # ``Intent`` 是 T4 消费端的决定，不属本方法。
+            return QuestionProbe(
+                None, candidate_set, trace, "pydantic_ai", "model_out_of_candidates"
+            )
+        if answer == Intent.UNKNOWN.value:
+            # UNKNOWN 是无条件候选（``app/agent/candidates.py``），所以
+            # ``allows()`` 永远为真；口径 §3.1 条件 4 要求合法读数还须
+            # ≠UNKNOWN，这一拒绝必须落在方法自身，不能依赖与规则读数的
+            # 比较碰巧成立。UNKNOWN↔UNKNOWN 的 reason 也因此从
+            # ``matches_rule`` 前移到 ``model_unknown``。
+            return QuestionProbe(None, candidate_set, trace, "pydantic_ai", "model_unknown")
+        if answer == rule_plan.intent.value:
+            # The model said what the rules already said: no new information,
+            # so nothing to confirm.
+            return QuestionProbe(None, candidate_set, trace, "pydantic_ai", "matches_rule")
+        # A legal reading that adds something the rules did not say. Returned
+        # as-is — this is where the probe stops; no adoption surface below it.
+        return QuestionProbe(answer, candidate_set, trace, "pydantic_ai", None)
