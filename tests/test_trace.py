@@ -18,6 +18,7 @@ from app.observability import tracing
 from app.observability.redaction import redact, redact_payload
 from app.observability.tracing import SpanBuffer, TraceRecorder
 from app.repositories.traces import TraceRepository
+from evals.replay import _link_line, _linked_task_trees, _load_source
 from tests.conftest import ALICE
 from tests.test_refund_taxonomy import _alembic_config
 
@@ -750,3 +751,89 @@ def test_migration_downgrade_removes_the_conversation_key(tmp_path: Path) -> Non
     indexed = {index["name"] for index in sa_inspect(engine).get_indexes("tasks")}
     assert "ix_tasks_conversation_id" not in indexed
     engine.dispose()
+
+
+# --- §5.10：回放产出按关联键串起一步（R9-d）------------------------------
+#
+# 断言对象是 evals/replay.py 的产出，不是 trace_spans 表本身（表由 §5.7 覆盖）。
+# 口径只允许「加一行输出」；两个既有打印行与全部比对规则不得动，这里从真实库
+# 现算那行输出的两个数，不跑 --self-check（模型读数由用户侧复跑）。
+
+
+def test_the_replay_links_the_task_tree_under_the_conversation_key(
+    client: TestClient, app: FastAPI
+) -> None:
+    # 复用 §5.7 的样本：一次对话触发建单，_load_source 现在把
+    # traces_by_conversation 一并交出来（只搬运，不新增查询）。
+    response = client.post(
+        "/api/v1/support/messages",
+        headers=ALICE,
+        json={"message": REFUND_WITH_REASON},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    conversation_id = str(body["conversation_id"])
+
+    with app.state.session_factory() as session:
+        conversations, spans, traces_by_conversation = _load_source(session)
+
+    # 源里确实记录到了这轮对话。
+    assert conversation_id in {c.conversation_id for c in conversations}
+
+    # 判据一：该 conversation_id 名下挂到的树数 ≥ 2。
+    trace_ids = traces_by_conversation.get(conversation_id, [])
+    assert len(trace_ids) >= 2, trace_ids
+
+    # 判据二：root 名同时含对话树 support.turn 与任务树 task.run，且两棵树的 trace_id 不同。
+    roots_by_trace = {
+        trace_id: [
+            span["name"] for span in spans.get(trace_id, []) if span["kind"] == "root"
+        ]
+        for trace_id in trace_ids
+    }
+    dialog_traces = {
+        trace_id
+        for trace_id, names in roots_by_trace.items()
+        if "support.turn" in names
+    }
+    task_traces = {
+        trace_id for trace_id, names in roots_by_trace.items() if "task.run" in names
+    }
+    assert dialog_traces, roots_by_trace
+    assert task_traces, roots_by_trace
+    assert dialog_traces != task_traces, roots_by_trace
+
+    # 判据三：那行输出里的两个数，从真实库现算——只含该对话的映射得到恰 (1, 1)。
+    only_this_conversation = {conversation_id: trace_ids}
+    assert _linked_task_trees(only_this_conversation, spans) == (1, 1)
+
+
+def test_the_link_line_names_the_count_it_printed() -> None:
+    assert _link_line(1, 1) == (
+        "replay: 1 task trees linked by conversation_id across 1 conversations"
+    )
+    assert _link_line(0, 0) == (
+        "replay: 0 task trees linked by conversation_id across 0 conversations"
+    )
+
+    def span(kind: str, name: str) -> dict[str, Any]:
+        # 键集与 _load_source 产出的一致：kind / name / status / attributes。
+        return {"kind": kind, "name": name, "status": "OK", "attributes": {}}
+
+    spans = {
+        "trc_dialog": [span("understand", "support.classify"), span("root", "support.turn")],
+        "trc_task": [span("understand", "task.route"), span("root", "task.run")],
+        "trc_approve": [span("approval", "approval.decided"), span("root", "task.approve")],
+        "trc_noroot": [span("understand", "support.classify")],
+    }
+    # 只有对话树：链接没有把任何任务树带进来。
+    assert _linked_task_trees({"conv_a": ["trc_dialog"]}, spans) == (0, 0)
+    # 只有任务树、没有对话树：不算「对话里建出来的单」。
+    assert _linked_task_trees({"conv_b": ["trc_task"]}, spans) == (0, 0)
+    # 一个对话名下同时有 support.turn + task.run + task.approve → 两棵任务树、一个对话。
+    assert (
+        _linked_task_trees({"conv_c": ["trc_dialog", "trc_task", "trc_approve"]}, spans)
+        == (2, 1)
+    )
+    # trace 里没有 root span（_root_name 返回 None）→ 不进计数。
+    assert _linked_task_trees({"conv_d": ["trc_noroot"]}, spans) == (0, 0)

@@ -127,7 +127,11 @@ class RecordedConversation:
 # ------------------------------------------------------------------ source
 def _load_source(
     session: Any,
-) -> tuple[list[RecordedConversation], dict[str, list[dict[str, Any]]]]:
+) -> tuple[
+    list[RecordedConversation],
+    dict[str, list[dict[str, Any]]],
+    dict[str, list[str]],
+]:
     spans: dict[str, list[dict[str, Any]]] = {}
     span_rows = session.scalars(
         select(TraceSpan).order_by(TraceSpan.started_at, TraceSpan.id)
@@ -188,7 +192,7 @@ def _load_source(
                 turn.trace_id = known[index]
         if recorded.turns:
             conversations.append(recorded)
-    return conversations, spans
+    return conversations, spans, traces_by_conversation
 
 
 def _ineligible_reason(
@@ -212,6 +216,43 @@ def _ineligible_reason(
             if span["kind"] == "guard" and span["name"].startswith("tool.degraded."):
                 return "degraded tool call"
     return None
+
+
+def _root_name(trace_id: str, spans: dict[str, list[dict[str, Any]]]) -> str | None:
+    """The tree's root span name, or None when that trace recorded no root."""
+    for span in spans.get(trace_id, []):
+        if span["kind"] == "root":
+            return str(span["name"])
+    return None
+
+
+def _linked_task_trees(
+    traces_by_conversation: dict[str, list[str]],
+    spans: dict[str, list[dict[str, Any]]],
+) -> tuple[int, int]:
+    """Count what the conversation key actually pulled together.
+
+    A conversation owns a task tree only when the task was created inside that
+    dialog: a task minted through ``POST /api/v1/tasks`` carries no key, so it
+    stays out of this count. That is the point of the number — it measures the
+    cross-tree link, not how much tracing exists.
+    """
+    trees = 0
+    conversations = 0
+    for trace_ids in traces_by_conversation.values():
+        names = [_root_name(trace_id, spans) for trace_id in trace_ids]
+        task_trees = [name for name in names if name and name.startswith("task.")]
+        if task_trees and any(name == "support.turn" for name in names):
+            trees += len(task_trees)
+            conversations += 1
+    return trees, conversations
+
+
+def _link_line(trees: int, conversations: int) -> str:
+    return (
+        f"replay: {trees} task trees linked by conversation_id "
+        f"across {conversations} conversations"
+    )
 
 
 # ------------------------------------------------------------------ compare
@@ -349,6 +390,7 @@ def _replay(
     spans: dict[str, list[dict[str, Any]]],
     database_url: str,
     *,
+    traces_by_conversation: dict[str, list[str]],
     trace_id: str | None,
     limit: int | None,
 ) -> list[str]:
@@ -371,6 +413,14 @@ def _replay(
     )
     for reason, count in sorted(skipped.items()):
         print(f"  skip {count}: {reason}")
+    replayed = {
+        conversation.conversation_id: traces_by_conversation.get(
+            conversation.conversation_id, []
+        )
+        for conversation in chosen
+    }
+    task_trees, linked_conversations = _linked_task_trees(replayed, spans)
+    print(_link_line(task_trees, linked_conversations))
     if trace_id is not None and not chosen:
         return [f"trace {trace_id}: not found or not replayable"]
     if not chosen:
@@ -418,7 +468,11 @@ def _replay(
 
 def _generate_source(
     dataset: dict[str, Any], database_url: str
-) -> tuple[list[RecordedConversation], dict[str, list[dict[str, Any]]]]:
+) -> tuple[
+    list[RecordedConversation],
+    dict[str, list[dict[str, Any]]],
+    dict[str, list[str]],
+]:
     app = _new_app(database_url, seed=True)
     client = TestClient(app)
     try:
@@ -477,7 +531,9 @@ def main(argv: list[str] | None = None) -> int:
             dataset = json.loads(args.dataset.read_text(encoding="utf-8"))
             source_url = f"sqlite+pysqlite:///{Path(directory) / 'source.db'}"
             try:
-                conversations, spans = _generate_source(dataset, source_url)
+                conversations, spans, traces_by_conversation = _generate_source(
+                    dataset, source_url
+                )
             except ReplayError as exc:
                 print(f"replay: {exc}")
                 return 2
@@ -490,6 +546,7 @@ def main(argv: list[str] | None = None) -> int:
                     conversations,
                     spans,
                     replay_url,
+                    traces_by_conversation=traces_by_conversation,
                     trace_id=args.trace_id,
                     limit=args.limit,
                 )
@@ -508,7 +565,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             with app.state.session_factory() as session:
                 try:
-                    conversations, spans = _load_source(session)
+                    conversations, spans, traces_by_conversation = _load_source(session)
                 except SQLAlchemyError as exc:
                     detail = str(exc).splitlines()[0] if str(exc) else type(exc).__name__
                     print(f"replay: cannot read traces from the source: {detail}")
@@ -521,6 +578,7 @@ def main(argv: list[str] | None = None) -> int:
                 conversations,
                 spans,
                 replay_url,
+                traces_by_conversation=traces_by_conversation,
                 trace_id=args.trace_id,
                 limit=args.limit,
             )
