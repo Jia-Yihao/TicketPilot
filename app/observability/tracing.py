@@ -68,6 +68,7 @@ SpanKind = Literal[
     "approval",
     "handoff",
     "reconcile",
+    "root",
 ]
 
 
@@ -93,10 +94,12 @@ class TraceRecorder:
         tenant_id: str,
         trace_id: str | None = None,
         conversation_id: str | None = None,
+        root_name: str | None = None,
     ) -> None:
         self.trace_id = trace_id or f"trc_{uuid.uuid4().hex[:16]}"
         self.tenant_id = tenant_id
         self.conversation_id = conversation_id
+        self.root_name = root_name
         self.spans: list[SpanBuffer] = []
         self._open: list[SpanBuffer] = []
 
@@ -160,6 +163,43 @@ class TraceRecorder:
             )
         finally:
             self._open.pop()
+
+    # ------------------------------------------------------------- finalize
+    def finalize(self) -> None:
+        """Give the tree its one root span before the writer flushes it.
+
+        The only birthplace of a ``root`` span in the codebase (R9 口径 §2.3):
+        no caller ever adds a root span itself, so "one root per tree"
+        is a property of this method, not of caller discipline. Idempotent —
+        a second call changes nothing (§2.3.6). A recorder built without a
+        root name grows no root (§7.1), so existing callers are untouched.
+
+        The root is appended last so readers that order by insertion (or by
+        ``started_at, id``) still see the segment spans first (§2.3.7). Its
+        attributes are the empty dict, still routed through ``_record`` so
+        they pass the same redaction path as every other span (§2.3.8).
+        Never raise here: the recorder's standing promise is that a broken
+        trace must not fail a request (§2.3.5) — an unexpectedly open stack is
+        swallowed, observable only by unit tests asserting ``_open`` is empty.
+        """
+        if self.root_name is None:
+            return
+        for span in self.spans:
+            if span.kind == "root":
+                return  # already finalized: idempotent (§2.3.6)
+        root = self._record(
+            "root",
+            self.root_name,
+            attributes={},
+            status="OK",
+            latency_ms=0,
+            parent_span_id=None,
+        )
+        for span in self.spans:
+            if span is root:
+                continue
+            if span.parent_span_id is None:
+                span.parent_span_id = root.id  # rehang top-level spans only
 
     # ------------------------------------------------------------- queries
     def kinds(self) -> list[str]:

@@ -404,7 +404,11 @@ class TaskRuntime:
             plan, planning_source, model_trace = self.brain.plan(
                 task.request, task.context, decision=decision
             )
-            trace = TraceRecorder(tenant_id=task.tenant_id, trace_id=task.trace_id)
+            trace = TraceRecorder(
+                tenant_id=task.tenant_id,
+                trace_id=task.trace_id,
+                root_name="task.run",
+            )
             route_attributes: dict[str, Any] = {
                 "intent": plan.intent.value,
                 "order_id": plan.order_id,
@@ -904,7 +908,11 @@ class TaskRuntime:
             self._require_visible(task, identity)
             if task.status is not TaskStatus.WAITING_APPROVAL:
                 raise ConflictError(f"Task is {task.status.value}, not waiting for approval.")
-            trace = TraceRecorder(tenant_id=task.tenant_id, trace_id=task.trace_id)
+            trace = TraceRecorder(
+                tenant_id=task.tenant_id,
+                trace_id=task.trace_id,
+                root_name="task.approve",
+            )
             pending = services.approvals.pending_for_task(task.id)
             if pending is None:
                 raise ConflictError("No pending approval for this task.")

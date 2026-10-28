@@ -49,7 +49,12 @@ class TraceRepository:
         return span_id
 
     def flush(self, recorder: TraceRecorder) -> int:
-        """Write every buffered span of a recorder; returns the span count."""
+        """Write every buffered span of a recorder; returns the span count.
+
+        Finalising first makes this the one call site where a tree grows its
+        root span (R9 口径 §2.3.2) — callers never add one themselves.
+        """
+        recorder.finalize()
         for span in recorder.spans:
             self.record(
                 trace_id=recorder.trace_id,

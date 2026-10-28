@@ -336,6 +336,7 @@ class SupportAgent:
             trace = TraceRecorder(
                 tenant_id=identity.tenant_id,
                 conversation_id=turn.conversation.id,
+                root_name="support.turn",
             )
             trace.add(
                 "understand",
@@ -1054,6 +1055,7 @@ class SupportAgent:
         trace = TraceRecorder(
             tenant_id=identity.tenant_id,
             conversation_id=turn.conversation.id,
+            root_name="support.turn",
         )
         trace.add(
             "handoff",
