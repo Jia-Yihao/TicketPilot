@@ -366,10 +366,19 @@
    - `understand/task.route`：一条提交到任务的样本（`runtime.py:436`）。
    打桩能抓住「产出者忘了传 `latency_ms`」——那种情况下它是 0，而不是 7。**不得**用真实耗时做这条断言
    （§2.2 第 2 条）。
-3. **根 span 结构**：从 `GET /api/v1/traces/{trace_id}` 读回后按 `parent_span_id` 建树，断言：
-   - `kind == "root"` 的 span **恰好一条**；
+3. **根 span 结构（措辞订正，2026-10-28，R9-b 实现轮上报）**：从 `GET /api/v1/traces/{trace_id}`
+   读回后按 `parent_span_id` 建树，断言：
+   - **每棵树**的 `kind == "root"` span **恰好一条**（§1.1：树 = 一次 `flush` 写下的一批 span，
+     **不等于** `trace_id`）；一个 `trace_id` 上有几棵树，就允许读到几条根。
+     *为何订正*：本条原写作「从 `GET /api/v1/traces/{trace_id}` 读回恰好一条 root」，对
+     `task.approve` 不可满足——审批树复用 `task.trace_id`（既有用例
+     `tests/test_trace.py::test_approving_a_refund_appends_to_the_task_trace` 钉住的追加行为），
+     同一个 `trace_id` 上因此有 `task.run` 与 `task.approve` 两棵树、两条根。可判定的形式改为
+     **每个根名在该 `trace_id` 上恰好一条**（三个名字互不重复），它与 §2.3.2「`finalize` 只由
+     `flush` 调一次」等价，且不需要为审批树另铸一个 `trace_id`（那会改动既有追加行为，超出本轮范围）。
    - 根的 `parent_span_id` 为 `None`；
-   - 除根外每条 span 的 `parent_span_id` 非空，且指向同一棵树里存在的 span（不是自己）；
+   - 除根外每条 span 的 `parent_span_id` 非空，且指向同一棵**树**里存在的 span（不是自己）；
+     该 `trace_id` 上另一棵树的 span 不算「同一棵树」，因此顶层 span 必须已被该次 `finalize` 重挂；
    - 至少要覆盖三种树：一条 POLICY_QA 对话（`support.turn`）、一次退款任务（`task.run`）、一次审批
      （`task.approve`，`runtime.py:897` 那棵树）。
    **不要**写成「每轮恰好一个根」——沉默路径下同一轮有两棵树（§4.8.a）。
