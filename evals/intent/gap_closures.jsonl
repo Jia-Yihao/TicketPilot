@@ -1,0 +1,1 @@
+{"id": "gap-fd54b3b92cad", "text": "我刚拍的刀纸地址选错了", "gold": "ORDER_QUERY", "layer": "authored_gap", "label_source": "human", "note": "改收货地址属于订单字段", "provenance": {"gap_id": "gap-fd54b3b92cad", "source": "intent-gap-loop", "cycle": "2026-10-26"}}

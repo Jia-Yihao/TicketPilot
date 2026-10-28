@@ -1,6 +1,25 @@
+"""只读客服：把一句话装配成一个回合，只回答，不动业务数据。
+
+一个回合的顺序是固定的：规则先读（意图目录 + 关键词表）；规则读不出来时才
+允许问一次模型，且只采用「退款」这一种模型读法；答复由动作处理器生成，
+最后必须过输出护栏。缺哪个槽位就追问哪个，绝不用默认值顶上。
+
+第一条边界：这里只编排**读**。退款、建单这类写请求原样交给
+``app.services.runtime.TaskRuntime``——审批、幂等、台账、审计都在那里，
+本模块不给自己留任何写业务表的旁路。
+
+第二条边界：会话接管的状态机不在这里（见 ``app/services/handoff.py``）。
+本模块只问两件事：「现在该不该沉默」「现在该不该转人工」，不自己维护状态。
+
+调用方是 HTTP 层（``app/api/v1/support.py``）和渠道网关
+（``app/channels/gateway.py``）。反方向不成立：任务运行时、仓储与工具实现
+都不该依赖本模块——它们要的是一个回合留下的任务与台账，那是数据库里的事实。
+"""
+
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -8,16 +27,22 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.agent import actions
 from app.agent.actions import ActionRequest
+from app.agent.analytics_narrator import build_analytics_narrator
+from app.agent.decision import ModelDecision, request_digest
 from app.agent.escalation import EscalationSignal, get_escalation_catalog
-from app.agent.handoff import ActionRecord, Citation
-from app.agent.intent_catalog import get_catalog
+from app.agent.handoff import ActionRecord, CandidateOrder, Citation
+from app.agent.intent_catalog import IntentCatalog, get_catalog
 from app.agent.personalization import (
     EFFECT_FIELDS,
     load_profile,
     personalize,
 )
+from app.agent.pydantic_agent import ADOPTABLE_INTENTS
+from app.agent.refund_reason_rules import match_refund_reason
 from app.agent.routing import (
+    RULESET_FINGERPRINT,
     RoutePlan,
+    _refund_reason,
     blocks_write_action,
     classify,
     extract_amount,
@@ -37,6 +62,7 @@ from app.models.handoff import HandoffEvent
 from app.models.security_event import SecurityEvent
 from app.observability.redaction import digest
 from app.observability.tracing import TraceRecorder, reply_digest
+from app.repositories.commerce import CommerceRepository
 from app.repositories.traces import TraceRepository
 from app.retrieval.build import build_policy_search
 from app.services.catalog import CatalogService
@@ -59,7 +85,14 @@ from app.services.handoff import (
 from app.services.llm_usage import LlmUsageService
 from app.services.runtime import TaskRuntime
 from app.services.security_events import SecurityEventService
-from app.services.support import SupportContextService
+from app.services.support import (
+    CANDIDATE_LIMIT,
+    SupportContextService,
+    order_candidate,
+)
+from app.sql.narrative import AnalyticsNarrator
+from app.sql.planner import names_dataset
+from app.sql.router import asks_for_detail_followup
 from app.sql.service import SqlAnalyticsService
 
 if TYPE_CHECKING:
@@ -111,6 +144,18 @@ _TOOL_SOURCED_ACTIONS = frozenset(
 )
 
 
+def _clarify_candidate_count(draft: Draft) -> int:
+    """How many order candidates this asking showed.
+
+    The ledger stores the number, not the order numbers: a trace is read by
+    seats, sampled into eval files and shipped to the bad-case queue, while a
+    candidate list is personal data that only belongs to this reply.
+    """
+    if draft.clarification is None:
+        return 0
+    return sum(1 for card in draft.cards if card.get("kind") == "order_candidate")
+
+
 def classify_support(
     message: str,
     route: RoutePlan,
@@ -141,6 +186,37 @@ def classify_support(
     if spec is None:
         return SupportPlan(SupportIntent.UNKNOWN, resolved_order)
     return SupportPlan(SupportIntent(spec.intent_id), resolved_order)
+
+
+@dataclass(frozen=True, slots=True)
+class _SlotReading:
+    """一句话被读出来的槽位，以及规则表与意图目录各自给出的意图。"""
+
+    message_order: str | None
+    message_amount: int | None
+    amount_invalid: bool
+    api_order: str | None
+    resolved_order: str | None
+    resolved_amount: int | None
+    context: dict[str, Any]
+    route: RoutePlan
+    plan: SupportPlan
+    product: Any
+
+
+@dataclass(frozen=True, slots=True)
+class _Consultation:
+    """模型咨询这一段的产出：问了没有、问到了什么、最后采用了哪一份读法。"""
+
+    plan: SupportPlan
+    route: RoutePlan
+    context: dict[str, Any]
+    resumed: bool
+    expand_query_id: str | None
+    model_gap: dict[str, Any] | None
+    model_trace: ModelTrace | None
+    model_decision: ModelDecision | None
+    resealed_keys: list[str]
 
 
 class SupportAgent:
@@ -174,6 +250,7 @@ class SupportAgent:
         catalog: CatalogService | None = None,
         policy: PolicyEngine | None = None,
         analytics: SqlAnalyticsService | None = None,
+        narrator: AnalyticsNarrator | None = None,
     ) -> None:
         self.session_factory = session_factory
         self.settings = settings
@@ -181,8 +258,14 @@ class SupportAgent:
         self.catalog = catalog or CatalogService()
         self.policy = policy or PolicyEngine.from_settings(settings)
         self.analytics = analytics or SqlAnalyticsService(
-            max_limit=settings.analytics_max_limit
+            max_limit=settings.analytics_max_limit,
+            prefetch_enabled=settings.analytics_prefetch_enabled,
+            prefetch_max_rows=settings.analytics_prefetch_max_rows,
+            snapshot_ttl_seconds=settings.analytics_snapshot_ttl_seconds,
         )
+        # ``None`` is a promise, not an omission: rules mode and the disabled
+        # switch cannot reach a model because there is nothing to call.
+        self.narrator = narrator or build_analytics_narrator(settings)
         self.escalation = EscalationEngine(
             get_escalation_catalog(), self.policy
         )
@@ -220,65 +303,29 @@ class SupportAgent:
                     handoffs,
                 )
 
-            message_order = extract_order_id(message)
-            message_amount, amount_invalid = extract_amount(message)
-            api_order = order_id.upper() if order_id else None
-            resolved_order = message_order or api_order or carried.order_id
-            resolved_amount = (
-                message_amount
-                if message_amount is not None
-                else (None if amount_invalid else carried.amount_cents)
+            # --- 阶段二：把这一句读成槽位与意图 ---
+            reading = self._stage_read_slots(message, order_id, channel, carried)
+            # --- 阶段三：决定最终读法（沿用追问 / 展开统计 / 问一次模型）---
+            consult = self._stage_consult_model(
+                session, identity, message, reading, carried, turn
             )
+            message_order = reading.message_order
+            message_amount = reading.message_amount
+            amount_invalid = reading.amount_invalid
+            api_order = reading.api_order
+            resolved_order = reading.resolved_order
+            resolved_amount = reading.resolved_amount
+            product = reading.product
+            route = consult.route
+            context = consult.context
+            plan = consult.plan
+            resumed = consult.resumed
+            expand_query_id = consult.expand_query_id
+            model_gap = consult.model_gap
+            model_decision = consult.model_decision
+            resealed_keys = consult.resealed_keys
 
-            context: dict[str, Any] = {}
-            if resolved_order:
-                context["order_id"] = resolved_order
-            if resolved_amount is not None:
-                context["amount_cents"] = resolved_amount
-
-            route = classify(message, context)
-            # Added only after routing so the channel stays provenance: it lands in
-            # the task context for sampling, never in a decision input.
-            context["channel"] = channel.value
-            matched_product = self.catalog.resolve(message)
-            product = matched_product or (
-                self.catalog.for_order(resolved_order) if resolved_order else None
-            )
-            plan = classify_support(
-                message,
-                route,
-                has_catalog_match=matched_product is not None,
-                message_order_id=message_order,
-                order_id=resolved_order,
-            )
-            plan, resumed = self._resume_pending(plan, carried, message)
-            plan, model_gap, model_trace = self._consult_model(
-                plan,
-                route,
-                message,
-                context,
-            )
-            if model_trace is not None:
-                # Written on the turn's own session, before the commit below:
-                # a second connection would wait on this one's write lock on
-                # SQLite. The row is part of the turn it paid for.
-                LlmUsageService(session).record(
-                    tenant_id=identity.tenant_id,
-                    user_id=identity.user_id,
-                    conversation_id=turn.conversation.id,
-                    source="chat",
-                    planning_source="pydantic_ai",
-                    # A test double may not expose the label; the row still
-                    # records the call without inventing a model name.
-                    model_name=getattr(self.runtime.brain, "model_name", None),
-                    requests=model_trace.requests,
-                    retries=model_trace.retries,
-                    input_tokens=model_trace.input_tokens,
-                    output_tokens=model_trace.output_tokens,
-                    latency_ms=model_trace.latency_ms,
-                    status=model_trace.status,
-                )
-
+            # --- 阶段四：落 ledger 与回合状态（trace 从这里开始记）---
             catalog = get_catalog()
             trace = TraceRecorder(
                 tenant_id=identity.tenant_id,
@@ -294,18 +341,33 @@ class SupportAgent:
                     "order_id": resolved_order,
                     "amount_cents": resolved_amount,
                     "resumed": resumed,
+                    "analytics_expand": expand_query_id,
                     "product_id": product.product_id if product else None,
                     "risk_level": catalog.risk_of(plan.intent.value).value,
                     "catalog_version": catalog.version,
                     "guard_categories": [event.category for event in guard_events],
                 },
             )
+            if resealed_keys:
+                # The marker the re-seal owes the reader (ADR-030 决策 6): this
+                # turn's digest was recomputed over keys that entered the
+                # context *after* the model answered, so the record must not
+                # claim the model saw them. Key names only — no values, no
+                # order numbers, never the reply text or a model prompt, and
+                # nothing here is one of the six fields the ledger verifies.
+                trace.add(
+                    "understand",
+                    "decision.reseal",
+                    attributes={"derived_keys": sorted(resealed_keys)},
+                )
 
             state = Turn(
                 conversation_id=turn.conversation.id,
                 order_id=resolved_order,
                 amount_cents=resolved_amount,
                 product_id=product.product_id if product else carried.product_id,
+                refund_reason=route.refund_reason,
+                refund_type=route.refund_type,
                 inherited=self._inherited_slots(
                     carried,
                     message_order=message_order,
@@ -316,28 +378,22 @@ class SupportAgent:
                 ),
             )
 
-            escalation_state = EscalationState(
-                failed_intents=dict(carried.failed_intents),
-                clarification_count=carried.clarification_count,
-                negative_rounds=carried.negative_rounds,
-                idle_minutes=self._idle_minutes(carried.last_message_at),
-                amount_cents=resolved_amount,
-            )
-            escalation_state = self.escalation.count_message(
-                message.lower(), escalation_state
-            )
-            decision = self.escalation.evaluate_pre(
-                text=message.lower(),
-                intent=plan.intent.value,
-                risk_level=catalog.risk_of(plan.intent.value),
-                state=escalation_state,
+            # --- 阶段五：回合前判一次要不要现在就转人工 ---
+            escalation_state, decision = self._stage_escalation_pre(
+                carried, message, plan, resolved_amount, catalog
             )
 
+            # --- 阶段六：缺槽位就追问，否则派给动作处理器 ---
             present: set[str] = set()
             if resolved_order:
                 present.add("order_id")
             if resolved_amount is not None:
                 present.add("amount_cents")
+            if route.refund_reason is not None:
+                # Only the reason is collected here. The refund type is derived
+                # by the server from the order's refundable balance, so the
+                # customer is never asked "full or partial".
+                present.add("refund_reason")
             missing = catalog.missing_slots(plan.intent.value, present)
 
             request_text = (
@@ -377,9 +433,20 @@ class SupportAgent:
                     trace=trace,
                     action_name="handoff.escalate",
                     signal=decision.signal,
+                    model_decision=model_decision,
                 )
             elif missing:
-                draft = self._clarify(plan, missing[0], amount_invalid=amount_invalid)
+                draft = self._clarify(
+                    plan,
+                    missing[0],
+                    amount_invalid=amount_invalid,
+                    candidates=self._clarification_candidates(
+                        session,
+                        identity,
+                        missing[0],
+                        escalation_state.clarification_count,
+                    ),
+                )
             else:
                 contexts = self._contexts(session)
                 draft = self._dispatch(
@@ -392,8 +459,12 @@ class SupportAgent:
                     request_text=request_text,
                     context=context,
                     trace=trace,
+                    action_name="analytics.expand" if expand_query_id else None,
+                    expand_query_id=expand_query_id,
+                    model_decision=model_decision,
                 )
 
+            # --- 阶段七：回合后再判一次，转人工与措辞都由信号表给 ---
             clarified = draft.clarification is not None
             escalation_state = self.escalation.count_outcome(
                 intent=plan.intent.value,
@@ -444,6 +515,7 @@ class SupportAgent:
                     },
                 )
 
+            # --- 阶段八：定稿——输出护栏是最后一道手，之后才写槽位与回复 ---
             outcome = self._outcome(draft, decision)
             personalization = self._personalize(
                 session, identity, trace, draft, carried, state
@@ -462,20 +534,60 @@ class SupportAgent:
                     else request_text
                 )
 
+            # Whatever this turn writes back as the pending intent: the
+            # clarification it just raised, or nothing. Extracted once because
+            # the refund_reason lifetime below reads this same written-back
+            # value (口径 §5.6.1.1), never the previous turn's
+            # carried.pending_intent (that reading is vetoed (G)).
+            pending_intent_value = (
+                draft.clarification["resumable_intent"]
+                if draft.clarification
+                else None
+            )
+            # 存活域（口径 §5.6.1.1）：携带的原因只在本回合退款流程仍开着时
+            # 保留 — 本回合规划/恢复为 REFUND_REQUEST，或本轮正要写回一个
+            # REFUND_REQUEST 追问（条件读的是上面这个本轮写回值）。
+            refund_flow_open = (
+                plan.intent is SupportIntent.REFUND_REQUEST
+                or pending_intent_value == SupportIntent.REFUND_REQUEST.value
+            )
+
             slots = ConversationSlots(
                 order_id=state.order_id,
                 product_id=state.product_id,
                 amount_cents=state.amount_cents,
-                pending_intent=(
-                    draft.clarification["resumable_intent"]
-                    if draft.clarification
-                    else None
+                # Whatever decided this turn: the carried value or a fresh
+                # match. None means the slot was never answered, not a
+                # placeholder. A refund task created on this turn ends the
+                # carry-over: the reason is the customer's choice made at the
+                # start of one refund (口径 §1、§5.6.1.1 生命周期句), so the
+                # next refund answers a fresh one instead of inheriting this
+                # one; the carry also dies once the refund flow is no longer
+                # open this turn, read against this turn's written-back
+                # pending value (口径 §5.6.1.1). refund_type is not asked and
+                # not cleared here.
+                refund_reason=(
+                    None
+                    if not refund_flow_open
+                    or (
+                        draft.task is not None
+                        and plan.intent is SupportIntent.REFUND_REQUEST
+                    )
+                    else (
+                        state.refund_reason.value
+                        if state.refund_reason is not None
+                        else None
+                    )
                 ),
+                pending_intent=pending_intent_value,
                 pending_request=pending_request,
                 failed_intents=escalation_state.failed_intents,
                 clarification_count=escalation_state.clarification_count,
                 negative_rounds=escalation_state.negative_rounds,
                 last_intent=plan.intent.value,
+                last_analytics_query_id=self._next_analytics_query_id(
+                    carried, draft, expand_query_id
+                ),
                 resolved=draft.resolved or bool(takeover),
                 last_message_at=utcnow().isoformat(),
             )
@@ -500,6 +612,9 @@ class SupportAgent:
                     "clarified": draft.clarification is not None,
                     "clarify_reason": clarification.get("reason"),
                     "clarify_slot": clarification.get("expected_slot"),
+                    # A count, never the order numbers: candidates are the
+                    # customer's own rows and the ledger is read by other people.
+                    "clarify_candidates": _clarify_candidate_count(draft),
                     "outcome": outcome,
                     "action": draft.action,
                 },
@@ -523,6 +638,228 @@ class SupportAgent:
                 "handoff": handoff_payload,
                 "personalization": personalization,
             }
+
+    # --------------------------------------------------------------- stages
+    def _stage_read_slots(
+        self,
+        message: str,
+        order_id: str | None,
+        channel: Channel,
+        carried: ConversationSlots,
+    ) -> _SlotReading:
+        """把这一句客户输入读成槽位，再让关键词表与意图目录各读一次意图。
+
+        三个来源的优先级是固定的：本条消息 > 调用方显式传入 > 上一回合携带。
+        读不出来的槽位留空交给追问，绝不用默认值顶上——把缺失猜成某个默认值，
+        用户就再也纠正不了它。返回的 ``context`` 同时是路由、模型和任务上下文
+        的输入，所以它只装读得出的值。
+        """
+        message_order = extract_order_id(message)
+        message_amount, amount_invalid = extract_amount(message)
+        api_order = order_id.upper() if order_id else None
+        resolved_order = message_order or api_order or carried.order_id
+        resolved_amount = (
+            message_amount
+            if message_amount is not None
+            else (None if amount_invalid else carried.amount_cents)
+        )
+
+        context: dict[str, Any] = {}
+        if resolved_order:
+            context["order_id"] = resolved_order
+        if resolved_amount is not None:
+            context["amount_cents"] = resolved_amount
+        carried_reason = _refund_reason(carried.refund_reason)
+        if carried_reason is not None:
+            # The customer already answered the reason in an earlier turn.
+            # classify() reads the context key before matching this text,
+            # so the carried value wins and the slot is never asked twice.
+            # A dirty stored value is treated as "not carried": never None,
+            # an empty string or any placeholder is written into context.
+            context["refund_reason"] = carried_reason.value
+        route = classify(message, context)
+        # What the keyword table read out of this message, or what the
+        # caller already supplied. A miss leaves the key out: the slot is
+        # then asked for, never guessed.
+        if route.refund_reason is not None:
+            context["refund_reason"] = route.refund_reason.value
+        if route.refund_type is not None:
+            context["refund_type"] = route.refund_type.value
+        # Added only after routing so the channel stays provenance: it lands in
+        # the task context for sampling, never in a decision input.
+        context["channel"] = channel.value
+        matched_product = self.catalog.resolve(message)
+        product = matched_product or (
+            self.catalog.for_order(resolved_order) if resolved_order else None
+        )
+        plan = classify_support(
+            message,
+            route,
+            has_catalog_match=matched_product is not None,
+            message_order_id=message_order,
+            order_id=resolved_order,
+        )
+        return _SlotReading(
+            message_order=message_order,
+            message_amount=message_amount,
+            amount_invalid=amount_invalid,
+            api_order=api_order,
+            resolved_order=resolved_order,
+            resolved_amount=resolved_amount,
+            context=context,
+            route=route,
+            plan=plan,
+            product=product,
+        )
+
+    def _stage_consult_model(
+        self,
+        session: Session,
+        identity: Identity,
+        message: str,
+        reading: _SlotReading,
+        carried: ConversationSlots,
+        turn: ConversationTurn,
+    ) -> _Consultation:
+        """决定这一回合的最终读法：沿用未完成的追问、展开上一条统计，或问一次模型。
+
+        规则读得出就到此为止；只有规则读不出、而消息又是动作型时才允许问模型，
+        并且只采用「退款」这一种读法（理由见 ``_consult_model``）。模型的成本
+        记账写在本回合自己的会话上：另开一条连接会在 SQLite 上等这把写锁。
+        """
+        plan = reading.plan
+        route = reading.route
+        context = reading.context
+        plan, resumed = self._resume_pending(plan, carried, message)
+        expand_query_id = self._detail_followup(message, carried, plan.intent)
+        if expand_query_id is not None:
+            # Opening the previous statistic is a lookup in the snapshot
+            # store, not a new question: no slot is missing, and the
+            # model has nothing to add.
+            plan = SupportPlan(SupportIntent("SELF_ANALYTICS"), reading.resolved_order)
+            resumed = False
+            model_gap: dict[str, Any] | None = {
+                "source": "rules",
+                "intent": plan.intent.value,
+                "adopted": False,
+                "gate": "detail_followup",
+                # 与 consult 档同形：这一轮没有问模型，所以是「没有改道」，
+                # 不是「问过但没改」。
+                "redirect": False,
+                "redirect_rejected": False,
+                "redirect_kind": "none",
+            }
+            model_trace = None
+            model_decision = None
+        else:
+            # The candidate kernel never queries the database (口径 §2.2): the
+            # caller resolves the order status here, under the same scope as
+            # OrderService.require_order. Unreadable means None — no
+            # evidence, never an error and never a substituted default.
+            order_state = self._scoped_order_state(
+                session, identity, reading.resolved_order
+            )
+            plan, model_gap, model_trace, model_decision = self._consult_model(
+                plan,
+                route,
+                message,
+                context,
+                carried=carried,
+                order_state=order_state,
+            )
+        if model_trace is not None:
+            # Written on the turn's own session, before the commit below:
+            # a second connection would wait on this one's write lock on
+            # SQLite. The row is part of the turn it paid for.
+            LlmUsageService(session).record(
+                tenant_id=identity.tenant_id,
+                user_id=identity.user_id,
+                conversation_id=turn.conversation.id,
+                source="chat",
+                planning_source="pydantic_ai",
+                # A test double may not expose the label; the row still
+                # records the call without inventing a model name.
+                model_name=getattr(self.runtime.brain, "model_name", None),
+                requests=model_trace.requests,
+                retries=model_trace.retries,
+                input_tokens=model_trace.input_tokens,
+                output_tokens=model_trace.output_tokens,
+                latency_ms=model_trace.latency_ms,
+                status=model_trace.status,
+            )
+
+        resealed_keys: list[str] = []
+        if (
+            plan.intent is SupportIntent.REFUND_REQUEST
+            and route.refund_reason is None
+        ):
+            # classify() runs the rule table only on a turn it reads as a
+            # refund itself. A refund reached by ``_resume_pending`` or a
+            # model adoption must still see this turn's wording: this is
+            # how a reason answered into a clarification gets collected
+            # (口径 §5.6.1.1 沿用适用域). A miss stays a miss (§5.6.2).
+            matched_reason = match_refund_reason(message)
+            if matched_reason is not None:
+                route = replace(route, refund_reason=matched_reason)
+                context["refund_reason"] = matched_reason.value
+                if model_decision is not None:
+                    # The reason key joins the same context dict the
+                    # ledger will re-verify against. The table read it out
+                    # of this turn's own text under this turn's own rules,
+                    # so the record is re-sealed over the final context
+                    # rather than costing a second model call: every other
+                    # verified field (request, rule reads, ruleset, model
+                    # name) is exactly what the entry already held.
+                    model_decision = replace(
+                        model_decision,
+                        digest=request_digest(message, context),
+                    )
+                    # Which server-derived keys landed in the context after
+                    # the call. The digest itself is not recorded: a trace
+                    # is read by seats and sampled into eval files.
+                    resealed_keys.append("refund_reason")
+        return _Consultation(
+            plan=plan,
+            route=route,
+            context=context,
+            resumed=resumed,
+            expand_query_id=expand_query_id,
+            model_gap=model_gap,
+            model_trace=model_trace,
+            model_decision=model_decision,
+            resealed_keys=resealed_keys,
+        )
+
+    def _stage_escalation_pre(
+        self,
+        carried: ConversationSlots,
+        message: str,
+        plan: SupportPlan,
+        resolved_amount: int | None,
+        catalog: IntentCatalog,
+    ) -> tuple[EscalationState, EscalationDecision | None]:
+        """回合开始前问一次信号表：这一句是不是就该转人工了。
+
+        读的是上一回合留下的失败意图、追问次数、负向轮数与沉默时长；本回合
+        只把它们推进一格，不落库——写回发生在回合末尾的槽位里。
+        """
+        escalation_state = EscalationState(
+            failed_intents=dict(carried.failed_intents),
+            clarification_count=carried.clarification_count,
+            negative_rounds=carried.negative_rounds,
+            idle_minutes=self._idle_minutes(carried.last_message_at),
+            amount_cents=resolved_amount,
+        )
+        escalation_state = self.escalation.count_message(
+            message.lower(), escalation_state
+        )
+        decision = self.escalation.evaluate_pre(
+            text=message.lower(),
+            intent=plan.intent.value,
+            risk_level=catalog.risk_of(plan.intent.value),
+            state=escalation_state,
+        )
+        return escalation_state, decision
 
     def get_card(
         self, identity: Identity, kind: str, card_id: str
@@ -749,6 +1086,8 @@ class SupportAgent:
         trace: TraceRecorder,
         action_name: str | None = None,
         signal: EscalationSignal | None = None,
+        model_decision: ModelDecision | None = None,
+        expand_query_id: str | None = None,
     ) -> Draft:
         """Hand the turn to the action the catalog binds to this intent."""
         action_names = get_catalog().actions_of(plan.intent.value)
@@ -769,6 +1108,8 @@ class SupportAgent:
                 context,
                 trace,
                 signal,
+                model_decision,
+                expand_query_id,
             )
         )
         draft.action = name
@@ -786,6 +1127,8 @@ class SupportAgent:
         context: dict[str, Any],
         trace: TraceRecorder,
         signal: EscalationSignal | None = None,
+        model_decision: ModelDecision | None = None,
+        expand_query_id: str | None = None,
     ) -> ActionRequest:
         return ActionRequest(
             session=session,
@@ -802,11 +1145,20 @@ class SupportAgent:
             context=context,
             trace=trace,
             signal=signal,
+            model_decision=model_decision,
+            narrator=self.narrator,
+            conversation_id=state.conversation_id,
+            expand_query_id=expand_query_id,
         )
 
     # ----------------------------------------------------------- clarifiers
     def _clarify(
-        self, plan: SupportPlan, slot: str, *, amount_invalid: bool = False
+        self,
+        plan: SupportPlan,
+        slot: str,
+        *,
+        amount_invalid: bool = False,
+        candidates: list[dict[str, Any]] | None = None,
     ) -> Draft:
         catalog = get_catalog()
         if slot == "amount_cents" and amount_invalid:
@@ -815,13 +1167,27 @@ class SupportAgent:
         else:
             prompt = catalog.prompt_for(plan.intent.value, slot)
             reason = catalog.missing_reason_for(slot)
-        reply = f"{prompt}你也可以直接说「转人工」，我会转给人工同事接手。"
-        if slot != "order_id" and plan.order_id:
+        cards = list(candidates or [])
+        if cards:
+            ids = "、".join(str(card["card_id"]) for card in cards)
+            reply = (
+                f"{prompt}你名下最近的订单是 {ids}，"
+                "点一下订单号我就接着处理；也可以直接把订单号发给我。"
+            )
+        elif slot != "order_id" and plan.order_id:
             reply = f"{prompt}订单号 {plan.order_id} 我已经记住了。"
+        else:
+            reply = f"{prompt}你也可以直接说「转人工」，我会转给人工同事接手。"
         return Draft(
             intent=plan.intent,
             reply=reply,
-            suggestions=["查询订单", "退款条件是什么？", "转人工"],
+            cards=cards,
+            suggestions=[
+                *(str(card["card_id"]) for card in cards),
+                "查询订单",
+                "退款条件是什么？",
+                "转人工",
+            ],
             clarification={
                 "reason": reason,
                 "prompt": prompt,
@@ -830,6 +1196,28 @@ class SupportAgent:
             },
             resolved=False,
         )
+
+    def _clarification_candidates(
+        self,
+        session: Session,
+        identity: Identity,
+        slot: str,
+        clarification_count: int,
+    ) -> list[dict[str, Any]]:
+        """The second asking's candidate list, from the caller's own orders.
+
+        Only the repeat is downgraded: the first asking stays the plain slot
+        question, and a missing amount gets no order list. Candidates are never
+        guessed or matched fuzzily — they are rows this caller already owns.
+        """
+        if slot != "order_id" or clarification_count < 1:
+            return []
+        orders = CommerceRepository(session).list_recent_orders(
+            identity.tenant_id, identity.user_id, limit=CANDIDATE_LIMIT
+        )
+        return [
+            order_candidate(order, self.catalog.for_order(order.id)) for order in orders
+        ]
 
     # ---------------------------------------------------------- escalation
     def _shape(self, draft: Draft, decision: EscalationDecision) -> Draft:
@@ -882,6 +1270,7 @@ class SupportAgent:
             ),
             policy_refs=self._citations(draft),
             attempted_actions=self._attempted(draft),
+            attempted_candidates=self._attempted_candidates(draft),
             digest_max_chars=self.policy.escalation.digest_max_chars,
             channel=channel,
         )
@@ -937,6 +1326,32 @@ class SupportAgent:
                 at=utcnow().isoformat(),
             )
         ]
+
+    def _attempted_candidates(self, draft: Draft) -> list[CandidateOrder]:
+        """The list this customer was already shown, so the seat starts there.
+
+        Read back from the draft's own cards: what the seat is told was offered
+        is exactly what the customer was rendered, never a fresh query that may
+        have moved on since.
+        """
+        candidates: list[CandidateOrder] = []
+        for card in draft.cards:
+            if card.get("kind") != "order_candidate":
+                continue
+            fields = card.get("fields") or {}
+            candidates.append(
+                CandidateOrder(
+                    order_id=str(card.get("card_id", "")),
+                    product_name=str(fields.get("product_name") or ""),
+                    status=str(fields.get("status") or ""),
+                    delivered_at=(
+                        str(fields["delivered_at"])
+                        if fields.get("delivered_at") is not None
+                        else None
+                    ),
+                )
+            )
+        return candidates
 
     def _outcome(self, draft: Draft, decision: EscalationDecision | None) -> str:
         if decision is not None and decision.takeover:
@@ -1005,7 +1420,10 @@ class SupportAgent:
         route: RoutePlan,
         message: str,
         context: dict[str, Any],
-    ) -> tuple[SupportPlan, dict[str, Any] | None, ModelTrace | None]:
+        *,
+        carried: ConversationSlots,
+        order_state: str | None = None,
+    ) -> tuple[SupportPlan, dict[str, Any] | None, ModelTrace | None, ModelDecision | None]:
         """The one place a chat turn may reach the model, and what it may buy.
 
         The intent catalog decides first. A turn is a gap when the rule table
@@ -1015,7 +1433,10 @@ class SupportAgent:
         "ORD-... 那笔钱给我退回来" should not be answered with an order card
         just because of the id.
 
-        Only a *refund* reading is adopted. That is deliberate:
+        Only an ``ADOPTABLE_INTENTS`` reading is adopted — today that set is the
+        refund intent alone, and it is the same set the task runtime's
+        ``IntentBrain.plan`` reads, so the two entries cannot drift apart
+        (口径 ``.qoder/rules/adoption-surface.md``). That is deliberate:
 
         * the refund it opens still has to pass eligibility and a human
           approval before any money moves, so the model changes *whether a
@@ -1037,12 +1458,21 @@ class SupportAgent:
         third value is the cost record of that call (``None`` when the model
         was not asked); the caller writes it to the usage ledger on the
         turn's own transaction.
+
+        Wiring (``.qoder/rules/intent-candidates.md`` §2.2): the candidate
+        kernel takes ``context:`` evidence from the ``pending_intent`` /
+        ``last_intent`` keys and ``order:`` evidence from a caller-supplied
+        ``order_state``. This entry therefore derives a *model-only* dict
+        carrying the two slot keys (``None`` when a slot is empty — the
+        kernel fabricates nothing from a non-string), and passes the resolved
+        ``order_state`` through. The ledger ``context`` and the
+        ``ModelDecision`` digest over it stay byte-identical (§2.3 rule 6).
         """
         decision = model_gate(plan, route, message)
         if decision == "rules_hit":
-            return plan, None, None
+            return plan, None, None, None
         if self.settings.agent_mode != "pydantic_ai":
-            return plan, None, None
+            return plan, None, None, None
         if decision == "question":
             return (
                 plan,
@@ -1051,20 +1481,64 @@ class SupportAgent:
                     "intent": "UNKNOWN",
                     "adopted": False,
                     "gate": "question",
+                    # 问句不进模型，因此既没有采纳的改道，也没有被拒的改道。
+                    "redirect": False,
+                    "redirect_rejected": False,
+                    "redirect_kind": "none",
                 },
                 None,
+                None,
             )
-        routed, source, model_trace = self.runtime.brain.plan(message, context)
+        # Model-only derivation: the two slot keys come from the carried
+        # conversation state, verbatim field names (口径 §2.2). A missing slot
+        # is None, and the kernel reads None as "no such evidence" — it is
+        # never a placeholder that could fake an inclusion.
+        model_context = dict(context)
+        model_context["pending_intent"] = carried.pending_intent
+        model_context["last_intent"] = carried.last_intent
+        routed, source, model_trace = self.runtime.brain.plan(
+            message, model_context, order_state=order_state
+        )
         gap: dict[str, Any] = {
             "source": source,
             "intent": routed.intent.value,
             "adopted": False,
             "gate": "consult",
+            # 改道计数：`redirect` 是被采纳的改道，`redirect_rejected` 是模型
+            # 想改而被采纳面拒掉的读数。两者是不同的数，不得相加减；真正的
+            # 「错判」需要 gold 标签，只在离线评测里算（口径
+            # `.qoder/rules/adoption-surface.md` §2.3）。默认值 = 这一轮没有
+            # 记录过判定（模型没被问、或调用失败），不是「判过且为假」。
+            "redirect": False,
+            "redirect_rejected": False,
+            "redirect_kind": "none",
         }
+        record: ModelDecision | None = None
         if model_trace is not None:
             gap["model"] = model_trace.as_dict()
-        if source != "pydantic_ai" or routed.intent is not Intent.REFUND_REQUEST:
-            return plan, gap, model_trace
+            # 搬运而不是重算：只有 brain 见过模型的原始回答，它把方向分类好
+            # 写进 trace，这里照抄（与 `model_reason` 的复用纪律同形）。
+            if model_trace.redirect is not None:
+                gap["redirect"] = model_trace.redirect
+                gap["redirect_rejected"] = bool(model_trace.redirect_rejected)
+                gap["redirect_kind"] = model_trace.redirect_kind or "none"
+        if source == "pydantic_ai" and model_trace is not None:
+            # The ledger may reuse this reading, but only after checking it
+            # against its own request, rule set and model configuration.
+            record = ModelDecision(
+                digest=request_digest(message, context),
+                ruleset=RULESET_FINGERPRINT,
+                model_name=getattr(self.runtime.brain, "model_name", None),
+                rule_intent=route.intent.value,
+                rule_order_id=route.order_id,
+                rule_amount_cents=route.amount_cents,
+                model_intent=routed.intent.value,
+                model_order_id=routed.order_id,
+                model_amount_cents=routed.amount_cents,
+                trace=model_trace.as_dict(),
+            )
+        if source != "pydantic_ai" or routed.intent not in ADOPTABLE_INTENTS:
+            return plan, gap, model_trace, record
         gap["adopted"] = True
         return (
             SupportPlan(
@@ -1073,7 +1547,32 @@ class SupportAgent:
             ),
             gap,
             model_trace,
+            record,
         )
+
+    def _scoped_order_state(
+        self,
+        session: Session,
+        identity: Identity,
+        order_id: str | None,
+    ) -> str | None:
+        """The current order status for candidate evidence, or ``None``.
+
+        Same scope as ``OrderService.require_order`` (tenant equal; user equal
+        unless the caller holds the support role), but it never raises: a
+        missing, foreign or unreadable order simply means there is no
+        ``order:`` evidence. The candidate kernel must not query the database
+        (``.qoder/rules/intent-candidates.md`` §2.2), so the caller resolves
+        it here — and every lookup keeps the tenant boundary.
+        """
+        if not order_id:
+            return None
+        order = CommerceRepository(session).get_order(order_id)
+        if order is None or order.tenant_id != identity.tenant_id:
+            return None
+        if order.user_id != identity.user_id and not identity.has_role("support"):
+            return None
+        return order.status.value
 
     def _resume_pending(
         self, plan: SupportPlan, carried: ConversationSlots, message: str
@@ -1093,6 +1592,48 @@ class SupportAgent:
         ):
             return SupportPlan(pending_intent, plan.order_id), True
         return plan, False
+
+    def _detail_followup(
+        self, message: str, carried: ConversationSlots, intent: SupportIntent
+    ) -> str | None:
+        """The open snapshot this message asks to see, if it asks for one.
+
+        A message that names a record set is a new statistic, not a follow-up
+        ("订单明细" must not open last week's refund rows); a message with no
+        open snapshot has nothing to open. Only an analytics-shaped turn may
+        open one: a policy question that happens to say "明细" must stay a
+        policy question, or the customer gets last week's rows instead.
+        """
+        if not carried.last_analytics_query_id:
+            return None
+        if intent is not SupportIntent.UNKNOWN and intent.value != "SELF_ANALYTICS":
+            return None
+        if names_dataset(message) is not None:
+            return None
+        if not asks_for_detail_followup(message):
+            return None
+        return carried.last_analytics_query_id
+
+    def _next_analytics_query_id(
+        self,
+        carried: ConversationSlots,
+        draft: Draft,
+        expand_query_id: str | None,
+    ) -> str | None:
+        """Keep the open snapshot correct across one more turn.
+
+        A new statistic replaces it; a successful expansion keeps the same
+        id; a failed expansion closes it so the next question cannot chase a
+        snapshot that is already gone.
+        """
+        if expand_query_id is not None:
+            return draft.analytics_query_id
+        if draft.action == "analytics.query":
+            # Every statistics turn supersedes the open snapshot. The SQL
+            # route has no snapshot to open, so the slot must close rather
+            # than keep pointing at an older, different statistic.
+            return draft.analytics_query_id
+        return carried.last_analytics_query_id
 
     def _merged_request(self, carried: ConversationSlots, message: str) -> str:
         parts = [

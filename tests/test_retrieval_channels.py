@@ -20,6 +20,7 @@ from app.retrieval.dense import (
 from app.retrieval.fusion import rrf_fuse, zscore_fuse
 from app.retrieval.hybrid import DenseGate, HybridPolicySearch
 from app.retrieval.rerank import RerankClient
+from app.retrieval.rewrite import RewritingPolicySearch
 from app.retrieval.search import PolicySearchService, tokenize
 from app.seed import seed_all
 
@@ -397,7 +398,8 @@ def test_build_policy_search_passes_the_configured_dense_gate() -> None:
     try:
         with session_factory() as session:
             search = build_policy_search(session, settings)
-            assert isinstance(search, HybridPolicySearch)
+            assert isinstance(search, RewritingPolicySearch)
+            assert isinstance(search.inner, HybridPolicySearch)
             assert search.dense_gate == DenseGate(min_coverage=0.4)
     finally:
         engine.dispose()
@@ -418,7 +420,8 @@ def test_build_policy_search_can_restore_the_always_on_channel() -> None:
     try:
         with session_factory() as session:
             search = build_policy_search(session, settings)
-            assert isinstance(search, HybridPolicySearch)
+            assert isinstance(search, RewritingPolicySearch)
+            assert isinstance(search.inner, HybridPolicySearch)
             assert search.dense_gate is None
     finally:
         engine.dispose()

@@ -1,4 +1,4 @@
-.PHONY: install run seed test guard guard-negative lint eval eval-support eval-retrieval eval-replay eval-business sample-bad-cases migrate compose-up compose-down manual
+.PHONY: install run seed test guard guard-negative lint eval eval-support eval-dimension eval-intent eval-retrieval eval-replay eval-business eval-baseline eval-answer sample-bad-cases migrate compose-up compose-down manual
 
 install:
 	python -m pip install -e ".[dev]"
@@ -27,6 +27,16 @@ eval:
 eval-support:
 	python evals/support_run.py
 
+eval-dimension:
+	python evals/support_run.py --dataset evals/analytics_dimension_set.json --partial
+
+eval-memory:
+	python evals/support_run.py --dataset evals/memory_personalization_set.json --partial
+
+eval-intent:
+	python scripts/build_intent_set.py --check
+	python evals/intent_metrics.py --enforce
+
 eval-retrieval:
 	python evals/retrieval_metrics.py
 
@@ -35,6 +45,12 @@ eval-replay:
 
 eval-business:
 	python evals/business_metrics.py
+
+eval-baseline:
+	python evals/metrics_baseline.py --check
+
+eval-answer:
+	python evals/answer_metrics.py --enforce
 
 sample-bad-cases:
 	python scripts/sample_traces.py

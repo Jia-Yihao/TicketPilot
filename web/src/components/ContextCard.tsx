@@ -23,6 +23,7 @@ const KIND_META: Record<
   product: { label: '商品', mono: 'PRODUCT' },
   policy: { label: '政策', mono: 'POLICY' },
   order: { label: '订单', mono: 'ORDER' },
+  order_candidate: { label: '订单候选', mono: 'CANDIDATE' },
   analytics: { label: '统计', mono: 'ANALYTICS' },
 }
 
@@ -42,6 +43,7 @@ const FIELD_LABELS: Record<string, string> = {
   source_uri: '来源',
   matched_section: '命中章节',
   order_id: '订单号',
+  product_name: '商品名',
   total_cents: '订单金额',
   refundable_cents: '可退余额',
   currency: '币种',
@@ -378,7 +380,9 @@ export function ContextCardView({
         <span className="mono">
           {card.sections.length} SECTIONS · {card.total_chars} CHARS
         </span>
-        <span className="mono">按需加载</span>
+        <span className="mono">
+          {card.kind === 'order_candidate' ? '仅 L1 事实 · 点订单号即可' : '按需加载'}
+        </span>
       </footer>
     </article>
   )

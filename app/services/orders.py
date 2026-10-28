@@ -16,6 +16,7 @@ class OrderService:
         self.repo = CommerceRepository(session)
 
     def require_order(self, identity: Identity, order_id: str) -> Order:
+        """取订单并做可见性校验：跨租户、非本人（且无客服角色）都按 not found。"""
         order = self.repo.get_order(order_id)
         if order is None or order.tenant_id != identity.tenant_id:
             raise NotFoundError("Order not found.")
@@ -24,10 +25,12 @@ class OrderService:
         return order
 
     def get_logistics(self, identity: Identity, order_id: str) -> Logistics | None:
+        """取某订单的物流记录；订单先过一次可见性校验，没有物流记录就是 None。"""
         order = self.require_order(identity, order_id)
         return self.repo.get_logistics(order.id)
 
     def order_view(self, order: Order) -> dict[str, Any]:
+        """订单的工具返回体：状态、金额、可退余额与版本，供执行器与卡片共用。"""
         return {
             "order_id": order.id,
             "status": order.status.value,
@@ -40,6 +43,7 @@ class OrderService:
         }
 
     def order_summary(self, order: Order) -> str:
+        """一句客户可读的订单摘要，与工具清单里的回执模板同口径。"""
         return (
             f"订单 {order.id} 当前状态为 {order.status.value}，"
             f"订单金额 {format_cents(order.total_cents)} {order.currency}，"
@@ -47,6 +51,7 @@ class OrderService:
         )
 
     def logistics_view(self, order: Order, logistics: Logistics | None) -> dict[str, Any]:
+        """物流的工具返回体；没有物流记录时只给 available=False，不编造字段。"""
         if logistics is None:
             return {"order_id": order.id, "available": False}
         return {
@@ -63,6 +68,7 @@ class OrderService:
         }
 
     def logistics_summary(self, order: Order, logistics: Logistics | None) -> str:
+        """一句客户可读的物流摘要；没有物流记录时明确说没有。"""
         if logistics is None:
             return f"订单 {order.id} 暂无物流记录。"
         return (

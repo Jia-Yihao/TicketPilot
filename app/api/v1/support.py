@@ -50,6 +50,7 @@ def get_card(
     identity: Identity = Depends(get_identity),
     agent: SupportAgent = Depends(get_support_agent),
 ) -> dict[str, Any]:
+    """读一张上下文卡片；商品卡片公开，订单与政策卡片按调用者自己的可见范围取。"""
     return agent.get_card(identity, kind, card_id)
 
 
@@ -64,4 +65,5 @@ def get_card_section(
     identity: Identity = Depends(get_identity),
     agent: SupportAgent = Depends(get_support_agent),
 ) -> dict[str, Any]:
+    """读卡片里某一节的正文；可见范围与卡片本身一致。"""
     return agent.get_section(identity, kind, card_id, section_id)

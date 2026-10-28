@@ -1,0 +1,30 @@
+{
+  "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+  "dataset_url": "https://www.modelscope.cn/datasets/modelscope_mp_677764216/E_commerce_Customer_Service",
+  "license": "Apache-2.0",
+  "source_file": "dev_clean_v2.jsonl",
+  "source_sha256": "202e45eed3e53e0f8bfcca8283e5183e3b7119bdd433a9b2158f25eaac3d427c",
+  "source_rows": 16205,
+  "selection_file": "external_selection.jsonl",
+  "selection_rows": 201,
+  "selection_sha256": "53c8267299bf1f3d51c2d1b74f85f951963affb0fd8bc824fdb704be7347812a",
+  "sample_file": "external_phrasings.jsonl",
+  "sample_rows": 201,
+  "sample_sha256": "589e837d7c53a6b2620b85b4002f5147c3fef266316afa0b2e2c5c036d8b84fe",
+  "per_intent": {
+    "DELIVERY_ISSUE": 27,
+    "HUMAN_HANDOFF": 10,
+    "LOGISTICS_QUERY": 24,
+    "ORDER_QUERY": 16,
+    "POLICY_QA": 18,
+    "PRODUCT_QUERY": 28,
+    "REFUND_ELIGIBILITY": 15,
+    "REFUND_REQUEST": 20,
+    "REFUND_STATUS": 15,
+    "TICKET_CREATE": 10,
+    "UNKNOWN": 18
+  },
+  "labels": "human, written against app/agent/intents.yaml; no corpus answer or label copied",
+  "selection": "line numbers listed in external_selection.jsonl; the first user message of each line, 4-60 characters, refused if it contains 6+ consecutive digits, an email or a URL",
+  "used_for": "intent evaluation only; not a retrieval case"
+}

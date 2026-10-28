@@ -1,0 +1,101 @@
+{
+  "version": "2026-10-26",
+  "description": "Intent gaps sampled from traffic. One row per normalized text; tenants only as hashes; model output is a proposal, never gold.",
+  "normalization": "NFKC, casefold, strip Unicode punctuation, collapse whitespace",
+  "statuses": [
+    "OPEN",
+    "CLOSED",
+    "IGNORED"
+  ],
+  "cases": [
+    {
+      "id": "gap-805434f799c9",
+      "text": "能早点发吗我这离预产期没几天了发晚了就用不上了",
+      "dedup_key": "805434f799c94018a209bf48ee94707756d58f718ee482bdf83c4dcfcbd8b696",
+      "tenant_hashes": [
+        "316a28499b304298eb14cf7d3d4c09574cf02b231db34a4bef9a63824295566c"
+      ],
+      "status": "OPEN",
+      "observations": 1,
+      "first_cycle": "2026-10-26",
+      "last_cycle": "2026-10-26",
+      "signals": [
+        "false_unknown"
+      ],
+      "predicted": "UNKNOWN",
+      "label": null,
+      "note": "",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 108
+      },
+      "confirmed_by": null,
+      "confirmation": null,
+      "closed_cycle": null,
+      "proposals": [
+        {
+          "source": "model",
+          "label": "LOGISTICS_QUERY",
+          "note": "模型提议：催发货，属于物流进度",
+          "by": "model:qwen3-8b",
+          "cycle": "2026-10-26"
+        }
+      ]
+    },
+    {
+      "id": "gap-c4b9c908f33d",
+      "text": "退回去的邮费也是你们承担吗有问题的也一起退回啊",
+      "dedup_key": "c4b9c908f33d1142fd0f7995fd115ddae48018f46f06f3ff60ded6b7331895ff",
+      "tenant_hashes": [
+        "316a28499b304298eb14cf7d3d4c09574cf02b231db34a4bef9a63824295566c"
+      ],
+      "status": "OPEN",
+      "observations": 1,
+      "first_cycle": "2026-10-26",
+      "last_cycle": "2026-10-26",
+      "signals": [
+        "false_unknown"
+      ],
+      "predicted": "UNKNOWN",
+      "label": null,
+      "note": "",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 132
+      },
+      "confirmed_by": null,
+      "confirmation": null,
+      "closed_cycle": null,
+      "proposals": []
+    },
+    {
+      "id": "gap-fd54b3b92cad",
+      "text": "我刚拍的刀纸地址选错了",
+      "dedup_key": "fd54b3b92cad181a742399d8ff41b5a17dace4261228c2708cf8a08f48aebbc0",
+      "tenant_hashes": [
+        "316a28499b304298eb14cf7d3d4c09574cf02b231db34a4bef9a63824295566c"
+      ],
+      "status": "CLOSED",
+      "observations": 1,
+      "first_cycle": "2026-10-26",
+      "last_cycle": "2026-10-26",
+      "signals": [
+        "false_unknown"
+      ],
+      "predicted": "UNKNOWN",
+      "label": "ORDER_QUERY",
+      "note": "改收货地址属于订单字段",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 106
+      },
+      "confirmed_by": "reviewer",
+      "confirmation": "human",
+      "closed_cycle": "2026-10-26",
+      "proposals": []
+    }
+  ]
+}

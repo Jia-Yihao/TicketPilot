@@ -37,6 +37,7 @@ class TicketService:
         description: str,
         idempotency_key: str,
     ) -> TicketCreation:
+        """建一张工单；幂等键命中已有工单时返回它并标记 ``created=False``。"""
         category = category.upper()
         priority = priority.upper()
         if category not in CATEGORIES:
@@ -80,6 +81,7 @@ class TicketService:
         return TicketCreation(ticket=ticket, created=True)
 
     def get(self, identity: Identity, ticket_id: str) -> Ticket:
+        """取一张工单并做可见性校验：跨租户、非本人（且无客服角色）都按 not found。"""
         ticket = self.repo.get(ticket_id)
         if ticket is None or ticket.tenant_id != identity.tenant_id:
             raise NotFoundError("Ticket not found.")

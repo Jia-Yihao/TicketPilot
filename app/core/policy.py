@@ -35,6 +35,7 @@ class EscalationThresholds:
     """When the agent stops trying and reaches for a human."""
 
     frustration_rounds: int
+    clarification_rounds: int
     after_failed_attempts: int
     no_evidence_score: float
     session_idle_minutes: int
@@ -47,6 +48,7 @@ class EscalationThresholds:
         """Resolve a threshold named by the escalation table."""
         values = {
             "frustration_rounds": float(self.frustration_rounds),
+            "clarification_rounds": float(self.clarification_rounds),
             "after_failed_attempts": float(self.after_failed_attempts),
             "no_evidence_score": self.no_evidence_score,
             "session_idle_minutes": float(self.session_idle_minutes),
@@ -75,6 +77,7 @@ class PolicyEngine:
             ),
             escalation=EscalationThresholds(
                 frustration_rounds=settings.escalation_frustration_rounds,
+                clarification_rounds=settings.escalation_clarification_rounds,
                 after_failed_attempts=settings.handoff_after_failed_attempts,
                 no_evidence_score=settings.escalation_no_evidence_score,
                 session_idle_minutes=settings.session_idle_minutes,

@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "description": "P3 回归集：不支持的统计维度必须拒绝并转人工。只覆盖本轮修复的行为，不替代 support_set.json 的 61 条门槛；运行：python evals/support_run.py --dataset evals/analytics_dimension_set.json",
+  "cases": [
+    {
+      "id": "dimension-product-refunds",
+      "query": "我的退款按商品分布",
+      "intent": "SELF_ANALYTICS",
+      "kind": "failure",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "我的退款按商品分布",
+          "expect": {
+            "intent": "SELF_ANALYTICS",
+            "reply_contains": ["转人工"],
+            "reply_not_contains": ["已受理", "已到账", "状态待确认"],
+            "clarification": null,
+            "task": null,
+            "handoff": {},
+            "spans": ["understand/support.classify", "tool/analytics.query", "generate/support.reply"],
+            "span_attrs": {
+              "analytics.query": {"status": "REJECTED", "reason": "UNSUPPORTED_DIMENSION"}
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "dimension-category-refunds",
+      "query": "按品类统计我的退款",
+      "intent": "SELF_ANALYTICS",
+      "kind": "failure",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "按品类统计我的退款",
+          "expect": {
+            "intent": "SELF_ANALYTICS",
+            "reply_contains": ["转人工"],
+            "reply_not_contains": ["已受理", "已到账", "状态待确认"],
+            "clarification": null,
+            "task": null,
+            "handoff": {},
+            "spans": ["understand/support.classify", "tool/analytics.query", "generate/support.reply"],
+            "span_attrs": {
+              "analytics.query": {"status": "REJECTED", "reason": "UNSUPPORTED_DIMENSION"}
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "dimension-channel-refunds",
+      "query": "按渠道看看我的退款",
+      "intent": "SELF_ANALYTICS",
+      "kind": "failure",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "按渠道看看我的退款",
+          "expect": {
+            "intent": "SELF_ANALYTICS",
+            "reply_contains": ["转人工"],
+            "reply_not_contains": ["已受理", "已到账", "状态待确认"],
+            "clarification": null,
+            "task": null,
+            "handoff": {},
+            "spans": ["understand/support.classify", "tool/analytics.query", "generate/support.reply"],
+            "span_attrs": {
+              "analytics.query": {"status": "REJECTED", "reason": "UNSUPPORTED_DIMENSION"}
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

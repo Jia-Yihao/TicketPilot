@@ -20,7 +20,7 @@ import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import text
 from sqlalchemy.engine import Connection, Engine
@@ -35,15 +35,27 @@ from app.sql.builder import build_statement
 from app.sql.errors import SqlRejected
 from app.sql.guard import SqlGuard
 from app.sql.parser import render
-from app.sql.planner import HeuristicSqlPlanner, SqlPlan, SqlPlanner
+from app.sql.planner import (
+    HeuristicSqlPlanner,
+    PlanRefusal,
+    SqlPlan,
+    SqlPlanner,
+)
+from app.sql.prefetch import PrefetchService
+from app.sql.router import AnalyticsRoute, AnalyticsRouter, RouteDecision
 from app.sql.schema import dataset_for
+from app.sql.snapshot import AnalyticsSnapshot, SnapshotStore
 
 __all__ = ["SqlAnalyticsService", "SqlAnswer"]
 
 
 @dataclass(frozen=True, slots=True)
 class SqlAnswer:
-    """The result of one question, and the statement that produced it."""
+    """The result of one question, and the statement that produced it.
+
+    ``route`` says which path answered: ``SQL`` keeps the P3-a shape,
+    ``PREFETCH`` carries a snapshot whose L3 rows live in the store.
+    """
 
     plan: SqlPlan
     sql: str
@@ -52,6 +64,8 @@ class SqlAnswer:
     row_count: int
     duration_ms: int
     query_id: str
+    route: str = "SQL"
+    snapshot: AnalyticsSnapshot | None = None
 
 
 class SqlAnalyticsService:
@@ -63,10 +77,24 @@ class SqlAnalyticsService:
         guard: SqlGuard | None = None,
         planner: SqlPlanner | None = None,
         max_limit: int = 200,
+        prefetch_enabled: bool = True,
+        prefetch_max_rows: int = 200,
+        snapshot_ttl_seconds: int = 900,
+        snapshot_store: SnapshotStore | None = None,
     ) -> None:
         self.guard = guard or SqlGuard(max_limit=max_limit)
         self.planner = planner or HeuristicSqlPlanner()
         self.max_limit = max_limit
+        self.prefetch_enabled = prefetch_enabled
+        self.prefetch_max_rows = prefetch_max_rows
+        self.prefetch = PrefetchService(
+            max_rows=prefetch_max_rows,
+            ttl_seconds=snapshot_ttl_seconds,
+        )
+        self.router = AnalyticsRouter(
+            max_rows=prefetch_max_rows, prefetch_enabled=prefetch_enabled
+        )
+        self.snapshots = snapshot_store or SnapshotStore()
 
     # ------------------------------------------------------------ answering
     def answer(
@@ -78,8 +106,18 @@ class SqlAnalyticsService:
         trace: TraceRecorder | None = None,
     ) -> SqlAnswer:
         """Answer the question, or refuse with a reason code."""
-        plan = self.planner.plan(question, now=utcnow())
+        plan, refusal = self._decide(question)
         if plan is None:
+            reason = refusal.reason if refusal is not None else "NO_PLAN"
+            detail = (
+                refusal.detail
+                if refusal is not None and refusal.detail
+                else "the question does not name a record set"
+            )
+            decision = self.router.route(
+                question, None, row_count=0, refusal=refusal
+            )
+            self._trace_route(trace, decision, None, row_count=0, query_id=None)
             self._record(
                 session,
                 identity,
@@ -90,12 +128,14 @@ class SqlAnalyticsService:
                 row_count=0,
                 duration_ms=0,
                 status="REJECTED",
-                rejected_reason="NO_PLAN",
+                rejected_reason=reason,
                 trace_id=trace.trace_id if trace else None,
             )
-            raise SqlRejected("NO_PLAN", "the question does not name a record set")
+            raise SqlRejected(reason, detail)
         dataset = dataset_for(plan.dataset)
         if dataset is None:
+            decision = RouteDecision(AnalyticsRoute.REFUSED, "UNKNOWN_TABLE")
+            self._trace_route(trace, decision, plan, row_count=0, query_id=None)
             self._record(
                 session,
                 identity,
@@ -110,6 +150,20 @@ class SqlAnalyticsService:
                 trace_id=trace.trace_id if trace else None,
             )
             raise SqlRejected("UNKNOWN_TABLE", f"{plan.dataset} is not readable")
+
+        row_count = self.prefetch.count(plan, identity, session)
+        decision = self.router.route(question, plan, row_count=row_count)
+        if decision.route is AnalyticsRoute.PREFETCH:
+            return self._answer_prefetch(
+                plan,
+                identity,
+                session,
+                question=question,
+                row_count=row_count,
+                decision=decision,
+                trace=trace,
+            )
+        self._trace_route(trace, decision, plan, row_count=row_count, query_id=None)
 
         engine = session.get_bind()
         if not isinstance(engine, Engine):
@@ -203,9 +257,137 @@ class SqlAnalyticsService:
             row_count=len(rows),
             duration_ms=duration_ms,
             query_id=row.id,
+            route=AnalyticsRoute.SQL.value,
+        )
+
+    # ------------------------------------------------------------ snapshots
+    def get_snapshot(
+        self, query_id: str, identity: Identity
+    ) -> AnalyticsSnapshot | None:
+        """The L3 rows behind one answer, if they are still this caller's."""
+        return self.snapshots.get(query_id, identity)
+
+    # ------------------------------------------------------------ prefetch
+    def _answer_prefetch(
+        self,
+        plan: SqlPlan,
+        identity: Identity,
+        session: Session,
+        *,
+        question: str,
+        row_count: int,
+        decision: RouteDecision,
+        trace: TraceRecorder | None,
+    ) -> SqlAnswer:
+        """Rows are read and summed before any model is asked to speak."""
+        query_id = f"sql_{uuid.uuid4().hex[:16]}"
+        started = time.perf_counter()
+        snapshot = self.prefetch.build(
+            plan, identity, session, query_id=query_id
+        )
+        duration_ms = int((time.perf_counter() - started) * 1000)
+        self._record(
+            session,
+            identity,
+            plan,
+            plan.question,
+            "",
+            {},
+            row_count=len(snapshot.l1_rows()),
+            duration_ms=duration_ms,
+            status="SUCCEEDED",
+            rejected_reason=None,
+            trace_id=trace.trace_id if trace else None,
+            row_id=query_id,
+        )
+        self.snapshots.put(snapshot, identity)
+        self._trace_route(
+            trace, decision, plan, row_count=row_count, query_id=query_id
+        )
+        if trace is not None:
+            context = snapshot.prompt_context()
+            trace.add(
+                "tool",
+                "analytics.query",
+                attributes={
+                    "dataset": plan.dataset,
+                    "metric": plan.metric,
+                    "group_by": plan.group_by,
+                    "range": plan.time_range.label if plan.time_range else None,
+                    "row_count": len(snapshot.rows),
+                    "duration_ms": duration_ms,
+                    "sql": "",
+                    "query_id": query_id,
+                    "route": AnalyticsRoute.PREFETCH.value,
+                    "rows_returned": len(snapshot.rows),
+                    "truncated": snapshot.truncated,
+                },
+            )
+            trace.add(
+                "tool",
+                "analytics.prefetch",
+                attributes={
+                    "query_id": query_id,
+                    "rows_returned": len(snapshot.rows),
+                    "truncated": snapshot.truncated,
+                    "context_chars": context["chars"],
+                    "estimated_tokens": context["estimated_tokens"],
+                    "duration_ms": duration_ms,
+                },
+            )
+        rows = snapshot.l1_rows()
+        return SqlAnswer(
+            plan=plan,
+            sql="",
+            columns=_prefetch_columns(plan, snapshot.metric),
+            rows=rows,
+            row_count=len(rows),
+            duration_ms=duration_ms,
+            query_id=query_id,
+            route=AnalyticsRoute.PREFETCH.value,
+            snapshot=snapshot,
+        )
+
+    def _trace_route(
+        self,
+        trace: TraceRecorder | None,
+        decision: RouteDecision,
+        plan: SqlPlan | None,
+        *,
+        row_count: int,
+        query_id: str | None,
+    ) -> None:
+        if trace is None:
+            return
+        trace.add(
+            "tool",
+            "analytics.route",
+            attributes={
+                "route": decision.route.value,
+                "route_reason": decision.reason,
+                "dataset": plan.dataset if plan is not None else None,
+                "row_count": row_count,
+                "threshold": self.prefetch_max_rows,
+                "query_id": query_id,
+            },
         )
 
     # ------------------------------------------------------------ execution
+    def _decide(self, question: str) -> tuple[SqlPlan | None, PlanRefusal | None]:
+        """Ask the planner for a plan and, if there is none, why.
+
+        The protocol only promises ``plan()``. A planner that also exposes
+        ``decide()`` gives the ledger a countable reason; older planners keep
+        working and are reported as ``NO_PLAN``.
+        """
+        decide = getattr(self.planner, "decide", None)
+        if callable(decide):
+            return cast(
+                tuple[SqlPlan | None, PlanRefusal | None],
+                decide(question, now=utcnow()),
+            )
+        return self.planner.plan(question, now=utcnow()), None
+
     def _execute(
         self,
         engine: Engine,
@@ -268,9 +450,10 @@ class SqlAnalyticsService:
         status: str,
         rejected_reason: str | None,
         trace_id: str | None,
+        row_id: str | None = None,
     ) -> SqlQuery:
         row = SqlQuery(
-            id=f"sql_{uuid.uuid4().hex[:16]}",
+            id=row_id or f"sql_{uuid.uuid4().hex[:16]}",
             tenant_id=identity.tenant_id,
             user_id=identity.user_id,
             question=str(redact_payload(question)),
@@ -293,6 +476,18 @@ class SqlAnalyticsService:
         )
         session.add(row)
         return row
+
+
+def _prefetch_columns(plan: SqlPlan, metric: str) -> tuple[str, ...]:
+    """The columns of a prefetch answer mirror the SQL builder's shape."""
+    columns: list[str] = []
+    if plan.group_by is not None:
+        columns.append("bucket")
+    if metric in {"count", "count_and_sum"}:
+        columns.append("metric")
+    if metric in {"sum", "count_and_sum"}:
+        columns.append("metric_total")
+    return tuple(columns)
 
 
 def _param_digest(params: dict[str, Any]) -> str:

@@ -88,7 +88,17 @@ _VOLATILE_ATTRS = frozenset(
 # Spans that make a turn impossible to reproduce without replaying side
 # effects: a human took over, an approval was opened, or a write tool ran.
 _BLOCKING_KINDS = frozenset({"approval", "handoff", "reconcile"})
-_READ_ONLY_TOOLS = frozenset({"analytics.query"})
+# The analytics bookkeeping spans (`route`, `prefetch`, `expand`) are decision,
+# budget and read-back records: no database write, no external call. Leaving
+# them out would silently cut replayable coverage.
+_READ_ONLY_TOOLS = frozenset(
+    {
+        "analytics.query",
+        "analytics.route",
+        "analytics.prefetch",
+        "analytics.expand",
+    }
+)
 
 # Row ids are minted when a database is seeded, so the same fixture can carry
 # a different id in the replay database. They are compared as placeholders.

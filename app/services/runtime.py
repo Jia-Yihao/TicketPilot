@@ -1,17 +1,39 @@
+"""写路径编排：一个任务从「被创建」到「有确定结果」的全过程。
+
+这里只有一条流水线：任务落库 → 规划意图 → 按意图调工具 → 需要人批就停在
+``WAITING_APPROVAL`` → 审批通过或按阈值自动执行 → 对着权威记录对账 →
+结果落进 ``tasks.result``。任务状态机的每一次迁移、审批行的创建与消费、
+退款台账与幂等、外发队列的投递，都挂在这条线上，没有第二条旁路。
+
+一条分界：**写操作只走这里，读操作不走这里**。只读答案在
+``app/agent/support_agent.py`` 里就地组装，不建任务、不进执行台账——否则
+「查一下订单」会把台账灌满，审计也就再说明不了钱有没有动。
+
+调用方是 HTTP 层（``app/api/v1/tasks.py``、``approvals.py``、``outbox.py``）、
+对话入口和 ``scripts/outbox_worker.py``。反方向不成立：仓储、领域服务、
+工具实现都不该 import 本模块。工具注册表由 ``_services`` 就地装配
+（``app/tools/builtin.py``），中间层因此既不需要知道运行时的存在，也不会
+和它形成环。
+"""
+
 from __future__ import annotations
 
 import logging
 import time
 import uuid
+from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.agent.decision import ModelDecision
+from app.agent.intent_catalog import get_catalog
 from app.agent.pydantic_agent import IntentBrain
-from app.agent.routing import RoutePlan
+from app.agent.routing import RoutePlan, _refund_reason, _refund_type, classify
 from app.channels.outbound import PROACTIVE_EVENT_TYPE, ProactiveSender
+from app.core.approval_tiers import get_approval_tiers
 from app.core.config import Settings
 from app.core.errors import (
     AppError,
@@ -31,6 +53,8 @@ from app.models.commerce import Order
 from app.models.enums import (
     ApprovalStatus,
     Intent,
+    RefundReason,
+    RefundType,
     TaskStatus,
     VerificationStatus,
 )
@@ -53,7 +77,14 @@ from app.services.outbox import (
     OutboxSink,
 )
 from app.services.refund_policy import RefundPolicy
-from app.services.refunds import RefundExecutionService, RefundOutcome
+from app.services.refunds import (
+    RefundExecutionService,
+    RefundOutcome,
+    refund_reason_label,
+    refund_reason_of,
+    refund_type_label,
+    refund_type_of,
+)
 from app.services.tickets import TicketService
 from app.tools.base import DegradationStep, ToolContext, ToolResult
 from app.tools.builtin import build_registry
@@ -72,6 +103,101 @@ TERMINAL = {
 }
 
 REFUND_PENDING_CONFIRMATION = "refund.pending_confirmation"
+
+# 退款写路径的两个槽位（口径 §5.6.3、§5.6.6）。
+#
+# 两个入口读的是同一个 ``context`` 键，因此判定只写这一处：任务 API 把它翻译成
+# 422，对话入口把它翻译成「不建退款任务」。两侧不各写一份，也不为某个入口放宽。
+REFUND_REASON_MISSING = "REFUND_REASON_MISSING"
+REFUND_REASON_INVALID = "REFUND_REASON_INVALID"
+REFUND_TYPE_INVALID = "REFUND_TYPE_INVALID"
+REASON_NOTE_NOT_ALLOWED = "REASON_NOTE_NOT_ALLOWED"
+REFUND_REASON_REQUIRED = "退款申请需要退款原因，请补充退款原因后重试。"
+
+
+@dataclass(frozen=True, slots=True)
+class RefundSlots:
+    """退款原因 / 退款类型两个槽位的判定结果。"""
+
+    required: bool
+    refund_reason: RefundReason | None = None
+    refund_type: RefundType | None = None
+    error_code: str | None = None
+    error_message: str | None = None
+
+    @property
+    def ok(self) -> bool:
+        return self.error_code is None
+
+
+def resolve_refund_slots(request: str, context: dict[str, Any]) -> RefundSlots:
+    """判定一笔退款申请的原因与类型槽位（口径 §5.6.3、§5.6.6）。
+
+    - 原因：上下文里的显式值优先，否则由关键词规则命中；两处都没有就是缺值。
+      缺值不放行，也不兜底成 ``OTHER``。
+    - 类型：只有显式值（坐席 / 调用方提交）。缺值不是错误，运行时按订单可退余额派生。
+    - 补充说明只在 ``reason=OTHER`` 时合法；其余情况一律拒绝，不静默忽略。
+    """
+    plan = classify(request, context)
+    raw_reason = context.get("refund_reason")
+    raw_type = context.get("refund_type")
+    required = (
+        plan.intent is Intent.REFUND_REQUEST
+        or raw_reason is not None
+        or raw_type is not None
+    )
+
+    refund_reason: RefundReason | None
+    if raw_reason is not None:
+        refund_reason = _refund_reason(raw_reason)
+        if refund_reason is None:
+            return RefundSlots(
+                required,
+                error_code=REFUND_REASON_INVALID,
+                error_message="退款原因取值不合法，只能是 RefundReason 的成员。",
+            )
+    else:
+        refund_reason = plan.refund_reason
+
+    refund_type: RefundType | None = None
+    if raw_type is not None:
+        refund_type = _refund_type(raw_type)
+        if refund_type is None:
+            return RefundSlots(
+                required,
+                refund_reason=refund_reason,
+                error_code=REFUND_TYPE_INVALID,
+                error_message="退款类型取值不合法，只能是 RefundType 的成员。",
+            )
+
+    if required and refund_reason is None:
+        return RefundSlots(
+            required,
+            refund_type=refund_type,
+            error_code=REFUND_REASON_MISSING,
+            error_message=get_catalog().prompt_for("REFUND_REQUEST", "refund_reason"),
+        )
+
+    if context.get("reason_note") is not None and refund_reason is not RefundReason.OTHER:
+        return RefundSlots(
+            required,
+            refund_reason=refund_reason,
+            refund_type=refund_type,
+            error_code=REASON_NOTE_NOT_ALLOWED,
+            error_message="补充说明只在退款原因为「其他」时才可以提交。",
+        )
+
+    return RefundSlots(required, refund_reason=refund_reason, refund_type=refund_type)
+
+
+def derive_refund_type(amount_cents: int, refundable_cents: int) -> RefundType:
+    """缺省派生退款类型（口径 §5.6.6）。
+
+    实退金额等于订单当前可退余额 ``orders.refundable_cents`` → ``FULL``；否则
+    ``PARTIAL``。锚点是订单事实，不是资格判定的输出 ``max_refundable_cents``；
+    缺值时一律不默认 ``FULL``。
+    """
+    return RefundType.FULL if amount_cents == refundable_cents else RefundType.PARTIAL
 
 
 def _degradation_step(
@@ -171,6 +297,7 @@ class TaskRuntime:
         context: dict[str, Any] | None = None,
         *,
         idempotency_key: str | None = None,
+        decision: ModelDecision | None = None,
     ) -> dict[str, Any]:
         """Create and run a task, optionally under a client retry key.
 
@@ -246,7 +373,7 @@ class TaskRuntime:
                         "Idempotency-Key was reused with a different request."
                     ) from None
                 return self._replay(identity, existing.id)
-        self._run(task_id)
+        self._run(task_id, decision=decision)
         return self.get_task(identity, task_id)
 
     def _replay(self, identity: Identity, task_id: str) -> dict[str, Any]:
@@ -256,7 +383,7 @@ class TaskRuntime:
         snapshot["idempotent_replay"] = True
         return snapshot
 
-    def _run(self, task_id: str) -> None:
+    def _run(self, task_id: str, *, decision: ModelDecision | None = None) -> None:
         with self.session_factory() as session:
             services = self._services(session)
             task = services.tasks.require(task_id)
@@ -270,7 +397,7 @@ class TaskRuntime:
 
             identity = Identity(task.tenant_id, task.user_id, frozenset())
             plan, planning_source, model_trace = self.brain.plan(
-                task.request, task.context
+                task.request, task.context, decision=decision
             )
             trace = TraceRecorder(tenant_id=task.tenant_id, trace_id=task.trace_id)
             route_attributes: dict[str, Any] = {
@@ -287,22 +414,25 @@ class TaskRuntime:
             if model_trace is not None:
                 route_attributes.update(model_trace.as_dict())
                 routed_payload["model"] = model_trace.as_dict()
-                # Same transaction as task.routed: a task that was planned by
-                # the model and a usage row either both exist or neither does.
-                LlmUsageService(session).record(
-                    tenant_id=task.tenant_id,
-                    user_id=task.user_id,
-                    task_id=task.id,
-                    source="task",
-                    planning_source=planning_source,
-                    model_name=getattr(self.brain, "model_name", None),
-                    requests=model_trace.requests,
-                    retries=model_trace.retries,
-                    input_tokens=model_trace.input_tokens,
-                    output_tokens=model_trace.output_tokens,
-                    latency_ms=model_trace.latency_ms,
-                    status=model_trace.status,
-                )
+                if not model_trace.reused:
+                    # Same transaction as task.routed: a task that was planned
+                    # by the model and a usage row either both exist or neither
+                    # does. A reused reading was already paid for on the chat
+                    # turn, so writing another row would double-count it.
+                    LlmUsageService(session).record(
+                        tenant_id=task.tenant_id,
+                        user_id=task.user_id,
+                        task_id=task.id,
+                        source="task",
+                        planning_source=planning_source,
+                        model_name=getattr(self.brain, "model_name", None),
+                        requests=model_trace.requests,
+                        retries=model_trace.retries,
+                        input_tokens=model_trace.input_tokens,
+                        output_tokens=model_trace.output_tokens,
+                        latency_ms=model_trace.latency_ms,
+                        status=model_trace.status,
+                    )
             trace.add("understand", "task.route", attributes=route_attributes)
             services.tasks.append_event(task.id, "task.routed", routed_payload)
             session.commit()
@@ -349,6 +479,7 @@ class TaskRuntime:
         plan: RoutePlan,
         trace: TraceRecorder,
     ) -> None:
+        # --- 订单查询：只读一次工具，缺订单号先追问 ---
         if plan.intent is Intent.ORDER_QUERY:
             if not plan.order_id:
                 self._clarify(
@@ -374,6 +505,7 @@ class TaskRuntime:
             session.commit()
             return
 
+        # --- 物流查询：轨迹缺失不算失败，标成待人工核实 ---
         if plan.intent is Intent.LOGISTICS_QUERY:
             if not plan.order_id:
                 self._clarify(
@@ -414,6 +546,7 @@ class TaskRuntime:
             session.commit()
             return
 
+        # --- 政策问答：只做抽取式引用，检索为空时不下结论 ---
         if plan.intent is Intent.POLICY_QA:
             result = self._call_tool(
                 services,
@@ -463,6 +596,7 @@ class TaskRuntime:
             session.commit()
             return
 
+        # --- 建单：幂等键绑任务，同一任务重放不会产生第二张工单 ---
         if plan.intent is Intent.TICKET_CREATE:
             category = "REFUND" if "退款" in task.request else "OTHER"
             result = self._call_tool(
@@ -503,10 +637,12 @@ class TaskRuntime:
             session.commit()
             return
 
+        # --- 退款：唯一真正动钱的路径，编排全在 _handle_refund 里 ---
         if plan.intent is Intent.REFUND_REQUEST:
             self._handle_refund(session, services, task, identity, plan, trace)
             return
 
+        # --- 兜底：意图不可判，追问一次并留一个转人工的出口 ---
         self._clarify(
             services,
             task,
@@ -523,6 +659,7 @@ class TaskRuntime:
         plan: RoutePlan,
         trace: TraceRecorder,
     ) -> None:
+        # --- 槽位闸门：订单号 / 金额 / 退款原因缺一个就追问，不建台账 ---
         if not plan.order_id:
             self._clarify(services, task, "申请退款需要订单号，请提供订单号后重试。")
             session.commit()
@@ -536,12 +673,34 @@ class TaskRuntime:
             session.commit()
             return
 
+        # 第四道闸门：缺退款原因就追问，不建审批行、不退款（口径 §5.6.3）。
+        # 缺类型不是缺槽位——类型由服务端派生，见 derive_refund_type。
+        slots = resolve_refund_slots(task.request, task.context)
+        reason = plan.refund_reason
+        if reason is None or not slots.ok:
+            self._clarify(
+                services,
+                task,
+                slots.error_message or REFUND_REASON_REQUIRED,
+            )
+            session.commit()
+            return
+
+        # --- 资格判定：只读工具，结论决定后面是自动执行还是等人批 ---
+        tool_args: dict[str, Any] = {
+            "order_id": plan.order_id,
+            "amount_cents": plan.amount_cents,
+            "refund_reason": reason.value,
+        }
+        if slots.refund_type is not None:
+            # 显式类型才带进工具入参；派生类型此刻还不知道（订单还没加载）。
+            tool_args["refund_type"] = slots.refund_type.value
         eligibility = self._call_tool(
             services,
             task,
             identity,
             "check_refund_eligibility",
-            {"order_id": plan.order_id, "amount_cents": plan.amount_cents},
+            tool_args,
             trace,
         ).data
         if not eligibility["eligible"]:
@@ -567,9 +726,37 @@ class TaskRuntime:
             session.commit()
             return
 
+        # --- 台账与审批档位：先把载荷和摘要钉死，再决定谁来批 ---
         order = services.orders.require_order(identity, plan.order_id)
         amount = int(eligibility["amount_cents"])
-        payload = refund_payload(order, amount, eligibility["policy_version"])
+        refund_type = slots.refund_type
+        if refund_type is None:
+            # 显式值优先；缺值时按订单当前可退余额派生（口径 §5.6.6）。
+            refund_type = derive_refund_type(amount, order.refundable_cents)
+        # 资格已通过、订单已加载、金额已确定：此刻解析档位，快照进摘要
+        # （B-3 口径 §5.1；解析必须发生在 canonical_digest 之前）。
+        tier = get_approval_tiers().tier_for(amount)
+        if tier.fell_back:
+            # 金额大于所有档位上限：落到最后一档由调用方在 trace 留痕（§2.4），
+            # 不回落到最低档。tier_fallback 不进摘要。
+            trace.add(
+                "approval",
+                "refund.tier_fallback",
+                attributes={
+                    "tier_fallback": True,
+                    "tier_id": tier.tier.tier_id,
+                    "amount_cents": amount,
+                    "order_id": order.id,
+                },
+            )
+        payload = refund_payload(
+            order,
+            amount,
+            eligibility["policy_version"],
+            refund_reason=reason,
+            refund_type=refund_type,
+            approval_tier=tier.snapshot(),
+        )
         digest = canonical_digest(payload)
         services.executions.create_pending(
             task_id=task.id,
@@ -578,12 +765,64 @@ class TaskRuntime:
             request_digest=digest,
             request_payload=payload,
         )
+        # 阈值第一次真正接进写路径（B-3 口径 §3、§3.1）：读资格结果里的
+        # requires_approval，不再硬编码 True。「要不要人批」只由
+        # PolicyEngine.requires_approval 回答，档位表不参与这条判定。
+        # --- 自动路径：不起审批行，执行体与审批路径是同一个 ---
+        requires_approval = bool(eligibility["requires_approval"])
+        if not requires_approval:
+            # 自动执行路径（口径 §4.2）：不起审批行、不进 WAITING_APPROVAL、
+            # 台账已在上面同形状写好，执行走与审批路径同一个权威执行体。
+            outcome = services.refunds.execute_auto(task.id)
+            self._apply_refund_outcome(services, task, outcome, approval_path="AUTO")
+            services.tasks.append_event(
+                task.id,
+                "refund.auto_executed",
+                {
+                    "approval_path": "AUTO",
+                    "order_id": order.id,
+                    "amount_cents": amount,
+                },
+            )
+            # 留痕（§4.2 第 8 条）：审计 detail 恰好四键，档位只进审计与
+            # trace，不进客户可见文本（§4.3）。
+            AuditRepository(session).record(
+                actor_id="system",
+                tenant_id=task.tenant_id,
+                action="refund.auto_executed",
+                resource_type="task",
+                resource_id=task.id,
+                outcome=outcome.status.value,
+                detail={
+                    "task_id": task.id,
+                    "order_id": order.id,
+                    "amount_cents": amount,
+                    "tier_id": tier.tier.tier_id,
+                },
+            )
+            trace.add(
+                "approval",
+                "refund.auto_executed",
+                attributes={
+                    "amount_cents": amount,
+                    "order_id": order.id,
+                    "tier_id": tier.tier.tier_id,
+                    "threshold_cents": self.settings.refund_approval_threshold_cents,
+                    "verification_status": outcome.status.value,
+                },
+            )
+            session.commit()
+            return
+        # --- 审批路径：建审批行，任务停在 WAITING_APPROVAL 等审批人 ---
         approval = services.approval_service.create_refund_approval(
             task_id=task.id,
             order=order,
             amount_cents=amount,
             requested_by=identity.user_id,
             policy_version=eligibility["policy_version"],
+            refund_reason=reason,
+            refund_type=refund_type,
+            approval_tier=tier.snapshot(),
         )
         services.tasks.transition(
             task,
@@ -591,6 +830,7 @@ class TaskRuntime:
             allowed_from={TaskStatus.RUNNING},
             result={
                 "outcome": "WAITING_APPROVAL",
+                "approval_path": "APPROVAL",
                 "summary": (
                     f"已查询订单并完成资格校验。退款 {format_cents(amount)} {order.currency} "
                     "需要人工审批，审批通过后才会执行。"
@@ -608,14 +848,21 @@ class TaskRuntime:
                     "approval_id": approval.id,
                     "amount_cents": amount,
                     "currency": order.currency,
-                    "requires_approval": True,
+                    # 读资格结果里的真值，不再硬编码（B-3 口径 §3.1）：
+                    # 能走到这里说明阈值已过，恒为 True，但值来自判定本身。
+                    "requires_approval": requires_approval,
                 },
             },
         )
         services.tasks.append_event(
             task.id,
             "approval.requested",
-            {"approval_id": approval.id, "amount_cents": amount, "order_id": order.id},
+            {
+                "approval_id": approval.id,
+                "amount_cents": amount,
+                "order_id": order.id,
+                "approval_path": "APPROVAL",
+            },
         )
         trace.add(
             "approval",
@@ -638,6 +885,7 @@ class TaskRuntime:
         decision: str,
         reason: str | None = None,
     ) -> dict[str, Any]:
+        """批准或驳回一条待审批退款；仅 approver 可调，通过后在同一事务里执行。"""
         if not identity.has_role("approver"):
             raise ForbiddenError("Approver role required.")
         with self.session_factory() as session:
@@ -749,6 +997,7 @@ class TaskRuntime:
             return self._snapshot(services, task)
 
     def cancel(self, identity: Identity, task_id: str) -> dict[str, Any]:
+        """取消一个未终止的任务，并连带作废待审批行与在途台账。"""
         with self.session_factory() as session:
             services = self._services(session)
             task = services.tasks.require(task_id)
@@ -782,6 +1031,7 @@ class TaskRuntime:
             return self._snapshot(services, task)
 
     def reconcile(self, task_id: str) -> dict[str, Any]:
+        """对着权威退款记录对账一个任务，返回对账后的任务快照。"""
         with self.session_factory() as session:
             services = self._services(session)
             self._reconcile_with(services, task_id)
@@ -853,6 +1103,7 @@ class TaskRuntime:
         return outcome
 
     def get_task(self, identity: Identity, task_id: str) -> dict[str, Any]:
+        """读一个任务快照；越权与不存在都返回同一种 not found，不泄露存在性。"""
         with self.session_factory() as session:
             services = self._services(session)
             task = services.tasks.require(task_id)
@@ -862,6 +1113,7 @@ class TaskRuntime:
     def list_tasks(
         self, identity: Identity, *, limit: int = 50, offset: int = 0
     ) -> dict[str, Any]:
+        """按更新时间倒序列出调用者自己的任务摘要，附带总数供分页。"""
         with self.session_factory() as session:
             services = self._services(session)
             rows = services.tasks.list_for_user(
@@ -892,6 +1144,7 @@ class TaskRuntime:
         limit: int = 50,
         offset: int = 0,
     ) -> dict[str, Any]:
+        """列本租户的审批单（可按状态过滤），连同各状态计数一起给审批台。"""
         require_approver(identity)
         with self.session_factory() as session:
             services = self._services(session)
@@ -914,6 +1167,7 @@ class TaskRuntime:
             }
 
     def get_approval(self, identity: Identity, approval_id: str) -> dict[str, Any]:
+        """读一条审批详情：多出载荷摘要与只对坐席可见的补充说明；仅 approver 可调。"""
         require_approver(identity)
         with self.session_factory() as session:
             services = self._services(session)
@@ -926,6 +1180,7 @@ class TaskRuntime:
     def events(
         self, identity: Identity, task_id: str, after_id: str | None = None
     ) -> list[dict[str, Any]]:
+        """读某任务的事件流；``after_id`` 之后的部分正是断线重连要补的那一段。"""
         with self.session_factory() as session:
             services = self._services(session)
             task = services.tasks.require(task_id)
@@ -941,9 +1196,80 @@ class TaskRuntime:
                 for row in rows
             ]
 
+    def follow_events(
+        self,
+        identity: Identity,
+        task_id: str,
+        after_id: str | None = None,
+        *,
+        poll_interval: float = 0.5,
+        heartbeat: float = 15.0,
+        idle_timeout: float = 120.0,
+    ) -> Iterator[dict[str, Any]]:
+        """Replay what the client missed, then keep pushing new events.
+
+        The subscription is the database, not a process-local callback: every
+        worker already writes ``task_events``, so a stream opened on worker A
+        sees events written by worker B. Polling is the price of not adding a
+        message bus to a demo.
+
+        A terminal status is written in the same transaction as the last event,
+        so once it is visible there is nothing left to drain. When the task is
+        still open but quiet for ``idle_timeout`` seconds, the stream ends
+        rather than holding a connection forever. ``id=None`` is the heartbeat
+        sentinel; the HTTP layer turns it into an SSE comment.
+        """
+        terminal = {
+            TaskStatus.SUCCEEDED,
+            TaskStatus.FAILED,
+            TaskStatus.CANCELLED,
+            TaskStatus.TIMED_OUT,
+            TaskStatus.REJECTED,
+            TaskStatus.EXPIRED,
+        }
+        last_id = after_id
+        last_event_at = time.monotonic()
+        last_beat = time.monotonic()
+        while True:
+            rows = self.events(identity, task_id, after_id=last_id)
+            for row in rows:
+                last_id = row["id"]
+                last_event_at = time.monotonic()
+                yield row
+            status = self.get_task(identity, task_id)["status"]
+            now = time.monotonic()
+            if status in {item.value for item in terminal}:
+                # The status and the final event commit together, but this
+                # loop reads them in two statements. If the commit lands
+                # between them, the status is terminal while the final event
+                # was not in the previous batch; drain once before closing so
+                # a subscriber never misses ``task.succeeded`` / ``task.failed``.
+                for row in self.events(identity, task_id, after_id=last_id):
+                    last_id = row["id"]
+                    last_event_at = time.monotonic()
+                    yield row
+                return
+            if now - last_event_at >= idle_timeout:
+                return
+            if now - last_beat >= heartbeat:
+                last_beat = now
+                yield {"id": None, "event": "ping", "data": {}, "created_at": None}
+            time.sleep(poll_interval)
+
     def _apply_refund_outcome(
-        self, services: RuntimeServices, task: Task, outcome: RefundOutcome
+        self,
+        services: RuntimeServices,
+        task: Task,
+        outcome: RefundOutcome,
+        *,
+        approval_path: str | None = None,
     ) -> None:
+        # 执行路径标记（B-3 口径 §4.3）：取值封闭为 AUTO / APPROVAL，落 result 顶层。
+        # 未显式传入时沿用任务结果里已盖过的标记（审批路径在 WAITING_APPROVAL、
+        # 自动路径在本次执行入口各盖一次）；历史任务没有该键时按当时唯一存在的
+        # 路径读作 APPROVAL——阈值生效前每一笔退款都等人批，这不是猜测而是事实。
+        if approval_path is None:
+            approval_path = (task.result or {}).get("approval_path") or "APPROVAL"
         status = outcome.status
         if status is VerificationStatus.VERIFIED_SUCCESS:
             task_status = TaskStatus.SUCCEEDED
@@ -961,6 +1287,7 @@ class TaskRuntime:
             task_status,
             {
                 "outcome": status.value,
+                "approval_path": approval_path,
                 "summary": outcome.summary,
                 "evidence": (
                     [{"type": "refund", "reference": outcome.refund_id}]
@@ -1193,6 +1520,10 @@ class TaskRuntime:
     ) -> dict[str, Any]:
         payload = dict(approval.action_payload or {})
         result = task.result or {}
+        # 退款原因 / 退款类型：读载荷里被摘要钉死的那一份（B-1 口径 §4.1）。
+        # 存量载荷没有这两个键时读出来是「未提供」，绝不映射成 OTHER / FULL（口径 §2）。
+        refund_reason = refund_reason_of(payload)
+        refund_type = refund_type_of(payload)
         snapshot: dict[str, Any] = {
             "approval_id": approval.id,
             "task_id": approval.task_id,
@@ -1203,7 +1534,13 @@ class TaskRuntime:
             "order_id": approval.resource_id,
             "requested_by": approval.requested_by,
             "reviewer_id": approval.reviewer_id,
+            # 顶层 "reason" 是审批的决定 / 驳回 / 失效原因（口径 §1.0），
+            # 与「退款原因」是两个概念，永不被退款原因覆盖或复用。
             "reason": approval.reason,
+            "refund_reason": refund_reason.value if refund_reason is not None else None,
+            "refund_reason_label": refund_reason_label(refund_reason),
+            "refund_type": refund_type.value if refund_type is not None else None,
+            "refund_type_label": refund_type_label(refund_type),
             "resource_version": approval.resource_version,
             "created_at": approval.created_at.isoformat(),
             "expires_at": approval.expires_at.isoformat(),
@@ -1234,7 +1571,22 @@ class TaskRuntime:
         if detail:
             snapshot["action_digest"] = approval.action_digest
             snapshot["action_payload"] = payload
+            # 补充说明只在坐席 / 审批详情侧可见：它不进载荷、不进摘要、不进公开回执
+            # （B-1 口径 §4.2、§5.5）。唯一来源是任务上下文。
+            snapshot["refund_reason_note"] = self._reason_note_of(task)
         return snapshot
+
+    @staticmethod
+    def _reason_note_of(task: Task) -> str | None:
+        """补充说明的唯一来源是任务上下文；缺值就是没有。"""
+        context = task.context
+        if not isinstance(context, dict):
+            return None
+        raw = context.get("reason_note")
+        if raw is None:
+            return None
+        note = str(raw).strip()
+        return note or None
 
     def _snapshot(self, services: RuntimeServices, task: Task) -> dict[str, Any]:
         pending = services.approvals.pending_for_task(task.id)

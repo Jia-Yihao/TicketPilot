@@ -1,0 +1,16 @@
+{
+  "_meta": {
+    "command": [
+      "evals/support_run.py",
+      "--json",
+      "<tmp>"
+    ],
+    "recorded_at": "2026-10-28T12:53:03",
+    "source": "support"
+  },
+  "readings": {
+    "failed_count": 0,
+    "passed": 62,
+    "total": 62
+  }
+}

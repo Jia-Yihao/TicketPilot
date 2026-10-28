@@ -13,6 +13,7 @@ import { ErrorPanel } from '../components/ErrorPanel'
 import { Icon } from '../components/Icon'
 import { PageHeader } from '../components/PageHeader'
 import {
+  businessStatusLabel,
   formatFullDate,
   formatRelative,
   handoffReasonLabel,
@@ -293,6 +294,7 @@ export function AgentWorkbench() {
   const bundle = detail?.bundle ?? {}
   const intents = bundle.intent_history ?? []
   const actions = bundle.attempted_actions ?? []
+  const candidates = bundle.attempted_candidates ?? []
   const citations = bundle.policy_refs ?? []
   const slots = Object.entries(bundle.slots ?? {})
   const sentiment = bundle.sentiment
@@ -604,6 +606,30 @@ export function AgentWorkbench() {
                 </dl>
               </div>
 
+              {bundle.history_summary ? (
+                <div className="notice notice--info">
+                  <span className="notice__icon">
+                    <Icon name="user" size={17} />
+                  </span>
+                  <div className="notice__body">
+                    <strong>
+                      客户档案摘要
+                      {bundle.history_summary_source ? (
+                        <span className="mono">
+                          {bundle.history_summary_source}
+                        </span>
+                      ) : null}
+                      {typeof bundle.history_summary_max_chars === 'number' ? (
+                        <span className="mono">
+                          上限 {bundle.history_summary_max_chars} 字
+                        </span>
+                      ) : null}
+                    </strong>
+                    <p>{bundle.history_summary}</p>
+                  </div>
+                </div>
+              ) : null}
+
               {bundle.suggested_next_step ? (
                 <section className="case-block case-block--next">
                   <header>
@@ -718,6 +744,38 @@ export function AgentWorkbench() {
                             <small className="mono">
                               {intentLabel(action.intent)} ·{' '}
                               {formatFullDate(action.at)}
+                            </small>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+
+                <section className="case-block">
+                  <header>
+                    <h3>已展示候选</h3>
+                    <span className="mono">CANDIDATES / {candidates.length}</span>
+                  </header>
+                  {candidates.length === 0 ? (
+                    <p className="block-muted">Agent 没有给出过订单候选。</p>
+                  ) : (
+                    <ul className="bundle-actions">
+                      {candidates.map((candidate) => (
+                        <li key={candidate.order_id}>
+                          <span className="bundle-actions__mark is-offered">
+                            <Icon name="eye" size={14} />
+                          </span>
+                          <div>
+                            <strong className="mono">{candidate.order_id}</strong>
+                            <p>
+                              {candidate.product_name} ·{' '}
+                              {businessStatusLabel(candidate.status)}
+                            </p>
+                            <small className="mono">
+                              {candidate.delivered_at
+                                ? `签收 ${formatFullDate(candidate.delivered_at)}`
+                                : '未签收'}
                             </small>
                           </div>
                         </li>

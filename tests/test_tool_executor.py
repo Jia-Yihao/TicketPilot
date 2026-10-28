@@ -140,6 +140,64 @@ def test_a_broken_upstream_is_retried_and_then_the_breaker_opens() -> None:
     assert third.result.retryable is True
 
 
+def test_only_a_fault_counts_towards_the_breaker() -> None:
+    """R1：业务拒绝与参数校验不计入熔断，真正的故障照旧计入。
+
+    两半必须在一条用例里同时成立：只用「业务拒绝不计数」半边能证明的，
+    把熔断改死（任何东西都不计数）也能证明。同一执行器（阈值 3）上先连续
+    三次同类业务拒绝、再补一次参数错误——四次都真的进了处理器，熔断仍闭合；
+    再连续三次上游故障——熔断打开，第四次调用连处理器都进不去。
+    """
+    calls: list[int] = []
+    executor = ToolExecutor(breaker=CircuitBreaker(failure_threshold=3))
+    manifest = _manifest(retry=RetryPolicy(max_attempts=1, backoff_ms=0, retry_on=()))
+
+    rejections = [
+        (ConflictError("该订单已有退款在处理。"), FailureKind.BUSINESS),
+        (ConflictError("该订单已有退款在处理。"), FailureKind.BUSINESS),
+        (ConflictError("该订单已有退款在处理。"), FailureKind.BUSINESS),
+        (ValidationAppError("参数不合法。"), FailureKind.VALIDATION),
+    ]
+    for exc, kind in rejections:
+        outcome = executor.execute(manifest, _raising(exc, calls), _ctx(), {})
+        assert outcome.failure is kind
+
+    assert calls == [1, 1, 1, 1]
+    assert executor.breaker.state("read_order") == "closed"
+
+    for _ in range(3):
+        outcome = executor.execute(
+            manifest, _raising(UpstreamUnavailableError("上游 503。"), calls), _ctx(), {}
+        )
+        assert outcome.failure is FailureKind.UPSTREAM
+
+    assert executor.breaker.state("read_order") == "open"
+
+    refused = executor.execute(
+        manifest, _raising(UpstreamUnavailableError("上游 503。"), calls), _ctx(), {}
+    )
+    assert refused.attempts == 0
+    assert refused.code == "CIRCUIT_OPEN"
+    assert calls == [1, 1, 1, 1, 1, 1, 1]
+
+
+def test_an_unknown_outcome_still_counts_as_a_fault() -> None:
+    """结果未知不是业务拒绝：写入类工具的超时正是这么浮上来的（见 R3）。
+
+    这一条钉住 R1 的边界——它只把「工具已经答了」的两类摘出去，没有顺手
+    把 unknown 也摘掉，否则一个反复答不出结果的依赖就再也不减载了。
+    """
+    executor = ToolExecutor(breaker=CircuitBreaker(failure_threshold=3))
+    manifest = _manifest(retry=RetryPolicy(max_attempts=1, backoff_ms=0, retry_on=()))
+
+    for _ in range(3):
+        executor.execute(
+            manifest, _raising(UnknownOutcomeError("结果未知。"), []), _ctx(), {}
+        )
+
+    assert executor.breaker.state("read_order") == "open"
+
+
 def test_an_unknown_outcome_is_never_repeated() -> None:
     """Form 4: the call may or may not have taken effect. Repeating is unsafe."""
     calls: list[int] = []

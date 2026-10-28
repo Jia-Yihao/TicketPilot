@@ -21,7 +21,7 @@ def _refund_task(
     response = client.post(
         "/api/v1/tasks",
         headers=headers,
-        json={"request": f"我要申请退款，订单 {order_id}，金额 {amount} 元"},
+        json={"request": f"我要申请退款，订单 {order_id}，金额 {amount} 元，商品有质量问题"},
     )
     assert response.status_code == 201, response.text
     return response.json()

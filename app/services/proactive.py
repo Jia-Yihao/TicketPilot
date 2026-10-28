@@ -1,10 +1,18 @@
-"""Event-triggered proposals that the customer must confirm.
+"""事件触发的主动告知：提案要客户点头才可能发出去。
 
-The chain is fixed: an event type matches one tenant rule, the rule's
-template renders from an allowlisted context, and the result is a
-notification that waits for the customer. Confirmation writes an outbox row
-in the same transaction; the service cannot send anything the customer did
-not approve.
+链路是定死的：一个事件类型只对应该租户现役的那一条规则，规则模板只从白名单
+上下文取值渲染，渲染出来是一条等客户处理的 ``Notification``。客户确认时才在
+同一事务里写外发队列行——服务发不出任何客户没点过的东西。
+
+两条取舍写在这里，免得被后来人「优化」掉：规则的文案改动只能走提案，且必须
+第二个人批准、提交人不能自批，因为文案就是客户收到的那些字；事件类型是代码的
+所有物，``ProactiveEventType`` 里没有的类型在第一步就被拒，服务不能自己发明
+消息、也不能自己发明触发器。
+
+边界：本模块只管「说不说、说什么、要不要等确认」，怎么送到用户手上是
+``app/channels/outbound.py`` 的事。它不碰任务与退款，也不读客户画像与规则表
+之外的业务表；调用方是 ``app/api/v1/memory.py``，运行时只在对账队列里通过
+``ProactiveSender`` 碰到已经确认过的那条通知。
 """
 
 from __future__ import annotations
@@ -20,20 +28,37 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.errors import ConflictError, NotFoundError, ValidationAppError
-from app.core.security import Identity
+from app.core.errors import (
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+    ValidationAppError,
+)
+from app.core.security import Identity, require_approver
 from app.core.time import utcnow
 from app.models.enums import (
     NotificationStatus,
     ProactiveEventType,
 )
-from app.models.memory import CustomerProfile, Notification, ProactiveRule
+from app.models.memory import (
+    CustomerProfile,
+    Notification,
+    ProactiveRule,
+    ProactiveRuleChange,
+    ProactiveRuleVersion,
+)
 from app.observability.redaction import redact
 from app.repositories.audit import AuditRepository
 from app.services.memory import notification_view
 from app.services.outbox import OutboxService
 
-__all__ = ["EVENT_TITLES", "ProactiveService", "rule_view"]
+__all__ = [
+    "EVENT_TITLES",
+    "ProactiveService",
+    "change_view",
+    "rule_view",
+    "version_view",
+]
 
 EVENT_TITLES: dict[str, str] = {
     ProactiveEventType.REFUND_SETTLED.value: "退款到账提醒",
@@ -49,6 +74,8 @@ _CONTEXT_KEYS = frozenset(
 # editable template stops short of the line that cuts it.
 _TEMPLATE_LIMIT = 400
 _COOLDOWN_MAX_MINUTES = 1440
+_CHANGE_FIELDS = ("template", "enabled", "cooldown_minutes")
+_CHANGE_STATUSES = frozenset({"PENDING", "APPROVED", "REJECTED"})
 _ACTIVE_STATUSES = frozenset(
     {
         NotificationStatus.PENDING_CONFIRMATION.value,
@@ -79,6 +106,10 @@ def _iso(value: Any) -> str | None:
     return value.isoformat() if isinstance(value, datetime) else None
 
 
+def _digest(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
 def rule_view(row: ProactiveRule) -> dict[str, Any]:
     return {
         "rule_id": row.id,
@@ -90,7 +121,50 @@ def rule_view(row: ProactiveRule) -> dict[str, Any]:
         # Which context keys the emitter has to supply for this rule to fire.
         # Without it the only symptom is a suppression code days later.
         "required_context": _template_fields(row.template),
+        "version": row.version,
         "updated_at": _iso(row.updated_at),
+    }
+
+
+def change_view(row: ProactiveRuleChange) -> dict[str, Any]:
+    return {
+        "change_id": row.id,
+        "event_type": row.event_type,
+        "kind": row.kind,
+        "status": row.status,
+        "base_version": row.base_version,
+        "target_version": row.target_version,
+        "template": row.template,
+        "enabled": row.enabled,
+        "requires_confirmation": row.requires_confirmation,
+        "cooldown_minutes": row.cooldown_minutes,
+        "required_context": _template_fields(row.template),
+        "old_template": row.old_template,
+        "old_enabled": row.old_enabled,
+        "old_cooldown_minutes": row.old_cooldown_minutes,
+        "reason": row.reason,
+        "submitted_by": row.submitted_by,
+        "submitted_at": _iso(row.submitted_at),
+        "decided_by": row.decided_by,
+        "decided_at": _iso(row.decided_at),
+        "decision_note": row.decision_note,
+        "applied_version": row.applied_version,
+    }
+
+
+def version_view(row: ProactiveRuleVersion) -> dict[str, Any]:
+    return {
+        "event_type": row.event_type,
+        "version": row.version,
+        "template": row.template,
+        "enabled": row.enabled,
+        "requires_confirmation": row.requires_confirmation,
+        "cooldown_minutes": row.cooldown_minutes,
+        "change_id": row.change_id,
+        "submitted_by": row.submitted_by,
+        "approved_by": row.approved_by,
+        "reason": row.reason,
+        "created_at": _iso(row.created_at),
     }
 
 
@@ -101,6 +175,7 @@ class ProactiveService:
         self.audit = AuditRepository(session)
 
     def rules(self) -> list[dict[str, Any]]:
+        """列本租户现役的主动规则，按事件类型排序；只读。"""
         rows = self.session.scalars(
             select(ProactiveRule)
             .where(ProactiveRule.tenant_id == self.identity.tenant_id)
@@ -108,58 +183,413 @@ class ProactiveService:
         ).all()
         return [rule_view(row) for row in rows]
 
-    def update_rule(
+    def submit_change(
         self,
         event_type: str,
         changes: Mapping[str, Any],
+        *,
+        reason: str | None = None,
     ) -> dict[str, Any]:
-        """Change what this tenant says when an event happens.
+        """Propose a new rule state; nothing takes effect here.
 
         The template is validated here rather than at delivery: a placeholder
         outside ``_CONTEXT_KEYS`` would make the rule suppress forever, and a
         positional one raises while formatting. Both are the author's mistake,
         so both are refused now, with the offending key named.
         """
-        if not changes:
+        fields = dict(changes)
+        if not fields:
             raise ValidationAppError("No rule fields were supplied.")
         event = self._event(event_type)
         existing = self._rule_any(event)
-        created = existing is None
-        if created and "template" not in changes:
+        if existing is None and "template" not in fields:
             raise ValidationAppError("A new rule needs a template to speak with.")
-        row = existing if existing is not None else self._new_row(event)
-        if created:
-            self.session.add(row)
+        target = self._target_state(existing, fields)
+        self._require_no_pending(event)
+        change = self._new_change(
+            event,
+            existing,
+            target,
+            kind="UPDATE",
+            target_version=None,
+            reason=reason,
+        )
+        self._audit(
+            "proactive.rule.submit",
+            existing.id if existing is not None else self._rule_id(event),
+            {
+                "event_type": event.value,
+                "change_id": change.id,
+                "kind": change.kind,
+                "base_version": change.base_version,
+                "fields": sorted(fields),
+                "enabled": change.enabled,
+                "cooldown_minutes": change.cooldown_minutes,
+                "template_sha256": _digest(change.template),
+                "reason_sha256": _digest(change.reason) if change.reason else None,
+                "target_version": change.target_version,
+            },
+            resource_type="proactive_rule",
+        )
+        self.session.commit()
+        return change_view(change)
 
-        if "template" in changes:
-            row.template = self._template(changes["template"])
-        if "enabled" in changes:
-            enabled = changes["enabled"]
-            if not isinstance(enabled, bool):
-                raise ValidationAppError("enabled must be a boolean.")
-            row.enabled = enabled
-        if "cooldown_minutes" in changes:
-            minutes = changes["cooldown_minutes"]
-            if not isinstance(minutes, int) or isinstance(minutes, bool):
-                raise ValidationAppError("cooldown_minutes must be an integer.")
-            if not 0 <= minutes <= _COOLDOWN_MAX_MINUTES:
-                raise ValidationAppError(
-                    f"cooldown_minutes must be between 0 and {_COOLDOWN_MAX_MINUTES}."
-                )
-            row.cooldown_minutes = minutes
+    def approve_change(self, change_id: str, *, note: str | None = None) -> dict[str, Any]:
+        """Apply a pending change, but only from a second pair of eyes."""
+        require_approver(self.identity)
+        change = self._own_change(change_id)
+        self._require_pending(change)
+        if self.identity.user_id == change.submitted_by:
+            raise ForbiddenError(
+                "Self-approval is not allowed.", code="RULE_SELF_APPROVAL"
+            )
+        event = self._event(change.event_type)
+        existing = self._rule_any(event)
+        current_version = existing.version if existing is not None else 0
+        if current_version != change.base_version:
+            raise ConflictError(
+                "The rule changed after this proposal was submitted.",
+                code="RULE_VERSION_CONFLICT",
+                details={
+                    "base_version": change.base_version,
+                    "current_version": current_version,
+                },
+            )
 
-        row.updated_at = utcnow()
+        now = utcnow()
+        previous_template = existing.template if existing is not None else None
+        if existing is None:
+            rule = self._new_row(event)
+            self.session.add(rule)
+        else:
+            rule = existing
+        rule.template = change.template
+        rule.enabled = change.enabled
+        rule.cooldown_minutes = change.cooldown_minutes
+        rule.requires_confirmation = change.requires_confirmation
+        rule.version = current_version + 1
+        rule.updated_at = now
+        version = ProactiveRuleVersion(
+            id=f"prv_{uuid.uuid4().hex[:16]}",
+            tenant_id=self.identity.tenant_id,
+            event_type=event.value,
+            version=rule.version,
+            template=rule.template,
+            enabled=rule.enabled,
+            requires_confirmation=rule.requires_confirmation,
+            cooldown_minutes=rule.cooldown_minutes,
+            change_id=change.id,
+            submitted_by=change.submitted_by,
+            approved_by=self.identity.user_id,
+            reason=change.reason,
+            created_at=now,
+        )
+        self.session.add(version)
+        change.status = "APPROVED"
+        change.pending_key = None
+        change.decided_by = self.identity.user_id
+        change.decided_at = now
+        change.decision_note = self._note(note)
+        change.applied_version = rule.version
         try:
             self.session.flush()
         except IntegrityError:
             self.session.rollback()
             raise ConflictError(
-                "A rule for this event type already exists.",
-                code="RULE_ALREADY_EXISTS",
+                "The rule changed while this approval was being written.",
+                code="RULE_VERSION_CONFLICT",
             ) from None
-        self._audit_rule(row, changes, created)
+        self._audit(
+            "proactive.rule.approve",
+            rule.id,
+            {
+                "event_type": event.value,
+                "change_id": change.id,
+                "kind": change.kind,
+                "from_version": current_version,
+                "to_version": rule.version,
+                "target_version": change.target_version,
+                "submitted_by": change.submitted_by,
+                "approved_by": self.identity.user_id,
+                "fields": sorted(_CHANGE_FIELDS),
+                "enabled": rule.enabled,
+                "cooldown_minutes": rule.cooldown_minutes,
+                "template_sha256": _digest(rule.template),
+                "previous_template_sha256": (
+                    _digest(previous_template) if previous_template is not None else None
+                ),
+            },
+            resource_type="proactive_rule",
+        )
         self.session.commit()
-        return rule_view(row)
+        return change_view(change)
+
+    def reject_change(self, change_id: str, *, note: str | None = None) -> dict[str, Any]:
+        """驳回一条提案，规则保持原样；提交人不能审自己那条。"""
+        require_approver(self.identity)
+        change = self._own_change(change_id)
+        self._require_pending(change)
+        if self.identity.user_id == change.submitted_by:
+            raise ForbiddenError(
+                "Self-approval is not allowed.", code="RULE_SELF_APPROVAL"
+            )
+        change.status = "REJECTED"
+        change.pending_key = None
+        change.decided_by = self.identity.user_id
+        change.decided_at = utcnow()
+        change.decision_note = self._note(note)
+        event = self._event(change.event_type)
+        existing = self._rule_any(event)
+        self._audit(
+            "proactive.rule.reject",
+            existing.id if existing is not None else self._rule_id(event),
+            {
+                "event_type": change.event_type,
+                "change_id": change.id,
+                "kind": change.kind,
+                "from_version": change.base_version,
+                "to_version": None,
+                "target_version": change.target_version,
+                "submitted_by": change.submitted_by,
+                "rejected_by": self.identity.user_id,
+                "reason_sha256": _digest(change.decision_note)
+                if change.decision_note
+                else None,
+            },
+            resource_type="proactive_rule",
+        )
+        self.session.commit()
+        return change_view(change)
+
+    def submit_rollback(
+        self,
+        event_type: str,
+        version: int,
+        *,
+        reason: str | None = None,
+    ) -> dict[str, Any]:
+        """Propose restoring a version; the same approval path still applies."""
+        event = self._event(event_type)
+        existing = self._rule_any(event)
+        if existing is None:
+            raise NotFoundError("Rule not found.")
+        snapshot = self.session.scalars(
+            select(ProactiveRuleVersion).where(
+                ProactiveRuleVersion.tenant_id == self.identity.tenant_id,
+                ProactiveRuleVersion.event_type == event.value,
+                ProactiveRuleVersion.version == version,
+            )
+        ).one_or_none()
+        if snapshot is None:
+            raise NotFoundError("Rule version not found.")
+        if snapshot.version == existing.version:
+            raise ConflictError(
+                "The rule is already at that version.",
+                code="RULE_ALREADY_AT_VERSION",
+                details={"version": snapshot.version},
+            )
+        self._require_no_pending(event)
+        target = {
+            "template": snapshot.template,
+            "enabled": snapshot.enabled,
+            "cooldown_minutes": snapshot.cooldown_minutes,
+            "requires_confirmation": snapshot.requires_confirmation,
+        }
+        change = self._new_change(
+            event,
+            existing,
+            target,
+            kind="ROLLBACK",
+            target_version=snapshot.version,
+            reason=reason,
+        )
+        self._audit(
+            "proactive.rule.submit",
+            existing.id,
+            {
+                "event_type": event.value,
+                "change_id": change.id,
+                "kind": change.kind,
+                "base_version": change.base_version,
+                "fields": sorted(_CHANGE_FIELDS),
+                "enabled": change.enabled,
+                "cooldown_minutes": change.cooldown_minutes,
+                "template_sha256": _digest(change.template),
+                "reason_sha256": _digest(change.reason) if change.reason else None,
+                "target_version": change.target_version,
+            },
+            resource_type="proactive_rule",
+        )
+        self.session.commit()
+        return change_view(change)
+
+    def changes(self, *, status: str | None = None) -> list[dict[str, Any]]:
+        """列规则提案，最新的在前；状态过滤只接受三种值。"""
+        if status is not None and status not in _CHANGE_STATUSES:
+            raise ValidationAppError(
+                "Unknown change status.",
+                details={"allowed": sorted(_CHANGE_STATUSES)},
+            )
+        query = select(ProactiveRuleChange).where(
+            ProactiveRuleChange.tenant_id == self.identity.tenant_id
+        )
+        if status is not None:
+            query = query.where(ProactiveRuleChange.status == status)
+        rows = self.session.scalars(
+            query.order_by(ProactiveRuleChange.submitted_at.desc())
+        ).all()
+        return [change_view(row) for row in rows]
+
+    def change(self, change_id: str) -> dict[str, Any]:
+        """读一条提案；属于别的租户与不存在都报 not found。"""
+        return change_view(self._own_change(change_id))
+
+    def versions(self, event_type: str) -> list[dict[str, Any]]:
+        """列某个事件类型的规则历史版本，新的在前；只读。"""
+        event = self._event(event_type)
+        rows = self.session.scalars(
+            select(ProactiveRuleVersion)
+            .where(
+                ProactiveRuleVersion.tenant_id == self.identity.tenant_id,
+                ProactiveRuleVersion.event_type == event.value,
+            )
+            .order_by(ProactiveRuleVersion.version.desc())
+        ).all()
+        return [version_view(row) for row in rows]
+
+    def _target_state(
+        self,
+        existing: ProactiveRule | None,
+        fields: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        if "template" in fields:
+            template = self._template(fields["template"])
+        elif existing is not None:
+            template = existing.template
+        else:
+            raise ValidationAppError("A new rule needs a template to speak with.")
+        enabled = (
+            self._enabled(fields["enabled"])
+            if "enabled" in fields
+            else (existing.enabled if existing is not None else True)
+        )
+        cooldown = (
+            self._cooldown(fields["cooldown_minutes"])
+            if "cooldown_minutes" in fields
+            else (existing.cooldown_minutes if existing is not None else 60)
+        )
+        return {
+            "template": template,
+            "enabled": enabled,
+            "cooldown_minutes": cooldown,
+            "requires_confirmation": (
+                existing.requires_confirmation if existing is not None else True
+            ),
+        }
+
+    def _new_change(
+        self,
+        event: ProactiveEventType,
+        existing: ProactiveRule | None,
+        target: Mapping[str, Any],
+        *,
+        kind: str,
+        target_version: int | None,
+        reason: str | None,
+    ) -> ProactiveRuleChange:
+        change = ProactiveRuleChange(
+            id=f"chg_{uuid.uuid4().hex[:16]}",
+            tenant_id=self.identity.tenant_id,
+            event_type=event.value,
+            kind=kind,
+            status="PENDING",
+            pending_key=event.value,
+            base_version=existing.version if existing is not None else 0,
+            target_version=target_version,
+            template=target["template"],
+            enabled=target["enabled"],
+            requires_confirmation=target["requires_confirmation"],
+            cooldown_minutes=target["cooldown_minutes"],
+            old_template=existing.template if existing is not None else None,
+            old_enabled=existing.enabled if existing is not None else None,
+            old_cooldown_minutes=(
+                existing.cooldown_minutes if existing is not None else None
+            ),
+            reason=self._text(reason, field="reason"),
+            submitted_by=self.identity.user_id,
+            submitted_at=utcnow(),
+        )
+        self.session.add(change)
+        try:
+            self.session.flush()
+        except IntegrityError:
+            self.session.rollback()
+            raise ConflictError(
+                "A change for this event type is already waiting for approval.",
+                code="RULE_CHANGE_PENDING",
+            ) from None
+        return change
+
+    def _require_no_pending(self, event: ProactiveEventType) -> None:
+        pending = self.session.scalars(
+            select(ProactiveRuleChange).where(
+                ProactiveRuleChange.tenant_id == self.identity.tenant_id,
+                ProactiveRuleChange.event_type == event.value,
+                ProactiveRuleChange.status == "PENDING",
+            )
+        ).one_or_none()
+        if pending is not None:
+            raise ConflictError(
+                "A change for this event type is already waiting for approval.",
+                code="RULE_CHANGE_PENDING",
+                details={"change_id": pending.id},
+            )
+
+    def _own_change(self, change_id: str) -> ProactiveRuleChange:
+        row = self.session.scalars(
+            select(ProactiveRuleChange).where(
+                ProactiveRuleChange.id == change_id,
+                ProactiveRuleChange.tenant_id == self.identity.tenant_id,
+            )
+        ).one_or_none()
+        if row is None:
+            raise NotFoundError("Rule change not found.")
+        return row
+
+    def _require_pending(self, change: ProactiveRuleChange) -> None:
+        if change.status != "PENDING":
+            raise ConflictError(
+                f"This change is already {change.status}.",
+                code="RULE_CHANGE_NOT_PENDING",
+                details={"status": change.status},
+            )
+
+    def _enabled(self, value: Any) -> bool:
+        if not isinstance(value, bool):
+            raise ValidationAppError("enabled must be a boolean.")
+        return value
+
+    def _cooldown(self, value: Any) -> int:
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise ValidationAppError("cooldown_minutes must be an integer.")
+        if not 0 <= value <= _COOLDOWN_MAX_MINUTES:
+            raise ValidationAppError(
+                f"cooldown_minutes must be between 0 and {_COOLDOWN_MAX_MINUTES}."
+            )
+        return value
+
+    def _text(self, value: Any, *, field: str) -> str:
+        if value is None:
+            return ""
+        if not isinstance(value, str):
+            raise ValidationAppError(f"{field} must be a string.")
+        cleaned = value.strip()
+        if len(cleaned) > 200:
+            raise ValidationAppError(f"{field} must be at most 200 characters.")
+        return cleaned
+
+    def _note(self, note: str | None) -> str:
+        return self._text(note, field="note")
 
     def _new_row(self, event: ProactiveEventType) -> ProactiveRule:
         return ProactiveRule(
@@ -172,6 +602,7 @@ class ProactiveService:
             template="",
             enabled=True,
             cooldown_minutes=60,
+            version=1,
         )
 
     def _event(self, event_type: str) -> ProactiveEventType:
@@ -258,6 +689,11 @@ class ProactiveService:
         event_key: str,
         context: Mapping[str, Any] | None,
     ) -> dict[str, Any]:
+        """喂一个事实进去，由规则决定说不说；被压下的每一次都带理由回来。
+
+        顺序即判据：没有规则、没有同意、已退订、重复、冷却中、超过每日上限、
+        模板缺上下文——任何一条命中都只记一条抑制记录，不落通知。
+        """
         event = self._event(event_type)
         key = self._event_key(event_key)
         rule = self._rule(event)
@@ -296,6 +732,7 @@ class ProactiveService:
             event_type=event.value,
             event_key=key,
             rule_id=rule.id,
+            rule_version=rule.version,
             status=status,
             title=EVENT_TITLES[event.value],
             body=body,
@@ -326,6 +763,7 @@ class ProactiveService:
         }
 
     def list_notifications(self, *, limit: int = 50) -> list[dict[str, Any]]:
+        """列调用者自己的通知，最新的在前；不返回别人那条。"""
         rows = self.session.scalars(
             select(Notification)
             .where(
@@ -338,6 +776,7 @@ class ProactiveService:
         return [notification_view(row) for row in rows]
 
     def confirm(self, notification_id: str) -> dict[str, Any]:
+        """客户确认一条待确认通知；确认与入队在同一事务里完成。"""
         row = self._own(notification_id)
         if row.status == NotificationStatus.CANCELLED.value:
             raise ConflictError(
@@ -363,6 +802,7 @@ class ProactiveService:
         return notification_view(row)
 
     def cancel(self, notification_id: str) -> dict[str, Any]:
+        """撤销一条还没发出的通知；已发出的撤不回来，只能让客户退订。"""
         row = self._own(notification_id)
         if row.status == NotificationStatus.CANCELLED.value:
             return notification_view(row)
@@ -517,35 +957,6 @@ class ProactiveService:
         )
         self.session.commit()
         return {"status": "SUPPRESSED", "reason": reason, "notification": None}
-
-    def _audit_rule(
-        self,
-        row: ProactiveRule,
-        changes: Mapping[str, Any],
-        created: bool,
-    ) -> None:
-        """Record which rule changed, and prove which template took effect.
-
-        The words themselves stay out of the audit trail: a notification body
-        can carry an order number or an amount, and duplicating it into
-        ``audit_events`` would widen where that text can leak. The digest is
-        enough to answer "was it this version that was live".
-        """
-        self._audit(
-            "proactive.rule.update",
-            row.id,
-            {
-                "event_type": row.event_type,
-                "fields": sorted(changes),
-                "enabled": row.enabled,
-                "cooldown_minutes": row.cooldown_minutes,
-                "template_sha256": hashlib.sha256(
-                    row.template.encode("utf-8")
-                ).hexdigest(),
-                "created": created,
-            },
-            resource_type="proactive_rule",
-        )
 
     def _audit(
         self,

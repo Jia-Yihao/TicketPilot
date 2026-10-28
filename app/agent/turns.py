@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
+from app.models.enums import RefundReason, RefundType
+
 
 class SupportIntent(StrEnum):
     """The read-path sub-labels of the intent catalog.
@@ -69,6 +71,9 @@ class Draft:
     # The action that produced the draft; the handoff bundle records it so a
     # seat does not run the same capability twice.
     action: str | None = None
+    # The statistics snapshot this draft opened, if any. The conversation
+    # keeps it so a later "which rows?" can read the same facts.
+    analytics_query_id: str | None = None
     # The escalation this turn raised, if any.
     handoff: dict[str, Any] | None = None
 
@@ -79,4 +84,6 @@ class Turn:
     order_id: str | None = None
     amount_cents: int | None = None
     product_id: str | None = None
+    refund_reason: RefundReason | None = None
+    refund_type: RefundType | None = None
     inherited: list[str] = field(default_factory=list)

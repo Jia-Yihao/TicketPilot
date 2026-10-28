@@ -14,7 +14,7 @@ TicketPilot 的叙事是「诚实标注」——每个数字都要能跑出来�
 
 另外还守两件和数字相关的事：
 
-* 说明书（docx）是 `docs/PROJECT_SPEC.md` 的渲染结果，两者必须同步；
+* 说明书（docx）是 `docs/spec/项目规格.md` 的渲染结果，两者必须同步；
 * 说明书本身要干净：没有 U+FFFD、没有私有区字符、没有退化成 `<w:sym>` 的符号。
 """
 
@@ -40,9 +40,9 @@ import yaml
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 MANIFEST_FILE = ROOT / "docs" / "fact-baseline.yaml"
-SPEC_FILE = ROOT / "docs" / "PROJECT_SPEC.md"
-MANUAL_FILE = ROOT / "docs" / "TicketPilot项目说明书.docx"
-RECORD_FILE = ROOT / "docs" / "manual-build.json"
+SPEC_FILE = ROOT / "docs" / "spec" / "项目规格.md"
+MANUAL_FILE = ROOT / "docs" / "spec" / "TicketPilot项目说明书.docx"
+RECORD_FILE = ROOT / "docs" / "spec" / "manual-build.json"
 
 WORD_NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 PRIVATE_USE = re.compile(r"[\ue000-\uf8ff\U000f0000-\U0010ffff]")
@@ -466,7 +466,7 @@ def test_manual_contains_the_claimed_lines(
 
 
 def test_manual_build_record_matches_the_specification() -> None:
-    """说明书必须是从当前的 `docs/PROJECT_SPEC.md` 渲染出来的。
+    """说明书必须是从当前的 `docs/spec/项目规格.md` 渲染出来的。
 
     这一条不依赖 pandoc：构建记录里存着源文件的 sha256，
     规格改了没重生成说明书，这里就会红。
@@ -475,7 +475,7 @@ def test_manual_build_record_matches_the_specification() -> None:
     record = _build_record()
     digest = hashlib.sha256(SPEC_FILE.read_bytes()).hexdigest()
     assert record.get("source_sha256") == digest, (
-        "说明书落后于规格：docs/PROJECT_SPEC.md 改过之后没有重生成说明书。\n"
+        "说明书落后于规格：docs/spec/项目规格.md 改过之后没有重生成说明书。\n"
         f"  记录里的源文件摘要：{record.get('source_sha256')}\n"
         f"  当前规格的摘要　：{digest}\n"
         "  修法：python scripts/build_manual.py（或 make manual）"
@@ -486,7 +486,7 @@ def test_manual_build_record_matches_the_specification() -> None:
 
 
 def test_manual_is_in_sync_with_the_specification(manual_paragraphs: list[str]) -> None:
-    """说明书必须是 `docs/PROJECT_SPEC.md` 的渲染结果。
+    """说明书必须是 `docs/spec/项目规格.md` 的渲染结果。
 
     只有本机 pandoc 版本和构建记录里的版本一致时才逐段比对——
     不同版本的 pandoc 渲染细节可能不同，那不是「说明书过期」，
@@ -523,7 +523,7 @@ def test_manual_is_in_sync_with_the_specification(manual_paragraphs: list[str]) 
     for index, (old, new) in enumerate(zip(committed_text, fresh_text, strict=False)):
         if old != new:
             pytest.fail(
-                "说明书与规格不同步：改完 docs/PROJECT_SPEC.md 没有重生成说明书。\n"
+                "说明书与规格不同步：改完 docs/spec/项目规格.md 没有重生成说明书。\n"
                 f"  第一个不一致的段落 #{index}：\n"
                 f"    说明书：{old[:200]!r}\n"
                 f"    现渲染：{new[:200]!r}\n"

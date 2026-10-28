@@ -215,8 +215,11 @@ def test_every_reason_code_is_stable() -> None:
         "SCOPE_MISSING",
         "SCOPE_NOT_TOP_LEVEL",
         "NO_PLAN",
+        "UNSUPPORTED_DIMENSION",
     ):
         assert code in REASON_CODES
+    # Appending a code is allowed; losing one (or silently renaming) is not.
+    assert len(REASON_CODES) == 19
 
 
 def test_a_function_may_not_hide_a_star(guard: SqlGuard) -> None:

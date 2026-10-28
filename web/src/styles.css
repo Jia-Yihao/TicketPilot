@@ -2585,6 +2585,14 @@ svg {
   font-size: 9px;
 }
 
+/* Candidate order chips send on one click, so they read as buttons, not tags. */
+.support-suggestions .chip--candidate {
+  font-family: var(--font-mono);
+  border-color: var(--verified);
+  color: var(--verified);
+  background: var(--verified-soft);
+}
+
 .context-card {
   --card-accent: var(--muted-2);
 
@@ -2603,6 +2611,19 @@ svg {
 
 .context-card--order {
   --card-accent: var(--verified);
+}
+
+/* A candidate is a lighter order card: it carries L1 facts only, so it is
+   dashed and subdued to say "pick me", not "here is the full record". */
+.context-card--order_candidate {
+  --card-accent: var(--verified);
+
+  border-style: dashed;
+  background: color-mix(in srgb, var(--verified-soft) 40%, #fff);
+}
+
+.context-card__kind--order_candidate {
+  background: var(--verified-soft);
 }
 
 .context-card--analytics {
@@ -4944,6 +4965,13 @@ svg {
   color: var(--danger);
   background: var(--danger-soft);
   border-color: #e1c0c0;
+}
+
+/* Candidates were offered, not executed: neutral, never ok/failed. */
+.bundle-actions__mark.is-offered {
+  color: var(--muted-2);
+  background: #f6f6f4;
+  border-style: dashed;
 }
 
 .bundle-actions li > div {

@@ -2,7 +2,7 @@
 
 感谢有兴趣改进 TicketPilot。这个项目是**工程作品集与教学向演示**，
 它的价值在于把“Agent 系统里哪些部分必须是确定性代码”讲清楚，
-所以改动前请先读 [docs/SCOPE.md](docs/SCOPE.md) 与 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
+所以改动前请先读 [docs/guide/范围与边界.md](docs/guide/范围与边界.md) 与 [docs/guide/架构说明.md](docs/guide/架构说明.md)。
 
 ## 行为准则
 
@@ -26,33 +26,49 @@ uvicorn app.asgi:app --reload --port 8000
 
 ```bash
 ruff check app tests scripts evals alembic
-python -m mypy app                        # strict 模式，零错误（137 个文件）
-python -m pytest                          # 513 passed, 6 skipped（收集 519、45 个测试文件；跳过的 6 条需要 PostgreSQL 或 Redis）
+python -m mypy app                        # strict 模式，零错误（148 个文件）
+python -m pytest                          # 收集 1080 条、74 个测试文件（2026-10-28 实测 1074 passed / 6 skipped / 0 failed；上一轮 AUTO 对账回落轮读数 1029 passed，该轮早前读数 1025 passed 系三条说明书同步守卫仍红时取得，docx 重生成后已清零；跳过的 6 条需要 PostgreSQL 或 Redis）
 python evals/run.py                       # 40/40 任务路径 Golden Set
-python evals/support_run.py               # 61/61 只读路径（含多轮澄清）
+python evals/support_run.py               # 62/62 只读路径（含多轮澄清）
+python evals/clarification_candidates.py  # 澄清降级前后对比（同一批 5 段剧本跑旧预算=2 / 新预算=3）
+python evals/support_run.py --dataset evals/analytics_dimension_set.json --partial   # 3/3 统计维度拒绝
+python scripts/build_intent_set.py --check   # 346 条意图语料可复现
+python scripts/manage_intent_gaps.py report --cycle 2026-10-26   # 缺口队列计数；分层对比加 --before / --after
+python evals/intent_metrics.py --enforce     # 规则覆盖、误判代价与缺口不变量
+python evals/intent_candidates.py            # 意图候选集离线证据（不调模型；--with-model 才问端点）
 python evals/retrieval_metrics.py         # 检索/路由评测基线，门槛全过
+python evals/retrieval_metrics.py --dataset evals/retrieval_set.json   # 分层 1k 集（200 金 + 800 银）
+python scripts/build_retrieval_set.py --check   # 分层集可复现性
 python evals/replay.py --self-check       # 回放自检：diff 为空
+python evals/metrics_baseline.py --check  # 基线门禁：五个离线评测源的 395 条确定性读数与 evals/baseline/ 逐键相等（默认零容差）
 python -m alembic check                   # 模型与迁移无漂移
 cd web && npm run build                   # 控制台类型检查 + 构建
 ```
 
-这九条与 `.github/workflows/ci.yml` 的主 job 一一对应；CI 的 Postgres job 只验迁移链，不跑 pytest。
+这份清单覆盖 `.github/workflows/ci.yml` 主 job 的检查项；CI 另有 `alembic upgrade head`
+建库步骤，并把检索指标显式限定为 `--channels bm25,hybrid`。分层集指标、分层集复现、
+澄清降级剧本对比、指标基线门禁与控制台构建是本地附加检查（CI 的 web job 单独跑构建；剧本自身的前后对比
+不进 CI 门禁，但它的形状与读数由 `tests/test_clarification_evidence.py` 的 11 条用例钉住）；
+Postgres job 只验迁移链，不跑 pytest。
 
 只有需要真实 PostgreSQL（并发锁与 Outbox 认领竞态）或真实 Redis（跨进程共享配额）的用例才要指过去；指过去之后它们会真的执行，不再是 skip：
 
 ```bash
-TICKETPILOT_TEST_POSTGRES_URL=postgresql+psycopg://... python -m pytest   # 2026-10-25：517 passed / 2 skipped（153.64 s）
+TICKETPILOT_TEST_POSTGRES_URL=postgresql+psycopg://... python -m pytest   # 2026-10-25（519 条时代）：517 passed / 2 skipped（153.64 s）
 TICKETPILOT_TEST_REDIS_URL=redis://127.0.0.1:56379/0 python -m pytest tests/test_rate_limit_redis.py   # 2 passed
 # 两个容器同时指上：全量一条不跳
-TICKETPILOT_TEST_POSTGRES_URL=postgresql+psycopg://... TICKETPILOT_TEST_REDIS_URL=redis://127.0.0.1:56379/0 python -m pytest   # 2026-10-25：519 passed / 0 skipped（137.23 s）
+TICKETPILOT_TEST_POSTGRES_URL=postgresql+psycopg://... TICKETPILOT_TEST_REDIS_URL=redis://127.0.0.1:56379/0 python -m pytest   # 2026-10-25（519 条时代）：519 passed / 0 skipped（137.23 s）
 ```
 
 这些用例会临时创建数据库、跑完删除，不能指向共享库。
 
 > **Postgres 覆盖范围（2026-10-25）**：T2 起新建的测试文件与四张新表已经在 PostgreSQL 16.15 容器上跑过：
 > 全量 **517 passed / 2 skipped**，跳过的 2 条是 Redis 用例（把 `TICKETPILOT_TEST_REDIS_URL` 也指上后是 **519 passed / 0 skipped**，137.23 s），
-> 13 条迁移 + `alembic check` 无漂移。
-> 默认 `pytest` 的 513 passed / 6 skipped 是 SQLite 基线，两个读数不要混写。
+> 当时是 13 条迁移（head `b4e8d2f6a1c9`）；第 14 条 `a1c7e9d4b820`（P4）没在那次手工全量里，
+> 但已在运行中的 PostgreSQL 16 容器上单独验过 `upgrade head` + `check`（见 `docs/guide/证据索引.md` 的 P4 一节）与 CI 的 `postgres-migration` 作业。
+> 当前迁移链 **15 条**（head `d9e4c7a15b82`），本地 `alembic check` → `No new upgrade operations detected.`；
+> 默认 `pytest` 当前收集 1080 条（2026-10-28 实测：1074 passed / 6 skipped / 0 failed；上一轮 AUTO 对账回落轮读数 1029 passed），它与 PG 历史读数不要混写；
+> **查询改写、分层检索集、意图语料评测、意图缺口闭环、P2/P3/P6、预取式统计、P4 规则治理、P11 澄清候选降级与 P8 意图候选化新增的 347 条，加渠道可用性轮 19 条，再加 B-1/B-3 落地与后续各轮（收尾返工轮、R1/R3 端到端能力、R4 指标基线、R5 答案层、R7 采纳面收口）新增的 194 条（未逐轮拆分归因），共 560 条目前只有 SQLite 证据**，尚未在 PG 上复跑。
 > **检索指标脚本本身也在 PG 上跑过**（`retrieval_metrics.py --channels bm25,dense,hybrid,gated,rerank`
 > 在 `tp_eval` 库上跑出五行读数，与 SQLite 逐位一致）。
 > 这次能一致，前提是修掉了一个可复现性缺陷：`PolicySearchService.visible_chunks()` 原本没有 `ORDER BY`，
@@ -64,7 +80,7 @@ CI 会跑 ruff、mypy、后端测试、Golden Set、Alembic 迁移与 `alembic c
 
 ## 两个守卫：架构与文档
 
-上面那九条里已经包含两个守卫——它们是 `pytest` 里的普通用例，所以 CI 的主 job 会自动跑到。
+上面这份清单里已经包含两个守卫——它们是 `pytest` 里的普通用例，所以 CI 的主 job 会自动跑到。
 想单独跑一遍（改完分层或改完文档数字时用）：
 
 ```bash
@@ -80,7 +96,7 @@ python -m pytest tests/test_architecture_guard.py tests/test_docs_consistency.py
 - **文档一致性守卫**：`tests/test_docs_consistency.py`，清单源是 `docs/fact-baseline.yaml`。
   清单里**不写数字**，只写「在哪个文件的哪一行」与「用哪个正则把数字抠出来」；
   数字由代码现算。所以改完代码后，**改文档里的数字**就行，不需要碰清单。
-  改完 `docs/PROJECT_SPEC.md` 还要跑 `make manual` 重生成说明书，否则说明书同步那条会红。
+  改完 `docs/spec/项目规格.md` 还要跑 `make manual` 重生成说明书，否则说明书同步那条会红。
 
 失败信息都带 `文件:行`，直接改那一行。
 
@@ -110,10 +126,23 @@ app/retrieval/     政策摄取、切块、BM25 检索与引用
 app/observability/ 链路追踪与脱敏
 app/resources/     随包分发的演示数据（政策 md、商品 catalog.json）
 web/src/           React 控制台；设计令牌集中在 styles.css 的 :root
+docs/guide/        使用与实现：架构、接口、边界、评测怎么跑
+docs/spec/         契约：项目规格与它渲染出的说明书
+docs/records/      历史记录：逐轮交付、时间点读数、平台化设想
+docs/下一步规划.md 唯一的规划文档：待办登记处（§0.2）+ 为什么这么排（§15）
 docs/adr/          架构决策记录
+docs/*.yaml        三份守卫清单：事实基线、代码锚点、架构依赖
 tests/             单元 / 集成 / 端到端 / 安全用例
 evals/             Golden Set、只读评测集、检索指标与回放脚本
 ```
+
+### 代码注释与 docstring
+
+模块级 docstring 与公开函数的 docstring 写**简体中文**，讲「这个模块负责什么、边界在哪、谁不该依赖它」；
+标识符、日志文案、span 名、事件类型、错误码一律保持英文原样。行内注释只在解释「为什么」时写，
+不复述代码在做什么。
+
+存量还有一部分英文模块 docstring，不强求一次性改完：随触点（改到那个文件时）转译，避免制造大批噪声 diff。
 
 ## 加一条演示数据
 
@@ -126,7 +155,7 @@ evals/             Golden Set、只读评测集、检索指标与回放脚本
 
 ## 加一个接口
 
-1. 先在 `docs/API.md` 写契约：方法、路径、身份要求、错误码、是否跨租户可读。
+1. 先在 `docs/guide/接口说明.md` 写契约：方法、路径、身份要求、错误码、是否跨租户可读。
 2. 在 `app/schemas/` 定义响应模型，在 `app/api/v1/` 装配；业务规则放 `app/services/`。
 3. 跨租户访问一律 `404`，不要 `403`。
 4. 覆盖三类测试：正常路径、越权/跨租户、并发或重复提交（若涉及写）。
@@ -138,9 +167,9 @@ evals/             Golden Set、只读评测集、检索指标与回放脚本
 请在 `docs/adr/` 追加一条 ADR（编号递增，含背景/决策/后果/被否决方案），
 并在 PR 描述里链接它。纯文案、样式与测试补充不需要。
 
-编号规则：`docs/adr/` 当前 **24 篇**（ADR-001…ADR-011、ADR-013…ADR-025），
+编号规则：`docs/adr/` 当前 **36 篇**（ADR-001…ADR-011、ADR-013…ADR-037），
 **ADR-012 是预留号位**（策略外置与阈值灰度），**不回收、不重排**。
-即使中间号位空着，新 ADR 也要接在当前最大号之后；`docs/AGENT_PLATFORM_PLAN.md` 的
+即使中间号位空着，新 ADR 也要接在当前最大号之后；`docs/records/智能体平台设想.md` 的
 §9.4 ADR 索引、编号说明与文件计数要同步改。
 
 ## 截图与文档
@@ -148,32 +177,34 @@ evals/             Golden Set、只读评测集、检索指标与回放脚本
 控制台视觉有变化时请重拍受影响截图（`docs/assets/screenshots/`），
 README 只引用该目录下的图片。文档里的测试数量、端点数量必须与实际命令输出一致。
 
-`docs/TicketPilot项目说明书.docx` 是 `docs/PROJECT_SPEC.md` 的 Pandoc 渲染，**不要手工编辑**。
+`docs/spec/TicketPilot项目说明书.docx` 是 `docs/spec/项目规格.md` 的 Pandoc 渲染，**不要手工编辑**。
 改完 spec 后跑 `python scripts/build_manual.py`（或 `make manual`）：它渲染到临时文件、校验
 `U+FFFD` 计数 0、段落数与表格数非零、体积不低于 50 KB，全部通过才替换旧 docx，
 失败时旧文件原样保留并打印是哪一项没过。
 
 改动**会影响回复文本的生成路径**（个性化效果、输出护栏、模板措辞）时，除了
-`docs/API.md` 的响应示例，还要同步 `README.md` 的对照段、`docs/PROJECT_SPEC.md` §6.7
-与前端 `web/src/pages/ConversationPage.tsx` 里的原因码标签表；并在 `docs/EVALS.md`
+`docs/guide/接口说明.md` 的响应示例，还要同步 `README.md` 的对照段、`docs/spec/项目规格.md` §6.7
+与前端 `web/src/pages/ConversationPage.tsx` 里的原因码标签表；并在 `docs/guide/评测说明.md`
 确认回放口径：新增一种会让回复变化的效果，等于让已有档案客户的历史 trace 不再逐字可回放。
 
 改动**会打开或改变主动规则的写面**（`PUT /api/v1/memory/rules/{event_type}`）时，
 这条同步清单更长，漏一条就会出现「文档说只能改种子数据，代码却能改」的漂移：
 
-1. `docs/API.md`——请求体字段、每个错误码的形状、`details.allowed` 之类回显内容。
-2. `docs/ARCHITECTURE.md`——新增「主动规则的可编辑面」一节或更新它：写路径、校验点、诚实边界。
-3. `docs/SECURITY.md`——**可写字段的信任边界**：哪些字段不可写（`requires_confirmation`）、
-   事件类型为什么由代码定、审计为什么只存 `template_sha256`、改动为什么不回溯。
-4. `docs/PROJECT_SPEC.md`——§12.9 的写面块与 §19.1/§19.2 的实测读数、漂移表。
-5. `docs/SCOPE.md` 的「不做」侧与 `docs/EVALS.md` 的「诚实边界」侧——写路径进不了评测集，
+1. `docs/guide/接口说明.md`——提交（202）与批准（200）两段契约、每个错误码的形状、`details` 回显内容。
+2. `docs/guide/架构说明.md`——「主动规则的治理面」一节：提交 → 复核 → 生效的写路径、版本快照、回滚、诚实边界。
+3. `docs/guide/安全说明.md`——**可写字段与审批的信任边界**：`requires_confirmation` 不可写、
+   事件类型由代码定、发起人不能批准自己的提案、审计只存摘要、改动不回溯。
+4. `docs/spec/项目规格.md`——§12.9 的写面块、§9.1 的接口表与 §19.1/§19.2 的实测读数、漂移表。
+5. `docs/guide/范围与边界.md` 的「不做」侧与 `docs/guide/评测说明.md` 的「诚实边界」侧——写路径进不了评测集，
    要写清楚原因，不要让读数看起来覆盖了它。
-6. `README.md`、`docs/AGENT_PLATFORM_PLAN.md`（规模事实、Phase 表、ADR 索引、交付表）
+6. `README.md`、`docs/records/智能体平台设想.md`（规模事实、Phase 表、ADR 索引、交付表）
    与本文件的门禁读数。
 7. 前端 `web/src/pages/ProactiveRules.tsx` + `web/src/api.ts` + `web/src/types.ts`，
-   以及 `web/src/App.tsx` 的路由与角色门禁（`/rules` 只对 `support` / `admin` 可见）。
-8. 规则文案**不双人复核**、没有版本表 / 一键回滚 / 按租户灰度——这三件事是
-   ADR-019 明确不做的，任何文档都不能把它们写成已具备。
+   以及 `web/src/App.tsx` 的路由与角色门禁（`/rules` 只对 `support` / `admin` 可见；
+   批准 / 驳回按钮只对 `approver` 且非提交人显示）。
+8. 规则文案现在**需要另一位审批人**（四眼）、有不可变版本表与一键回滚；仍然**没有**
+   删除规则、按租户灰度、定时生效或对已生成通知的回溯改写——这些是 ADR-031 明确不做的，
+   任何文档都不能把它们写成已具备。
 
 ## 提交与 PR
 

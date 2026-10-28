@@ -19,6 +19,7 @@ from app.models.enums import Channel, HandoffReason
 
 __all__ = [
     "ActionRecord",
+    "CandidateOrder",
     "Citation",
     "HandoffBundle",
     "IntentRecord",
@@ -63,6 +64,28 @@ class ActionRecord:
             "result": self.result,
             "ok": self.ok,
             "at": self.at,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class CandidateOrder:
+    """An order the customer was shown as a candidate and did not pick.
+
+    The same four L1 facts as the card, so the seat can carry on from the list
+    the customer was already looking at instead of asking for a number again.
+    """
+
+    order_id: str
+    product_name: str
+    status: str
+    delivered_at: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "order_id": self.order_id,
+            "product_name": self.product_name,
+            "status": self.status,
+            "delivered_at": self.delivered_at,
         }
 
 
@@ -121,6 +144,7 @@ class HandoffBundle:
     intent_history: tuple[IntentRecord, ...]
     slots: dict[str, Any] = field(default_factory=dict)
     attempted_actions: tuple[ActionRecord, ...] = ()
+    attempted_candidates: tuple[CandidateOrder, ...] = ()
     pending_task_id: str | None = None
     sentiment: SentimentSnapshot = field(
         default_factory=lambda: SentimentSnapshot(label="NEUTRAL", score=0.0)
@@ -128,9 +152,15 @@ class HandoffBundle:
     policy_refs: tuple[Citation, ...] = ()
     suggested_next_step: str = ""
     created_at: str = ""
+    # What the customer wrote about themselves before this conversation, in
+    # their own words. It is here so the seat does not ask again; it is
+    # masked, clipped and sourced, and it exists only in this package.
+    history_summary: str | None = None
+    history_summary_source: str = ""
+    history_summary_max_chars: int = 0
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload: dict[str, Any] = {
             "conversation_id": self.conversation_id,
             "tenant_id": self.tenant_id,
             "user_id": self.user_id,
@@ -144,9 +174,20 @@ class HandoffBundle:
             "intent_history": [record.to_dict() for record in self.intent_history],
             "slots": dict(self.slots),
             "attempted_actions": [record.to_dict() for record in self.attempted_actions],
+            "attempted_candidates": [
+                candidate.to_dict() for candidate in self.attempted_candidates
+            ],
             "pending_task_id": self.pending_task_id,
             "sentiment": self.sentiment.to_dict(),
             "policy_refs": [citation.to_dict() for citation in self.policy_refs],
             "suggested_next_step": self.suggested_next_step,
             "created_at": self.created_at,
         }
+        # Nothing to say means nothing written: no null, no empty string, no
+        # zero. A seat must be able to tell "there is no summary" from
+        # "the summary is empty".
+        if self.history_summary:
+            payload["history_summary"] = self.history_summary
+            payload["history_summary_source"] = self.history_summary_source
+            payload["history_summary_max_chars"] = self.history_summary_max_chars
+        return payload

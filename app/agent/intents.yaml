@@ -5,8 +5,8 @@
 # happens when there is no basis for an answer. The code reads it; it never
 # repeats these values.
 #
-# Adding a capability means adding a row here plus an action implementation —
-# no change to the routing or dispatch code.
+# Adding a read capability means adding a row here plus an action implementation
+# — no change to the routing or dispatch code. Write rows: see the file's footer.
 #
 # Field reference
 #   priority            lower wins; the first matching row decides the intent
@@ -28,7 +28,7 @@
 #   no_evidence         what to answer when there is no basis for an answer
 #   fallback            what to do when the action cannot serve the intent
 
-version: "2026-10-24"
+version: "2026-10-27"
 
 slots:
   order_id:
@@ -45,6 +45,14 @@ slots:
     missing_reason: "MISSING_AMOUNT"
     examples:
       - "129 元"
+    sensitive: false
+  refund_reason:
+    type: refund_reason
+    prompt: "请说明退款原因，例如质量问题、破损、发错商品、与描述不符、不再需要；说不清或不方便分类的话，回答“其他”也可以继续。"
+    missing_reason: "MISSING_REFUND_REASON"
+    examples:
+      - "商品有质量问题"
+      - "包裹破损了"
     sensitive: false
 
 intents:
@@ -76,6 +84,7 @@ intents:
     required_slots:
       - order_id
       - amount_cents
+      - refund_reason
     validation: eligibility_and_approval
     risk_level: R3
     no_evidence: none
@@ -84,6 +93,15 @@ intents:
     clarify_prompts:
       order_id: "请提供订单号（格式如 ORD-DEMO-1001），退款申请必须绑定具体订单。"
       amount_cents: "请提供退款金额，例如 129 元。"
+      refund_reason: "请说明退款原因，例如质量问题、破损、发错商品、与描述不符、不再需要；说不清或不方便分类的话，回答“其他”也可以继续。"
+    match_request_only: true
+    cues:
+      - "申请退款"
+      - "我要退款"
+      - "帮我退款"
+      - "退钱"
+      - "退款申请"
+      - "refund"
 
   - intent_id: TICKET_CREATE
     priority: 11
@@ -95,6 +113,13 @@ intents:
     no_evidence: none
     fallback: create_ticket
     write_path: true
+    match_request_only: true
+    cues:
+      - "工单"
+      - "投诉"
+      - "转人工"
+      - "人工客服"
+      - "ticket"
 
   - intent_id: REFUND_STATUS
     priority: 20
@@ -319,3 +344,14 @@ intents:
     no_evidence: none
     fallback: clarify_then_handoff
     write_path: false
+
+# Footer: the one checked rule on the write path (write_path: true).
+#
+# classify() claims a write row only when its intent_id names an Intent member
+# listed in routing._WRITE_INTENT_IDS. A write row with no enum member must be
+# named in routing._WRITE_INTENT_EXEMPT -- DELIVERY_ISSUE is one, because the
+# catalog decides it on its own, in classify_support(), and Intent has no such
+# member. Add a write row that is in neither set and
+# tests/test_intent_catalog.py::test_every_enum_label_has_a_catalog_row fails,
+# naming what to extend. The point is that a write row is never skipped in
+# silence: silence is how "add a row, no code change" stops being true twice.

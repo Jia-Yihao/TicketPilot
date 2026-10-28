@@ -73,6 +73,16 @@ const SLOT_LABELS: Record<string, string> = {
   product_id: '商品',
 }
 
+// The order numbers the agent offered as candidates this turn. A chip carrying
+// one of these is not a topic hint, it is a request: clicking it should send.
+function candidateOrderIds(reply: SupportReply): Set<string> {
+  return new Set(
+    reply.context_cards
+      .filter((card) => card.kind === 'order_candidate')
+      .map((card) => card.card_id),
+  )
+}
+
 // The four effect codes of app/agent/personalization.py, phrased as what the
 // customer gets rather than as a log token.
 const PERSONALIZATION_LABELS: Record<string, string> = {
@@ -596,19 +606,35 @@ export function ConversationPage() {
                         <div className="support-suggestions">
                           <span className="result-label">继续追问</span>
                           <div className="chip-row">
-                            {message.reply.suggestions.map((suggestion) => (
-                              <button
-                                key={suggestion}
-                                type="button"
-                                className="chip"
-                                onClick={() => {
-                                  setInput(suggestion)
-                                  inputRef.current?.focus()
-                                }}
-                              >
-                                {suggestion}
-                              </button>
-                            ))}
+                            {message.reply.suggestions.map((suggestion) => {
+                              const isCandidate = candidateOrderIds(
+                                message.reply,
+                              ).has(suggestion)
+                              return (
+                                <button
+                                  key={suggestion}
+                                  type="button"
+                                  className={
+                                    isCandidate ? 'chip chip--candidate' : 'chip'
+                                  }
+                                  onClick={() => {
+                                    if (isCandidate) {
+                                      // A candidate order is one click to send,
+                                      // not one click to fill the box: the whole
+                                      // point of downgrade is that the customer
+                                      // does not retype an order number.
+                                      setInput('')
+                                      void send(suggestion)
+                                      return
+                                    }
+                                    setInput(suggestion)
+                                    inputRef.current?.focus()
+                                  }}
+                                >
+                                  {suggestion}
+                                </button>
+                              )
+                            })}
                           </div>
                         </div>
                       ) : null}

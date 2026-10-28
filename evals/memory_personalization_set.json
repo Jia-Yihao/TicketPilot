@@ -1,0 +1,778 @@
+{
+  "version": 1,
+  "description": "R6 记忆与多轮契约集：8 类 × 正负各 1，共 16 条；不替代 evals/support_set.json 的 62 条门槛；运行：python evals/support_run.py --dataset evals/memory_personalization_set.json --partial",
+  "reset_profile": true,
+  "required_classes": [
+    "first_turn_greeting",
+    "greeting_once",
+    "concise_trim",
+    "interest_reorder",
+    "cross_session_slots",
+    "long_conversation_trim",
+    "clarify_then_handoff",
+    "denied_memory_correction"
+  ],
+  "cases": [
+    {
+      "id": "mem-greeting-first-turn",
+      "query": "退款条件是什么？",
+      "intent": "POLICY_QA",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "class": "first_turn_greeting",
+      "polarity": "positive",
+      "setup_profile": {
+        "preferred_name": "Alice 女士"
+      },
+      "turns": [
+        {
+          "message": "退款条件是什么？",
+          "expect": {
+            "intent": "POLICY_QA",
+            "reply_contains": [
+              "你好，Alice 女士。"
+            ],
+            "personalization": {
+              "effects_contains": [
+                "ADDRESSED"
+              ],
+              "fields": [
+                "preferred_name"
+              ]
+            },
+            "spans": [
+              "generate/memory.personalize"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "mem-greeting-absent",
+      "query": "退款条件是什么？",
+      "intent": "POLICY_QA",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "class": "first_turn_greeting",
+      "polarity": "negative",
+      "turns": [
+        {
+          "message": "退款条件是什么？",
+          "expect": {
+            "intent": "POLICY_QA",
+            "reply_not_contains": [
+              "你好，"
+            ],
+            "personalization": null,
+            "span_absent": [
+              "generate/memory.personalize"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "mem-greeting-once",
+      "query": "退款条件是什么？",
+      "intent": "POLICY_QA",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "class": "greeting_once",
+      "polarity": "positive",
+      "setup_profile": {
+        "preferred_name": "Alice 女士"
+      },
+      "turns": [
+        {
+          "message": "退款条件是什么？",
+          "expect": {
+            "intent": "POLICY_QA",
+            "personalization": {
+              "effects_contains": [
+                "ADDRESSED"
+              ]
+            }
+          }
+        },
+        {
+          "message": "退款条件是什么？",
+          "expect": {
+            "intent": "POLICY_QA",
+            "reply_not_contains": [
+              "你好，",
+              "Alice 女士"
+            ],
+            "personalization": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "mem-greeting-no-free-text",
+      "query": "退款条件是什么？",
+      "intent": "POLICY_QA",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "class": "greeting_once",
+      "polarity": "negative",
+      "setup_profile": {
+        "preferred_name": "Alice 女士",
+        "history_summary": "周五下午三点前回复我，找王经理",
+        "preferences": {
+          "contact_window": "周五下午三点"
+        }
+      },
+      "turns": [
+        {
+          "message": "退款条件是什么？",
+          "expect": {
+            "intent": "POLICY_QA",
+            "reply_not_contains": [
+              "周五",
+              "下午三点",
+              "王经理"
+            ],
+            "suggestions_not_contains": [
+              "周五",
+              "下午三点",
+              "王经理"
+            ],
+            "personalization": {
+              "effects_contains": [
+                "ADDRESSED"
+              ],
+              "fields": [
+                "preferred_name"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "mem-concise-trim",
+      "query": "退款条件是什么？",
+      "intent": "POLICY_QA",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "class": "concise_trim",
+      "polarity": "positive",
+      "setup_profile": {
+        "preferences": {
+          "tone": "concise"
+        }
+      },
+      "turns": [
+        {
+          "message": "退款条件是什么？",
+          "expect": {
+            "intent": "POLICY_QA",
+            "suggestion_count": 2,
+            "personalization": {
+              "effects_contains": [
+                "SUGGESTIONS_TRIMMED"
+              ],
+              "fields": [
+                "tone"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "mem-tone-detailed-untrimmed",
+      "query": "退款条件是什么？",
+      "intent": "POLICY_QA",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "class": "concise_trim",
+      "polarity": "negative",
+      "setup_profile": {
+        "preferences": {
+          "tone": "detailed"
+        }
+      },
+      "turns": [
+        {
+          "message": "退款条件是什么？",
+          "expect": {
+            "intent": "POLICY_QA",
+            "suggestion_count_min": 3,
+            "personalization": {
+              "effects_absent": [
+                "SUGGESTIONS_TRIMMED"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "mem-interest-reorder",
+      "query": "TrailLite 的参数是什么？",
+      "intent": "PRODUCT_QUERY",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "class": "interest_reorder",
+      "polarity": "positive",
+      "setup_profile": {
+        "preferences": {
+          "product_interests": [
+            "TrailLite Pro 摄影背包 28L"
+          ]
+        }
+      },
+      "turns": [
+        {
+          "message": "TrailLite 的参数是什么？",
+          "expect": {
+            "intent": "PRODUCT_QUERY",
+            "card_ids": [
+              "PROD-TL-2003",
+              "PROD-TL-2002"
+            ],
+            "personalization": {
+              "effects_contains": [
+                "CARDS_REORDERED"
+              ],
+              "effects_absent": [
+                "INTEREST_SUGGESTION"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "mem-interest-already-first",
+      "query": "TrailLite 的参数是什么？",
+      "intent": "PRODUCT_QUERY",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "class": "interest_reorder",
+      "polarity": "negative",
+      "setup_profile": {
+        "preferences": {
+          "product_interests": [
+            "TrailLite 通勤背包 22L"
+          ]
+        }
+      },
+      "turns": [
+        {
+          "message": "TrailLite 的参数是什么？",
+          "expect": {
+            "intent": "PRODUCT_QUERY",
+            "card_ids": [
+              "PROD-TL-2002",
+              "PROD-TL-2003"
+            ],
+            "personalization": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "mem-session-slots-not-carried",
+      "query": "ORD-DEMO-1002 的物流到哪了",
+      "intent": "LOGISTICS_QUERY",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "class": "cross_session_slots",
+      "polarity": "positive",
+      "setup_profile": {
+        "preferred_name": "Alice 女士"
+      },
+      "turns": [
+        {
+          "message": "ORD-DEMO-1002 的物流到哪了",
+          "expect": {
+            "intent": "LOGISTICS_QUERY",
+            "slots": {
+              "order_id": "ORD-DEMO-1002"
+            }
+          }
+        },
+        {
+          "message": "帮我看看物流",
+          "new_conversation": true,
+          "expect": {
+            "intent": "LOGISTICS_QUERY",
+            "clarification": {
+              "reason": "MISSING_ORDER_ID",
+              "expected_slot": "order_id"
+            },
+            "slots": {
+              "order_id": null
+            },
+            "inherited_slots_empty": true,
+            "personalization": {
+              "effects_contains": [
+                "ADDRESSED"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "mem-session-slots-resumed",
+      "query": "帮我查一下订单",
+      "intent": "ORDER_QUERY",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "class": "cross_session_slots",
+      "polarity": "negative",
+      "setup_profile": {
+        "preferred_name": "Alice 女士"
+      },
+      "turns": [
+        {
+          "message": "帮我查一下订单",
+          "expect": {
+            "intent": "ORDER_QUERY",
+            "clarification": {
+              "reason": "MISSING_ORDER_ID",
+              "expected_slot": "order_id",
+              "resumable_intent": "ORDER_QUERY"
+            },
+            "slots": {
+              "clarification_count": 1
+            }
+          }
+        },
+        {
+          "message": "ORD-DEMO-1002",
+          "expect": {
+            "clarification": null,
+            "slots": {
+              "order_id": "ORD-DEMO-1002",
+              "resolved": true
+            },
+            "span_attrs": {
+              "support.classify": {
+                "resumed": true
+              }
+            },
+            "personalization": {
+              "effects_absent": [
+                "ADDRESSED"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "mem-long-conversation-trim",
+      "query": "退款条件是什么？",
+      "intent": "POLICY_QA",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "class": "long_conversation_trim",
+      "polarity": "positive",
+      "setup_profile": {
+        "preferred_name": "Alice 女士"
+      },
+      "turns": [
+        {
+          "message": "退款条件是什么？",
+          "expect": {
+            "intent": "POLICY_QA",
+            "personalization": {
+              "effects_contains": [
+                "ADDRESSED"
+              ]
+            }
+          }
+        },
+        {
+          "message": "签收以后多少天内可以申请退款",
+          "expect": {
+            "intent": "POLICY_QA"
+          }
+        },
+        {
+          "message": "退款金额应该怎么计算",
+          "expect": {
+            "intent": "POLICY_QA"
+          }
+        },
+        {
+          "message": "退款申请需要谁审批",
+          "expect": {
+            "intent": "POLICY_QA"
+          }
+        },
+        {
+          "message": "退款条件是什么？",
+          "expect": {
+            "intent": "POLICY_QA"
+          }
+        },
+        {
+          "message": "签收以后多少天内可以申请退款",
+          "expect": {
+            "intent": "POLICY_QA"
+          }
+        },
+        {
+          "message": "退款金额应该怎么计算",
+          "expect": {
+            "intent": "POLICY_QA"
+          }
+        },
+        {
+          "message": "退款申请需要谁审批",
+          "expect": {
+            "intent": "POLICY_QA"
+          }
+        },
+        {
+          "message": "退款条件是什么？",
+          "expect": {
+            "intent": "POLICY_QA"
+          }
+        },
+        {
+          "message": "签收以后多少天内可以申请退款",
+          "expect": {
+            "intent": "POLICY_QA"
+          }
+        },
+        {
+          "message": "退款金额应该怎么计算",
+          "expect": {
+            "intent": "POLICY_QA"
+          }
+        },
+        {
+          "message": "退款申请需要谁审批",
+          "expect": {
+            "intent": "POLICY_QA"
+          }
+        },
+        {
+          "message": "退款条件是什么？",
+          "expect": {
+            "intent": "POLICY_QA"
+          }
+        },
+        {
+          "message": "签收以后多少天内可以申请退款",
+          "expect": {
+            "intent": "POLICY_QA"
+          }
+        },
+        {
+          "message": "退款金额应该怎么计算",
+          "expect": {
+            "intent": "POLICY_QA"
+          }
+        },
+        {
+          "message": "退款申请需要谁审批",
+          "expect": {
+            "intent": "POLICY_QA"
+          }
+        },
+        {
+          "message": "退款条件是什么？",
+          "expect": {
+            "intent": "POLICY_QA"
+          }
+        },
+        {
+          "message": "签收以后多少天内可以申请退款",
+          "expect": {
+            "intent": "POLICY_QA"
+          }
+        },
+        {
+          "message": "退款金额应该怎么计算",
+          "expect": {
+            "intent": "POLICY_QA"
+          }
+        },
+        {
+          "message": "退款申请需要谁审批",
+          "expect": {
+            "intent": "POLICY_QA"
+          }
+        },
+        {
+          "message": "退款条件是什么？",
+          "expect": {
+            "intent": "POLICY_QA",
+            "stored_messages": 40,
+            "stored_messages_max": 40,
+            "personalization": {
+              "effects_absent": [
+                "ADDRESSED"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "mem-short-conversation-untrimmed",
+      "query": "退款条件是什么？",
+      "intent": "POLICY_QA",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "class": "long_conversation_trim",
+      "polarity": "negative",
+      "setup_profile": {
+        "preferred_name": "Alice 女士"
+      },
+      "turns": [
+        {
+          "message": "退款条件是什么？",
+          "expect": {
+            "intent": "POLICY_QA"
+          }
+        },
+        {
+          "message": "签收以后多少天内可以申请退款",
+          "expect": {
+            "intent": "POLICY_QA"
+          }
+        },
+        {
+          "message": "退款金额应该怎么计算",
+          "expect": {
+            "intent": "POLICY_QA",
+            "stored_messages": 6
+          }
+        }
+      ]
+    },
+    {
+      "id": "mem-clarify-two-then-handoff",
+      "query": "帮我查一下订单",
+      "intent": "ORDER_QUERY",
+      "kind": "normal",
+      "tenant": "demo",
+      "user": "alice",
+      "class": "clarify_then_handoff",
+      "polarity": "positive",
+      "setup_profile": {
+        "preferred_name": "Alice 女士"
+      },
+      "turns": [
+        {
+          "message": "帮我查一下订单",
+          "expect": {
+            "intent": "ORDER_QUERY",
+            "clarification": {
+              "reason": "MISSING_ORDER_ID",
+              "expected_slot": "order_id",
+              "resumable_intent": "ORDER_QUERY"
+            },
+            "slots": {
+              "clarification_count": 1
+            },
+            "personalization": {
+              "effects_contains": [
+                "ADDRESSED"
+              ]
+            }
+          }
+        },
+        {
+          "message": "我忘了单号",
+          "expect": {
+            "intent": "ORDER_QUERY",
+            "reply_contains": [
+              "你名下最近的订单是"
+            ],
+            "clarification": {
+              "reason": "MISSING_ORDER_ID",
+              "expected_slot": "order_id",
+              "resumable_intent": "ORDER_QUERY"
+            },
+            "slots": {
+              "clarification_count": 2
+            },
+            "personalization": {
+              "effects_absent": [
+                "ADDRESSED"
+              ]
+            }
+          }
+        },
+        {
+          "message": "还是想不起来",
+          "expect": {
+            "intent": "ORDER_QUERY",
+            "clarification": {
+              "reason": "MISSING_ORDER_ID",
+              "expected_slot": "order_id",
+              "resumable_intent": "ORDER_QUERY"
+            },
+            "handoff": {
+              "status": "HANDOFF_PENDING",
+              "reason": "NO_UNDERSTANDING",
+              "signal_id": "repeated_clarification",
+              "takeover": true
+            },
+            "slots": {
+              "clarification_count": 3
+            },
+            "personalization": {
+              "effects_absent": [
+                "ADDRESSED"
+              ]
+            }
+          }
+        },
+        {
+          "message": "还在吗",
+          "expect": {
+            "agent_silent": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "mem-clarify-resolved-no-handoff",
+      "query": "帮我查一下订单",
+      "intent": "ORDER_QUERY",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "class": "clarify_then_handoff",
+      "polarity": "negative",
+      "setup_profile": {
+        "preferred_name": "Alice 女士"
+      },
+      "turns": [
+        {
+          "message": "帮我查一下订单",
+          "expect": {
+            "intent": "ORDER_QUERY",
+            "clarification": {
+              "reason": "MISSING_ORDER_ID",
+              "expected_slot": "order_id",
+              "resumable_intent": "ORDER_QUERY"
+            },
+            "slots": {
+              "clarification_count": 1
+            }
+          }
+        },
+        {
+          "message": "ORD-DEMO-1002",
+          "expect": {
+            "clarification": null,
+            "task": null,
+            "handoff": null,
+            "slots": {
+              "order_id": "ORD-DEMO-1002",
+              "resolved": true
+            },
+            "span_attrs": {
+              "support.classify": {
+                "resumed": true
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "mem-correction-via-memory-api",
+      "query": "退款条件是什么？",
+      "intent": "POLICY_QA",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "class": "denied_memory_correction",
+      "polarity": "positive",
+      "setup_profile": {
+        "preferred_name": "Alice 女士"
+      },
+      "profile_ops": [
+        {
+          "after_turn": 0,
+          "action": "delete"
+        }
+      ],
+      "turns": [
+        {
+          "message": "退款条件是什么？",
+          "expect": {
+            "intent": "POLICY_QA",
+            "personalization": {
+              "effects_contains": [
+                "ADDRESSED"
+              ]
+            }
+          }
+        },
+        {
+          "message": "退款条件是什么？",
+          "new_conversation": true,
+          "expect": {
+            "intent": "POLICY_QA",
+            "reply_not_contains": [
+              "你好，",
+              "Alice 女士"
+            ],
+            "personalization": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "mem-denial-does-not-write",
+      "query": "退款条件是什么？",
+      "intent": "POLICY_QA",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "class": "denied_memory_correction",
+      "polarity": "negative",
+      "setup_profile": {
+        "preferred_name": "Alice 女士"
+      },
+      "turns": [
+        {
+          "message": "退款条件是什么？",
+          "expect": {
+            "intent": "POLICY_QA",
+            "personalization": {
+              "effects_contains": [
+                "ADDRESSED"
+              ]
+            }
+          }
+        },
+        {
+          "message": "以后不用称呼我的名字",
+          "expect": {
+            "reply_not_contains": [
+              "Alice 女士"
+            ],
+            "personalization": null,
+            "memory_audit_unchanged": true
+          }
+        }
+      ]
+    }
+  ]
+}

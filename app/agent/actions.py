@@ -1,9 +1,17 @@
-"""Action handlers — the executable half of the intent catalog.
+"""动作处理器：意图目录里每个意图的「可执行的那一半」。
 
-Every capability the agent can perform is an *action*. The catalog row names
-the action; this module implements it. Adding a capability therefore means
-adding a row to ``intents.yaml`` and one function here — the routing and
-dispatch code in ``support_agent.py`` never changes.
+目录（``app/agent/intents.yaml``）说这句话是什么意思、该由哪个动作来答；这里
+就是那些动作本身。所以加一项能力 = 目录里加一行 + 写一个函数并用 ``@action``
+注册，``support_agent.py`` 里的派发代码一行都不用改——派发只认名字。
+
+一条取舍：动作只负责组装 ``Draft``（回执文字、卡片、建议、可信度），不写业务
+表。真正动数据的那条路是 ``_create_task`` 把请求交给 ``TaskRuntime``，审批、
+幂等与审计都留在运行时里。这样读路径永远不可能在动作层留下半个事务。
+
+边界：动作依赖运行时，运行时、工具实现与仓储都不该反过来依赖动作。入参面只有
+``ActionRequest`` 一个，加字段要同时想清楚哪些动作会读到它、哪些动作读不到也
+不该假装读到了——``Draft.resolved`` 与 ``evidence_score`` 是转人工判定的输入，
+凭空填成「已解决」会让信号表看不出失败。
 """
 
 from __future__ import annotations
@@ -14,6 +22,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.agent.decision import ModelDecision
 from app.agent.escalation import EscalationSignal, get_escalation_catalog
 from app.agent.turns import Draft, SupportPlan, Turn
 from app.core.errors import NotFoundError
@@ -23,12 +32,15 @@ from app.core.security import Identity
 from app.core.time import utcnow
 from app.observability.tracing import TraceRecorder
 from app.services.catalog import CatalogService
+from app.services.llm_usage import LlmUsageService
 from app.services.refund_policy import EligibilityResult, RefundPolicy
 from app.services.runtime import TaskRuntime
 from app.services.support import SupportContextService, refund_reason_label
 from app.sql.errors import SqlRejected
-from app.sql.schema import DATASETS, status_label
+from app.sql.narrative import AnalyticsNarrator, NarrationResult, narrate, render_template
+from app.sql.schema import DATASETS
 from app.sql.service import SqlAnalyticsService, SqlAnswer
+from app.sql.snapshot import AnalyticsSnapshot
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +61,15 @@ class ActionRequest:
     context: dict[str, Any]
     trace: TraceRecorder
     signal: EscalationSignal | None = None
+    # The chat entry's model reading, offered to the task ledger for review.
+    # It is not a verdict: the runtime verifies it before reusing anything.
+    model_decision: ModelDecision | None = None
+    # The one narrator allowed to phrase prefetched facts. ``None`` in rules
+    # mode or when the switch is off, which is also the zero-call guarantee.
+    narrator: AnalyticsNarrator | None = None
+    conversation_id: str | None = None
+    # The snapshot a detail follow-up asked to open; ``None`` for a new turn.
+    expand_query_id: str | None = None
 
 
 ActionFn = Callable[[ActionRequest], Draft]
@@ -352,7 +373,10 @@ def ticket_create(request: ActionRequest) -> Draft:
 
 def _create_task(request: ActionRequest) -> Draft:
     task = request.runtime.create_task(
-        request.identity, request.request_text, request.context or None
+        request.identity,
+        request.request_text,
+        request.context or None,
+        decision=request.model_decision,
     )
     result = task.get("result") or {}
     summary = result.get("summary") or "任务已创建。"
@@ -377,9 +401,13 @@ def analytics_query(request: ActionRequest) -> Draft:
     """Answer a question about the caller's own records.
 
     The question never becomes SQL here. The planner writes down what was
-    asked, the builder turns that into a statement, and the guard decides
-    whether the statement may run. A question the planner does not
-    understand is refused rather than guessed at.
+    asked and the router picks a deterministic path:
+
+    * the controlled statement path returns a template sentence and makes no
+      model call;
+    * the prefetch path hands server-computed facts to the narrator, whose
+      sentence is checked number by number before it is shown;
+    * a question the planner cannot read is refused rather than guessed at.
     """
     try:
         answer = request.analytics.answer(
@@ -401,6 +429,8 @@ def analytics_query(request: ActionRequest) -> Draft:
             evidence_score=0.0,
             resolved=False,
         )
+    if answer.route == "PREFETCH" and answer.snapshot is not None:
+        return _prefetch_answer(request, answer)
     summary, card = _analytics_summary(answer)
     return Draft(
         intent=request.plan.intent,
@@ -412,61 +442,218 @@ def analytics_query(request: ActionRequest) -> Draft:
     )
 
 
-def _analytics_summary(answer: SqlAnswer) -> tuple[str, dict[str, Any]]:
-    """The sentence the customer reads, and the card that carries the numbers."""
-    dataset = DATASETS[answer.plan.dataset]
-    span = answer.plan.time_range.label if answer.plan.time_range else "全部时间"
-    rows = answer.rows
-    if answer.plan.group_by is None:
-        record = rows[0] if rows else {}
-        count = _as_int(record.get("metric"))
-        total = _as_int(record.get("metric_total"))
-        if answer.plan.metric == "sum":
-            sentence = f"{span}你的{dataset.label}金额合计 {format_cents(total)} 元。"
-        elif answer.plan.metric == "count_and_sum":
-            sentence = (
-                f"{span}你有 {count} {dataset.unit}{dataset.label}记录，"
-                f"金额合计 {format_cents(total)} 元。"
-            )
-        else:
-            sentence = f"{span}你有 {count} {dataset.unit}{dataset.label}记录。"
-        fields: dict[str, Any] = {"range": span, "currency": "CNY"}
-        if answer.plan.metric in {"count", "count_and_sum"}:
-            fields["records"] = count
-        if answer.plan.metric in {"sum", "count_and_sum"}:
-            fields["amount_cents"] = total
-        return sentence, _analytics_card(
-            answer, dataset.label, span, summary=sentence, fields=fields
+def _prefetch_answer(request: ActionRequest, answer: SqlAnswer) -> Draft:
+    """Phrase prefetched facts, then prove the sentence kept them."""
+    snapshot = answer.snapshot
+    if snapshot is None:  # pragma: no cover - guarded by the caller
+        summary, card = _analytics_summary(answer)
+        return Draft(intent=request.plan.intent, reply=summary, cards=[card])
+    result = narrate(request.message, snapshot, request.narrator)
+    _record_narration_usage(request, result)
+    request.trace.add(
+        "generate",
+        "analytics.narrate",
+        attributes={
+            "query_id": snapshot.query_id,
+            "source": result.source,
+            "faithfulness": result.faithfulness,
+            "prompt_chars": result.prompt.chars,
+            "facts_chars": result.prompt.facts_chars,
+            "estimated_tokens": result.prompt.estimated_tokens,
+            "truncated": snapshot.truncated,
+            "rows_in_prompt": len(snapshot.recent),
+        },
+    )
+    request.trace.add(
+        "guard",
+        "analytics.faithfulness",
+        status="FAILED" if result.faithfulness == "failed" else "OK",
+        attributes={
+            "status": result.faithfulness,
+            "missing_numbers": list(result.missing),
+            "source": result.source,
+        },
+    )
+
+    dataset = DATASETS[snapshot.dataset]
+    _template, fields = render_template(
+        dataset=snapshot.dataset,
+        metric=snapshot.metric,
+        group_by=snapshot.group_by,
+        span=snapshot.time_range,
+        rows=snapshot.l1_rows(),
+    )
+    card = _analytics_card(
+        answer, dataset.label, snapshot.time_range, summary=result.reply, fields=fields
+    )
+    if snapshot.truncated:
+        note = f"只展开最近 {len(snapshot.rows)} 条明细，统计数字仍是全量。"
+        card["sections"] = [
+            {"id": "detail-window", "title": "明细范围", "preview": note, "chars": len(note)}
+        ]
+    return Draft(
+        intent=request.plan.intent,
+        reply=result.reply,
+        cards=[card],
+        suggestions=["查询订单", "退款状态", "转人工"],
+        evidence_score=1.0,
+        resolved=True,
+        analytics_query_id=snapshot.query_id,
+    )
+
+
+@action("analytics.expand")
+def analytics_expand(request: ActionRequest) -> Draft:
+    """Open the rows behind the previous statistic, without a model call.
+
+    The snapshot store is the only source: an expired id, an id built by
+    another identity, or an id from another worker's process all look the
+    same and all ask the customer to re-ask. Falling back to a fresh query
+    here would silently answer a different question.
+    """
+    query_id = request.expand_query_id
+    if not query_id:
+        return Draft(
+            intent=request.plan.intent,
+            reply="没有可以展开的统计结果，请先提出一个统计问题。",
+            suggestions=["我买了多少订单", "我退了几笔款", "转人工"],
+            evidence_score=1.0,
+            resolved=False,
+        )
+    snapshot = request.analytics.get_snapshot(query_id, request.identity)
+    if snapshot is None:
+        request.trace.add(
+            "tool",
+            "analytics.expand",
+            attributes={"query_id": query_id, "status": "UNAVAILABLE"},
+        )
+        return Draft(
+            intent=request.plan.intent,
+            reply=(
+                "上一次统计的明细已经过期或不属于当前身份，"
+                "请重新提出统计问题，我再展开明细。"
+            ),
+            suggestions=["我买了多少订单", "我退了几笔款", "转人工"],
+            evidence_score=1.0,
+            resolved=True,
         )
 
-    parts: list[str] = []
-    fields = {"range": span}
-    for row in rows:
-        bucket = str(row.get("bucket", ""))
-        count = _as_int(row.get("metric"))
-        total = _as_int(row.get("metric_total"))
-        label = (
-            status_label(dataset.name, bucket)
-            if answer.plan.group_by == "status"
-            else bucket
-        )
-        key = label or "unknown"
-        if answer.plan.metric == "sum":
-            parts.append(f"{label} {format_cents(total)} 元")
-        elif answer.plan.metric == "count_and_sum":
-            parts.append(f"{label} {count} {dataset.unit}（{format_cents(total)} 元）")
-        else:
-            parts.append(f"{label} {count} {dataset.unit}")
-        if answer.plan.metric in {"count", "count_and_sum"}:
-            fields[key] = f"{count} {dataset.unit}"
-        if answer.plan.metric in {"sum", "count_and_sum"}:
-            fields[f"{key}_amount_cents"] = total
-    sentence = (
-        f"{span}你的{dataset.label}分布：" + "、".join(parts) + "。"
-        if parts
-        else f"{span}没有{dataset.label}记录。"
+    card = _analytics_detail_card(snapshot)
+    request.trace.add(
+        "tool",
+        "analytics.expand",
+        attributes={
+            "query_id": snapshot.query_id,
+            "status": "OK",
+            "rows": len(snapshot.rows),
+            "truncated": snapshot.truncated,
+            "source": "snapshot",
+        },
     )
-    return sentence, _analytics_card(answer, dataset.label, span, summary=sentence, fields=fields)
+    sentences = [
+        f"{snapshot.time_range}共 {snapshot.count} {snapshot.unit}"
+        f"{snapshot.label}记录，下面列出最近 {len(snapshot.rows)} 条明细。"
+    ]
+    if snapshot.truncated:
+        sentences.append("统计数字仍是全量。")
+    return Draft(
+        intent=request.plan.intent,
+        reply=" ".join(sentences),
+        cards=[card],
+        suggestions=["查询订单", "退款状态", "转人工"],
+        evidence_score=1.0,
+        resolved=True,
+        analytics_query_id=snapshot.query_id,
+    )
+
+
+def _analytics_detail_card(snapshot: AnalyticsSnapshot) -> dict[str, Any]:
+    """The L3 rows, one folded section each, under the statistics card shape."""
+    sections: list[dict[str, Any]] = []
+    for index, row in enumerate(snapshot.rows, start=1):
+        status = row.get("status_label") or row.get("status") or ""
+        reference = row.get("reference") or row.get("id") or ""
+        at = str(row.get("created_at") or "").replace("T", " ")
+        parts = [str(reference)]
+        if status:
+            parts.append(str(status))
+        amount = row.get("amount_cents")
+        if isinstance(amount, int):
+            parts.append(f"{format_cents(amount)} 元")
+        if at:
+            parts.append(at)
+        preview = " · ".join(item for item in parts if item)
+        sections.append(
+            {
+                "id": f"row-{index}",
+                "title": f"{snapshot.label} {index}",
+                "preview": preview,
+                "chars": len(preview),
+            }
+        )
+    if snapshot.rows:
+        summary = (
+            f"{snapshot.time_range}共 {snapshot.count} {snapshot.unit}"
+            f"{snapshot.label}记录，展示最近 {len(snapshot.rows)} 条。"
+        )
+    else:
+        summary = f"{snapshot.time_range}没有{snapshot.label}记录。"
+    fields: dict[str, Any] = {
+        "range": snapshot.time_range,
+        "records": snapshot.count,
+        "shown": len(snapshot.rows),
+    }
+    if snapshot.metric in {"sum", "count_and_sum"}:
+        fields["amount_cents"] = snapshot.total_cents
+    return {
+        "kind": "analytics_detail",
+        "card_id": snapshot.query_id,
+        "title": f"{snapshot.label}明细",
+        "subtitle": snapshot.time_range,
+        "summary": summary,
+        "badges": [],
+        "fields": fields,
+        "sections": sections,
+        "source": f"ledger://{snapshot.dataset}",
+        "total_chars": len(summary),
+    }
+
+
+def _record_narration_usage(request: ActionRequest, result: NarrationResult) -> None:
+    """Write the expression call to the shared usage ledger, source analytics."""
+    if result.call is None:
+        return
+    narrator = request.narrator
+    LlmUsageService(request.session).record(
+        tenant_id=request.identity.tenant_id,
+        user_id=request.identity.user_id,
+        conversation_id=request.conversation_id,
+        source="analytics",
+        planning_source="pydantic_ai",
+        model_name=getattr(narrator, "model_name", None),
+        requests=result.call.requests,
+        retries=result.call.retries,
+        input_tokens=result.call.input_tokens,
+        output_tokens=result.call.output_tokens,
+        latency_ms=result.call.latency_ms,
+        status=result.call.status,
+    )
+
+
+def _analytics_summary(answer: SqlAnswer) -> tuple[str, dict[str, Any]]:
+    """The template sentence and the card that carries the numbers."""
+    dataset = DATASETS[answer.plan.dataset]
+    span = answer.plan.time_range.label if answer.plan.time_range else "全部时间"
+    sentence, fields = render_template(
+        dataset=dataset.name,
+        metric=answer.plan.metric,
+        group_by=answer.plan.group_by,
+        span=span,
+        rows=answer.rows,
+    )
+    return sentence, _analytics_card(
+        answer, dataset.label, span, summary=sentence, fields=fields
+    )
 
 
 def _analytics_card(
@@ -489,16 +676,6 @@ def _analytics_card(
         "source": f"ledger://{answer.plan.dataset}",
         "total_chars": len(summary),
     }
-
-
-def _as_int(value: Any) -> int:
-    if isinstance(value, bool):
-        return 0
-    if isinstance(value, int):
-        return value
-    if isinstance(value, float):
-        return int(value)
-    return 0
 
 
 @action("handoff.escalate")

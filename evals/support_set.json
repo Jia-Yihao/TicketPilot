@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "description": "客服只读路径与多轮对话评测集。每条用例给出自然语言提问与期望意图；带 policy_id 的用例同时参与检索指标。turns 描述一轮或多轮对话，expect 断言回复、澄清、任务、转人工与轨迹。",
   "k_values": [1, 3, 5],
   "thresholds": {
@@ -1218,14 +1218,14 @@
     },
     {
       "id": "refund-3turn",
-      "query": "我要申请退款",
+      "query": "我要申请退款，商品有质量问题",
       "intent": "REFUND_REQUEST",
       "kind": "boundary",
       "tenant": "demo",
       "user": "alice",
       "turns": [
         {
-          "message": "我要申请退款",
+          "message": "我要申请退款，商品有质量问题",
           "expect": {
             "intent": "REFUND_REQUEST",
             "reply_contains": ["请提供订单号"],
@@ -1244,27 +1244,111 @@
           "message": "ORD-DEMO-1002",
           "expect": {
             "intent": "REFUND_REQUEST",
-            "reply_contains": ["已转人工同事接手"],
+            "reply_contains": ["请提供退款金额"],
+            "reply_not_contains": ["已转人工同事接手", "你名下最近的订单"],
             "clarification": {
               "reason": "MISSING_AMOUNT",
               "expected_slot": "amount_cents",
               "resumable_intent": "REFUND_REQUEST"
             },
             "task": null,
-            "handoff": {"status": "HANDOFF_PENDING", "reason": "NO_UNDERSTANDING"},
+            "handoff": null,
             "slots": {"order_id": "ORD-DEMO-1002", "clarification_count": 2},
             "span_attrs": {"support.classify": {"resumed": true}},
-            "spans": ["understand/support.classify", "handoff/handoff.escalate", "generate/support.reply"]
+            "spans": ["understand/support.classify", "generate/support.reply"]
           }
         },
         {
           "message": "80 元",
+          "expect": {
+            "intent": "REFUND_REQUEST",
+            "reply_contains": ["等待人工审批", "80.00 CNY"],
+            "clarification": null,
+            "task": {
+              "status": "WAITING_APPROVAL",
+              "outcome": "WAITING_APPROVAL",
+              "pending_amount_cents": 8000
+            },
+            "handoff": {"status": "NOTED", "reason": "RISK"},
+            "slots": {"order_id": "ORD-DEMO-1002", "amount_cents": 8000},
+            "inherited_slots": ["order_id"],
+            "span_attrs": {"support.classify": {"resumed": true}},
+            "spans": ["understand/support.classify", "handoff/handoff.escalate", "generate/support.reply"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "clarify-candidates",
+      "query": "帮我查一下订单",
+      "intent": "ORDER_QUERY",
+      "kind": "boundary",
+      "tenant": "demo",
+      "user": "alice",
+      "turns": [
+        {
+          "message": "帮我查一下订单",
+          "expect": {
+            "intent": "ORDER_QUERY",
+            "reply_contains": ["请提供订单号"],
+            "reply_not_contains": ["你名下最近的订单"],
+            "clarification": {
+              "reason": "MISSING_ORDER_ID",
+              "expected_slot": "order_id",
+              "resumable_intent": "ORDER_QUERY"
+            },
+            "task": null,
+            "handoff": null,
+            "slots": {"clarification_count": 1},
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        },
+        {
+          "message": "我忘了单号",
+          "expect": {
+            "intent": "ORDER_QUERY",
+            "reply_contains": ["你名下最近的订单是"],
+            "clarification": {
+              "reason": "MISSING_ORDER_ID",
+              "expected_slot": "order_id",
+              "resumable_intent": "ORDER_QUERY"
+            },
+            "task": null,
+            "handoff": null,
+            "slots": {"clarification_count": 2},
+            "spans": ["understand/support.classify", "generate/support.reply"]
+          }
+        },
+        {
+          "message": "还是想不起来",
+          "expect": {
+            "intent": "ORDER_QUERY",
+            "reply_contains": ["已转人工同事接手"],
+            "clarification": {
+              "reason": "MISSING_ORDER_ID",
+              "expected_slot": "order_id",
+              "resumable_intent": "ORDER_QUERY"
+            },
+            "task": null,
+            "handoff": {
+              "status": "HANDOFF_PENDING",
+              "reason": "NO_UNDERSTANDING",
+              "signal_id": "repeated_clarification",
+              "takeover": true
+            },
+            "slots": {"clarification_count": 3},
+            "spans": ["understand/support.classify", "handoff/handoff.escalate", "generate/support.reply"]
+          }
+        },
+        {
+          "message": "还在吗",
           "expect": {
             "intent": "UNKNOWN",
             "agent_silent": true,
             "clarification": null,
             "task": null,
             "handoff": {"status": "HANDOFF_PENDING", "reason": "NO_UNDERSTANDING"},
+            "slots": {"clarification_count": 3},
             "spans": ["handoff/agent.silent"]
           }
         }
@@ -1272,14 +1356,14 @@
     },
     {
       "id": "refund-one-clarify",
-      "query": "我要申请退款",
+      "query": "我要申请退款，商品有质量问题",
       "intent": "REFUND_REQUEST",
       "kind": "normal",
       "tenant": "demo",
       "user": "alice",
       "turns": [
         {
-          "message": "我要申请退款",
+          "message": "我要申请退款，商品有质量问题",
           "expect": {
             "intent": "REFUND_REQUEST",
             "reply_contains": ["请提供订单号"],
@@ -1314,14 +1398,14 @@
     },
     {
       "id": "refund-invalid-fixed",
-      "query": "我要申请退款，订单 ORD-EVAL-4013，金额 0 元",
+      "query": "我要申请退款，订单 ORD-EVAL-4013，金额 0 元，商品有质量问题",
       "intent": "REFUND_REQUEST",
       "kind": "boundary",
       "tenant": "demo",
       "user": "alice",
       "turns": [
         {
-          "message": "我要申请退款，订单 ORD-EVAL-4013，金额 0 元",
+          "message": "我要申请退款，订单 ORD-EVAL-4013，金额 0 元，商品有质量问题",
           "expect": {
             "intent": "REFUND_REQUEST",
             "reply_contains": ["格式不正确", "订单号 ORD-EVAL-4013 我已经记住了"],
@@ -1359,14 +1443,14 @@
     },
     {
       "id": "refund-amount-first",
-      "query": "我要退款 80 元",
+      "query": "我要退款 80 元，商品有质量问题",
       "intent": "REFUND_REQUEST",
       "kind": "boundary",
       "tenant": "demo",
       "user": "alice",
       "turns": [
         {
-          "message": "我要退款 80 元",
+          "message": "我要退款 80 元，商品有质量问题",
           "expect": {
             "intent": "REFUND_REQUEST",
             "reply_contains": ["请提供订单号", "高风险操作"],
@@ -1399,14 +1483,14 @@
     },
     {
       "id": "refund-order-first",
-      "query": "我要退款，订单 ORD-DEMO-1001",
+      "query": "我要退款，订单 ORD-DEMO-1001，商品有质量问题",
       "intent": "REFUND_REQUEST",
       "kind": "normal",
       "tenant": "demo",
       "user": "alice",
       "turns": [
         {
-          "message": "我要退款，订单 ORD-DEMO-1001",
+          "message": "我要退款，订单 ORD-DEMO-1001，商品有质量问题",
           "expect": {
             "intent": "REFUND_REQUEST",
             "reply_contains": ["请提供退款金额", "我已经记住了"],
@@ -1443,14 +1527,14 @@
     },
     {
       "id": "refund-cancel",
-      "query": "我要申请退款，订单 ORD-EVAL-4003，金额 90 元",
+      "query": "我要申请退款，订单 ORD-EVAL-4003，金额 90 元，商品有质量问题",
       "intent": "REFUND_REQUEST",
       "kind": "boundary",
       "tenant": "demo",
       "user": "alice",
       "turns": [
         {
-          "message": "我要申请退款，订单 ORD-EVAL-4003，金额 90 元",
+          "message": "我要申请退款，订单 ORD-EVAL-4003，金额 90 元，商品有质量问题",
           "expect": {
             "intent": "REFUND_REQUEST",
             "reply_contains": ["等待人工审批"],
@@ -1485,14 +1569,14 @@
     },
     {
       "id": "refund-expire",
-      "query": "我要申请退款，订单 ORD-EVAL-4004，金额 70 元",
+      "query": "我要申请退款，订单 ORD-EVAL-4004，金额 70 元，商品有质量问题",
       "intent": "REFUND_REQUEST",
       "kind": "boundary",
       "tenant": "demo",
       "user": "alice",
       "turns": [
         {
-          "message": "我要申请退款，订单 ORD-EVAL-4004，金额 70 元",
+          "message": "我要申请退款，订单 ORD-EVAL-4004，金额 70 元，商品有质量问题",
           "expect": {
             "intent": "REFUND_REQUEST",
             "reply_contains": ["等待人工审批"],
@@ -1533,14 +1617,14 @@
     },
     {
       "id": "refund-approve",
-      "query": "我要申请退款，订单 ORD-EVAL-4001，金额 200 元",
+      "query": "我要申请退款，订单 ORD-EVAL-4001，金额 200 元，商品有质量问题",
       "intent": "REFUND_REQUEST",
       "kind": "normal",
       "tenant": "demo",
       "user": "alice",
       "turns": [
         {
-          "message": "我要申请退款，订单 ORD-EVAL-4001，金额 200 元",
+          "message": "我要申请退款，订单 ORD-EVAL-4001，金额 200 元，商品有质量问题",
           "expect": {
             "intent": "REFUND_REQUEST",
             "reply_contains": ["等待人工审批"],

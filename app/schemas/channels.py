@@ -1,6 +1,16 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+# Why a channel's inbound path is or is not usable. A closed set: the order of
+# the members is the order the predicate evaluates them in, and it is the only
+# declaration of these strings in the codebase. ``app/channels`` (tier 3)
+# imports it from here (tier 1); nothing in ``app/schemas`` may import back.
+ChannelAvailability = Literal[
+    "available", "webhook_secret_missing", "not_enabled", "not_implemented"
+]
 
 
 class ChannelReply(BaseModel):
@@ -19,6 +29,7 @@ class ChannelReply(BaseModel):
 class ChannelCapabilityView(BaseModel):
     channel: str
     enabled: bool
+    availability: ChannelAvailability
     supports_stream: bool
     supports_rich_card: bool
     supports_voice: bool

@@ -43,7 +43,12 @@ class RetryingBrain:
         return "stub:retrying"
 
     def plan(
-        self, request: str, context: dict[str, Any] | None = None
+        self,
+        request: str,
+        context: dict[str, Any] | None = None,
+        *,
+        decision: Any = None,
+        order_state: str | None = None,
     ) -> tuple[RoutePlan, str, ModelTrace | None]:
         self.requests.append(request)
         return (

@@ -1,0 +1,7712 @@
+{
+  "version": "2026-10-26",
+  "dataset": "Held-out intent corpus in two layers: real external phrasings and an authored gap layer. Report the layers separately; do not add them into one accuracy.",
+  "label_rule": "Gold is the capability that should serve the request, read against app/agent/intents.yaml, not against the classifier's cue table. A request to move money is REFUND_REQUEST even when it names an order; a request to register a case is TICKET_CREATE even when the cause is a delivery problem; a question about a rule is POLICY_QA even when no policy document covers the topic, because the no-evidence path is the expected behaviour. When a sentence could be about order fields or transport position, ORDER_QUERY covers fields (payment, address, amount) and LOGISTICS_QUERY covers where the parcel is. REFUND_ELIGIBILITY asks whether this order or return qualifies and usually names the user's own item or action; POLICY_QA asks what the rule says in general. UNKNOWN means no catalog capability should serve it, not 'the classifier is unsure'.",
+  "cases": [
+    {
+      "id": "ext-delivery-01",
+      "layer": "external",
+      "gold": "DELIVERY_ISSUE",
+      "text": "超慢的5天了还没到",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.086,
+      "model": null
+    },
+    {
+      "id": "ext-delivery-02",
+      "layer": "external",
+      "gold": "DELIVERY_ISSUE",
+      "text": "对了那个外包装没有坏里面漏了瓶子也没有坏算破损吗",
+      "predicted": "DELIVERY_ISSUE",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.063,
+      "model": null
+    },
+    {
+      "id": "ext-delivery-03",
+      "layer": "external",
+      "gold": "DELIVERY_ISSUE",
+      "text": "这个没收到然后不是说说口水巾吗怎么都没有",
+      "predicted": "DELIVERY_ISSUE",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.047,
+      "model": null
+    },
+    {
+      "id": "ext-delivery-04",
+      "layer": "external",
+      "gold": "DELIVERY_ISSUE",
+      "text": "还有那个盒子非常破损没有开很破反正要怎么处理呢亲",
+      "predicted": "DELIVERY_ISSUE",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.035,
+      "model": null
+    },
+    {
+      "id": "ext-delivery-05",
+      "layer": "external",
+      "gold": "DELIVERY_ISSUE",
+      "text": "还有一个没到",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.052,
+      "model": null
+    },
+    {
+      "id": "ext-delivery-06",
+      "layer": "external",
+      "gold": "DELIVERY_ISSUE",
+      "text": "其实我也不会那么无聊为了贪两包湿纸巾故意说没收到的诚信比较重要",
+      "predicted": "DELIVERY_ISSUE",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.059,
+      "model": null
+    },
+    {
+      "id": "ext-delivery-07",
+      "layer": "external",
+      "gold": "DELIVERY_ISSUE",
+      "text": "哦知道了那就是还没到啊",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.048,
+      "model": null
+    },
+    {
+      "id": "ext-delivery-08",
+      "layer": "external",
+      "gold": "DELIVERY_ISSUE",
+      "text": "江浙沪皖为什么72小时还没到去了两次都没拿到",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.036,
+      "model": null
+    },
+    {
+      "id": "ext-delivery-09",
+      "layer": "external",
+      "gold": "DELIVERY_ISSUE",
+      "text": "我还没收到宝贝怎么写我的宝贝已收到周二01:39:51到达上海",
+      "predicted": "DELIVERY_ISSUE",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.034,
+      "model": null
+    },
+    {
+      "id": "ext-delivery-10",
+      "layer": "external",
+      "gold": "DELIVERY_ISSUE",
+      "text": "七天无理由的吧还没到呢",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.039,
+      "model": null
+    },
+    {
+      "id": "ext-delivery-11",
+      "layer": "external",
+      "gold": "DELIVERY_ISSUE",
+      "text": "今天补发吗",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.037,
+      "model": null
+    },
+    {
+      "id": "ext-delivery-12",
+      "layer": "external",
+      "gold": "DELIVERY_ISSUE",
+      "text": "我没收到",
+      "predicted": "DELIVERY_ISSUE",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.043,
+      "model": null
+    },
+    {
+      "id": "ext-delivery-13",
+      "layer": "external",
+      "gold": "DELIVERY_ISSUE",
+      "text": "不是货没收到",
+      "predicted": "DELIVERY_ISSUE",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.042,
+      "model": null
+    },
+    {
+      "id": "ext-delivery-14",
+      "layer": "external",
+      "gold": "DELIVERY_ISSUE",
+      "text": "剛查到是假簽收淘寶海外倉查不到說他們未收到",
+      "predicted": "DELIVERY_ISSUE",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.048,
+      "model": null
+    },
+    {
+      "id": "ext-delivery-15",
+      "layer": "external",
+      "gold": "DELIVERY_ISSUE",
+      "text": "嗯不要漏发",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.045,
+      "model": null
+    },
+    {
+      "id": "ext-delivery-16",
+      "layer": "external",
+      "gold": "DELIVERY_ISSUE",
+      "text": "冰袋坏了",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.044,
+      "model": null
+    },
+    {
+      "id": "ext-delivery-17",
+      "layer": "external",
+      "gold": "DELIVERY_ISSUE",
+      "text": "一包湿巾坏了",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.045,
+      "model": null
+    },
+    {
+      "id": "ext-delivery-18",
+      "layer": "external",
+      "gold": "DELIVERY_ISSUE",
+      "text": "我买了两份青团不是再送一份的吗怎么只有两份少了一份青团",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.036,
+      "model": null
+    },
+    {
+      "id": "ext-delivery-19",
+      "layer": "external",
+      "gold": "DELIVERY_ISSUE",
+      "text": "我年前买的核桃为啥没收到",
+      "predicted": "DELIVERY_ISSUE",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.044,
+      "model": null
+    },
+    {
+      "id": "ext-delivery-20",
+      "layer": "external",
+      "gold": "DELIVERY_ISSUE",
+      "text": "凭什么不送我买的时候没人说自提快递一个电话也没通知凭什么自提",
+      "predicted": "LOGISTICS_QUERY",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.033,
+      "model": null
+    },
+    {
+      "id": "ext-delivery-21",
+      "layer": "external",
+      "gold": "DELIVERY_ISSUE",
+      "text": "你好我的宝贝怎么这么长时间还没到货但是物流信息却显示早就派送了",
+      "predicted": "DELIVERY_ISSUE",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.032,
+      "model": null
+    },
+    {
+      "id": "ext-delivery-22",
+      "layer": "external",
+      "gold": "DELIVERY_ISSUE",
+      "text": "好几天前就显示派送了",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.043,
+      "model": null
+    },
+    {
+      "id": "ext-delivery-23",
+      "layer": "external",
+      "gold": "DELIVERY_ISSUE",
+      "text": "为什么这么迟才发啊不是接到订单就可以发了吗",
+      "predicted": "ORDER_QUERY",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.037,
+      "model": null
+    },
+    {
+      "id": "ext-delivery-24",
+      "layer": "external",
+      "gold": "DELIVERY_ISSUE",
+      "text": "但是我跟您说过我急着回购有部分发掉了为什么我的还是没有发我特地找客服备注敢情是白说的要么一开始就不要说11号我可以收到",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.072,
+      "model": null
+    },
+    {
+      "id": "ext-delivery-25",
+      "layer": "external",
+      "gold": "DELIVERY_ISSUE",
+      "text": "这个快递太不负责任了电话都没联系就说不在指定地址",
+      "predicted": "LOGISTICS_QUERY",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.061,
+      "model": null
+    },
+    {
+      "id": "ext-delivery-26",
+      "layer": "external",
+      "gold": "DELIVERY_ISSUE",
+      "text": "我在你店里买的茶刀就因为没有接到电话晚上就说被他们退回去了",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.061,
+      "model": null
+    },
+    {
+      "id": "ext-delivery-27",
+      "layer": "external",
+      "gold": "DELIVERY_ISSUE",
+      "text": "怎么有一袋里面打开都是这样的",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.032,
+      "model": null
+    },
+    {
+      "id": "ext-eligibility-01",
+      "layer": "external",
+      "gold": "REFUND_ELIGIBILITY",
+      "text": "那不要了可以退货吗",
+      "predicted": "POLICY_QA",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.022,
+      "model": null
+    },
+    {
+      "id": "ext-eligibility-02",
+      "layer": "external",
+      "gold": "REFUND_ELIGIBILITY",
+      "text": "时间太长了能退货吗",
+      "predicted": "POLICY_QA",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.02,
+      "model": null
+    },
+    {
+      "id": "ext-eligibility-03",
+      "layer": "external",
+      "gold": "REFUND_ELIGIBILITY",
+      "text": "坏的多可以退吗",
+      "predicted": "REFUND_ELIGIBILITY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.023,
+      "model": null
+    },
+    {
+      "id": "ext-eligibility-04",
+      "layer": "external",
+      "gold": "REFUND_ELIGIBILITY",
+      "text": "拆开了一包可以退吗",
+      "predicted": "REFUND_ELIGIBILITY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.023,
+      "model": null
+    },
+    {
+      "id": "ext-eligibility-05",
+      "layer": "external",
+      "gold": "REFUND_ELIGIBILITY",
+      "text": "这个棉柔巾我收到了拆开一包试了试湿水效果不好可以退吗",
+      "predicted": "REFUND_ELIGIBILITY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.027,
+      "model": null
+    },
+    {
+      "id": "ext-eligibility-06",
+      "layer": "external",
+      "gold": "REFUND_ELIGIBILITY",
+      "text": "那咋办能退吗地址给我但是我打开了一包",
+      "predicted": "REFUND_ELIGIBILITY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.022,
+      "model": null
+    },
+    {
+      "id": "ext-eligibility-07",
+      "layer": "external",
+      "gold": "REFUND_ELIGIBILITY",
+      "text": "我点错了能退吗",
+      "predicted": "REFUND_ELIGIBILITY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.023,
+      "model": null
+    },
+    {
+      "id": "ext-eligibility-08",
+      "layer": "external",
+      "gold": "REFUND_ELIGIBILITY",
+      "text": "东西买多了可以退吗没有用过",
+      "predicted": "REFUND_ELIGIBILITY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.025,
+      "model": null
+    },
+    {
+      "id": "ext-eligibility-09",
+      "layer": "external",
+      "gold": "REFUND_ELIGIBILITY",
+      "text": "我小孩用了还过敏能退吗",
+      "predicted": "REFUND_ELIGIBILITY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.023,
+      "model": null
+    },
+    {
+      "id": "ext-eligibility-10",
+      "layer": "external",
+      "gold": "REFUND_ELIGIBILITY",
+      "text": "其它的可以退货吗",
+      "predicted": "POLICY_QA",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.02,
+      "model": null
+    },
+    {
+      "id": "ext-eligibility-11",
+      "layer": "external",
+      "gold": "REFUND_ELIGIBILITY",
+      "text": "如果坏的多可以退货不",
+      "predicted": "POLICY_QA",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.022,
+      "model": null
+    },
+    {
+      "id": "ext-eligibility-12",
+      "layer": "external",
+      "gold": "REFUND_ELIGIBILITY",
+      "text": "如果手捏不破可以退货吗一包5斤吗",
+      "predicted": "POLICY_QA",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.022,
+      "model": null
+    },
+    {
+      "id": "ext-eligibility-13",
+      "layer": "external",
+      "gold": "REFUND_ELIGIBILITY",
+      "text": "反正吃了一两个不习惯可以退货吗",
+      "predicted": "POLICY_QA",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.021,
+      "model": null
+    },
+    {
+      "id": "ext-eligibility-14",
+      "layer": "external",
+      "gold": "REFUND_ELIGIBILITY",
+      "text": "那我可以退货再拍吗",
+      "predicted": "POLICY_QA",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.02,
+      "model": null
+    },
+    {
+      "id": "ext-eligibility-15",
+      "layer": "external",
+      "gold": "REFUND_ELIGIBILITY",
+      "text": "买回来不好可以退货么你们负责么",
+      "predicted": "POLICY_QA",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.026,
+      "model": null
+    },
+    {
+      "id": "ext-handoff-01",
+      "layer": "external",
+      "gold": "HUMAN_HANDOFF",
+      "text": "我要找你们店长",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.031,
+      "model": null
+    },
+    {
+      "id": "ext-handoff-02",
+      "layer": "external",
+      "gold": "HUMAN_HANDOFF",
+      "text": "你们店长呢",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.036,
+      "model": null
+    },
+    {
+      "id": "ext-handoff-03",
+      "layer": "external",
+      "gold": "HUMAN_HANDOFF",
+      "text": "您好能转下运营负责人吗",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.039,
+      "model": null
+    },
+    {
+      "id": "ext-handoff-04",
+      "layer": "external",
+      "gold": "HUMAN_HANDOFF",
+      "text": "给转下负责人吗",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.035,
+      "model": null
+    },
+    {
+      "id": "ext-handoff-05",
+      "layer": "external",
+      "gold": "HUMAN_HANDOFF",
+      "text": "在你们家呆了7天告诉我邮不了电话给我不给我投诉我不想骂你跟你没关系叫你们管事的来",
+      "predicted": "TICKET_CREATE",
+      "bucket": "write_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 1,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.039,
+      "model": null
+    },
+    {
+      "id": "ext-handoff-06",
+      "layer": "external",
+      "gold": "HUMAN_HANDOFF",
+      "text": "你们有客服电话么我打了好久字了好累说不清楚",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.052,
+      "model": null
+    },
+    {
+      "id": "ext-handoff-07",
+      "layer": "external",
+      "gold": "HUMAN_HANDOFF",
+      "text": "好接客服吧",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.086,
+      "model": null
+    },
+    {
+      "id": "ext-handoff-08",
+      "layer": "external",
+      "gold": "HUMAN_HANDOFF",
+      "text": "我问小蜜了那让客服处理吧",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.063,
+      "model": null
+    },
+    {
+      "id": "ext-handoff-09",
+      "layer": "external",
+      "gold": "HUMAN_HANDOFF",
+      "text": "让淘宝专业的电商客服去处理吧",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.052,
+      "model": null
+    },
+    {
+      "id": "ext-handoff-10",
+      "layer": "external",
+      "gold": "HUMAN_HANDOFF",
+      "text": "你们到底有没有客服回",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.049,
+      "model": null
+    },
+    {
+      "id": "ext-logistics-01",
+      "layer": "external",
+      "gold": "LOGISTICS_QUERY",
+      "text": "什么时候发货啊",
+      "predicted": "LOGISTICS_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.031,
+      "model": null
+    },
+    {
+      "id": "ext-logistics-02",
+      "layer": "external",
+      "gold": "LOGISTICS_QUERY",
+      "text": "快递发那家公",
+      "predicted": "LOGISTICS_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.044,
+      "model": null
+    },
+    {
+      "id": "ext-logistics-03",
+      "layer": "external",
+      "gold": "LOGISTICS_QUERY",
+      "text": "今天还能发货吗",
+      "predicted": "LOGISTICS_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.037,
+      "model": null
+    },
+    {
+      "id": "ext-logistics-04",
+      "layer": "external",
+      "gold": "LOGISTICS_QUERY",
+      "text": "发什么快递呢",
+      "predicted": "LOGISTICS_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.027,
+      "model": null
+    },
+    {
+      "id": "ext-logistics-05",
+      "layer": "external",
+      "gold": "LOGISTICS_QUERY",
+      "text": "哦哦好的谢谢帮我发天天快递吧",
+      "predicted": "LOGISTICS_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.035,
+      "model": null
+    },
+    {
+      "id": "ext-logistics-06",
+      "layer": "external",
+      "gold": "LOGISTICS_QUERY",
+      "text": "大概什么时候到呢",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.033,
+      "model": null
+    },
+    {
+      "id": "ext-logistics-07",
+      "layer": "external",
+      "gold": "LOGISTICS_QUERY",
+      "text": "几天到货啊",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.042,
+      "model": null
+    },
+    {
+      "id": "ext-logistics-08",
+      "layer": "external",
+      "gold": "LOGISTICS_QUERY",
+      "text": "噢算了还是普通快递吧",
+      "predicted": "LOGISTICS_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.045,
+      "model": null
+    },
+    {
+      "id": "ext-logistics-09",
+      "layer": "external",
+      "gold": "LOGISTICS_QUERY",
+      "text": "现在快递还发货么我要现在下单下午可以发货么在不在",
+      "predicted": "LOGISTICS_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.035,
+      "model": null
+    },
+    {
+      "id": "ext-logistics-10",
+      "layer": "external",
+      "gold": "LOGISTICS_QUERY",
+      "text": "现在下单下午能发货是吧是发邮政",
+      "predicted": "LOGISTICS_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.047,
+      "model": null
+    },
+    {
+      "id": "ext-logistics-11",
+      "layer": "external",
+      "gold": "LOGISTICS_QUERY",
+      "text": "你们为什么浙江发货",
+      "predicted": "LOGISTICS_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.029,
+      "model": null
+    },
+    {
+      "id": "ext-logistics-12",
+      "layer": "external",
+      "gold": "LOGISTICS_QUERY",
+      "text": "是寄什么快递",
+      "predicted": "LOGISTICS_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.027,
+      "model": null
+    },
+    {
+      "id": "ext-logistics-13",
+      "layer": "external",
+      "gold": "LOGISTICS_QUERY",
+      "text": "可不可以发其他的快递啊",
+      "predicted": "LOGISTICS_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.033,
+      "model": null
+    },
+    {
+      "id": "ext-logistics-14",
+      "layer": "external",
+      "gold": "LOGISTICS_QUERY",
+      "text": "粽子今天也能发货吗记得看下生产日期如果质量味道都好的话以后就一直在你家买",
+      "predicted": "LOGISTICS_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.043,
+      "model": null
+    },
+    {
+      "id": "ext-logistics-15",
+      "layer": "external",
+      "gold": "LOGISTICS_QUERY",
+      "text": "能走中通快递吗",
+      "predicted": "LOGISTICS_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.034,
+      "model": null
+    },
+    {
+      "id": "ext-logistics-16",
+      "layer": "external",
+      "gold": "LOGISTICS_QUERY",
+      "text": "除了EMS没别的快递吗",
+      "predicted": "LOGISTICS_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.035,
+      "model": null
+    },
+    {
+      "id": "ext-logistics-17",
+      "layer": "external",
+      "gold": "LOGISTICS_QUERY",
+      "text": "今天没发货明天会发货吗",
+      "predicted": "LOGISTICS_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.036,
+      "model": null
+    },
+    {
+      "id": "ext-logistics-18",
+      "layer": "external",
+      "gold": "LOGISTICS_QUERY",
+      "text": "今天可以发货了吗",
+      "predicted": "LOGISTICS_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.035,
+      "model": null
+    },
+    {
+      "id": "ext-logistics-19",
+      "layer": "external",
+      "gold": "LOGISTICS_QUERY",
+      "text": "今天付款什么时候能发货",
+      "predicted": "LOGISTICS_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.029,
+      "model": null
+    },
+    {
+      "id": "ext-logistics-20",
+      "layer": "external",
+      "gold": "LOGISTICS_QUERY",
+      "text": "客服在吗我想问不是中通那",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.036,
+      "model": null
+    },
+    {
+      "id": "ext-logistics-21",
+      "layer": "external",
+      "gold": "LOGISTICS_QUERY",
+      "text": "我说单号呢之前客服说分两次发还有一个单号给我下",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.037,
+      "model": null
+    },
+    {
+      "id": "ext-logistics-22",
+      "layer": "external",
+      "gold": "LOGISTICS_QUERY",
+      "text": "什么时候送货别跟我说这些我就问什么时候送货人呢",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.036,
+      "model": null
+    },
+    {
+      "id": "ext-logistics-23",
+      "layer": "external",
+      "gold": "LOGISTICS_QUERY",
+      "text": "别跟我说这个我只想问什么时候送",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.031,
+      "model": null
+    },
+    {
+      "id": "ext-logistics-24",
+      "layer": "external",
+      "gold": "LOGISTICS_QUERY",
+      "text": "你看我的这个订单年前还会到吗",
+      "predicted": "ORDER_QUERY",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.038,
+      "model": null
+    },
+    {
+      "id": "ext-order-01",
+      "layer": "external",
+      "gold": "ORDER_QUERY",
+      "text": "忘改地址了",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.044,
+      "model": null
+    },
+    {
+      "id": "ext-order-02",
+      "layer": "external",
+      "gold": "ORDER_QUERY",
+      "text": "你那边不能帮我备注改地址",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.035,
+      "model": null
+    },
+    {
+      "id": "ext-order-03",
+      "layer": "external",
+      "gold": "ORDER_QUERY",
+      "text": "刚刚提交了一个订单可以改一下邮费ma",
+      "predicted": "ORDER_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.051,
+      "model": null
+    },
+    {
+      "id": "ext-order-04",
+      "layer": "external",
+      "gold": "ORDER_QUERY",
+      "text": "看一下我的订单麻烦按我拍的发我要的带盖子的湿巾",
+      "predicted": "ORDER_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.055,
+      "model": null
+    },
+    {
+      "id": "ext-order-05",
+      "layer": "external",
+      "gold": "ORDER_QUERY",
+      "text": "我拍的订单是不是有赠品送啊",
+      "predicted": "ORDER_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.04,
+      "model": null
+    },
+    {
+      "id": "ext-order-06",
+      "layer": "external",
+      "gold": "ORDER_QUERY",
+      "text": "我要改地址改地址地址寫錯啦",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.037,
+      "model": null
+    },
+    {
+      "id": "ext-order-07",
+      "layer": "external",
+      "gold": "ORDER_QUERY",
+      "text": "我的订单要改一下地址忘了改了",
+      "predicted": "ORDER_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.051,
+      "model": null
+    },
+    {
+      "id": "ext-order-08",
+      "layer": "external",
+      "gold": "ORDER_QUERY",
+      "text": "我就提交订单然后你改呗",
+      "predicted": "ORDER_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.049,
+      "model": null
+    },
+    {
+      "id": "ext-order-09",
+      "layer": "external",
+      "gold": "ORDER_QUERY",
+      "text": "改一下订单还拍了五盒",
+      "predicted": "ORDER_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.048,
+      "model": null
+    },
+    {
+      "id": "ext-order-10",
+      "layer": "external",
+      "gold": "ORDER_QUERY",
+      "text": "可以改地址吧",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.046,
+      "model": null
+    },
+    {
+      "id": "ext-order-11",
+      "layer": "external",
+      "gold": "ORDER_QUERY",
+      "text": "我想改地址",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.032,
+      "model": null
+    },
+    {
+      "id": "ext-order-12",
+      "layer": "external",
+      "gold": "ORDER_QUERY",
+      "text": "我要改地址",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.032,
+      "model": null
+    },
+    {
+      "id": "ext-order-13",
+      "layer": "external",
+      "gold": "ORDER_QUERY",
+      "text": "看见订单了么",
+      "predicted": "ORDER_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.047,
+      "model": null
+    },
+    {
+      "id": "ext-order-14",
+      "layer": "external",
+      "gold": "ORDER_QUERY",
+      "text": "我的地址写错可以重新写吗",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.041,
+      "model": null
+    },
+    {
+      "id": "ext-order-15",
+      "layer": "external",
+      "gold": "ORDER_QUERY",
+      "text": "今天估计到不了了我差不多两点就要走了可以改地址吗",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.045,
+      "model": null
+    },
+    {
+      "id": "ext-order-16",
+      "layer": "external",
+      "gold": "ORDER_QUERY",
+      "text": "可以改地址么亲",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.047,
+      "model": null
+    },
+    {
+      "id": "ext-policy-01",
+      "layer": "external",
+      "gold": "POLICY_QA",
+      "text": "但是现在过了退货时间了我申请售后连售后都过时间了",
+      "predicted": "POLICY_QA",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.03,
+      "model": null
+    },
+    {
+      "id": "ext-policy-02",
+      "layer": "external",
+      "gold": "POLICY_QA",
+      "text": "运费谁出",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.032,
+      "model": null
+    },
+    {
+      "id": "ext-policy-03",
+      "layer": "external",
+      "gold": "POLICY_QA",
+      "text": "请问购买可包邮吗",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.037,
+      "model": null
+    },
+    {
+      "id": "ext-policy-04",
+      "layer": "external",
+      "gold": "POLICY_QA",
+      "text": "这个金额是否达到包邮条件",
+      "predicted": "POLICY_QA",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.019,
+      "model": null
+    },
+    {
+      "id": "ext-policy-05",
+      "layer": "external",
+      "gold": "POLICY_QA",
+      "text": "跟别的东西一起买怎么也要运费",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.033,
+      "model": null
+    },
+    {
+      "id": "ext-policy-06",
+      "layer": "external",
+      "gold": "POLICY_QA",
+      "text": "这个链接包邮其他东西一起包邮吗",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.041,
+      "model": null
+    },
+    {
+      "id": "ext-policy-07",
+      "layer": "external",
+      "gold": "POLICY_QA",
+      "text": "亲包邮吗为什么还要邮费啊",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.036,
+      "model": null
+    },
+    {
+      "id": "ext-policy-08",
+      "layer": "external",
+      "gold": "POLICY_QA",
+      "text": "退款需要手续费吗",
+      "predicted": "POLICY_QA",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.028,
+      "model": null
+    },
+    {
+      "id": "ext-policy-09",
+      "layer": "external",
+      "gold": "POLICY_QA",
+      "text": "什么时候申请退款发出以后",
+      "predicted": "POLICY_QA",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.022,
+      "model": null
+    },
+    {
+      "id": "ext-policy-10",
+      "layer": "external",
+      "gold": "POLICY_QA",
+      "text": "等到了会不会过期呀",
+      "predicted": "POLICY_QA",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.024,
+      "model": null
+    },
+    {
+      "id": "ext-policy-11",
+      "layer": "external",
+      "gold": "POLICY_QA",
+      "text": "退货的地址",
+      "predicted": "POLICY_QA",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.025,
+      "model": null
+    },
+    {
+      "id": "ext-policy-12",
+      "layer": "external",
+      "gold": "POLICY_QA",
+      "text": "你们客服都不知道退货流程的嘛不知道货退回再退款吗",
+      "predicted": "POLICY_QA",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.023,
+      "model": null
+    },
+    {
+      "id": "ext-policy-13",
+      "layer": "external",
+      "gold": "POLICY_QA",
+      "text": "两件包邮嘛",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.045,
+      "model": null
+    },
+    {
+      "id": "ext-policy-14",
+      "layer": "external",
+      "gold": "POLICY_QA",
+      "text": "我提交订单还是要运费啊",
+      "predicted": "ORDER_QUERY",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.048,
+      "model": null
+    },
+    {
+      "id": "ext-policy-15",
+      "layer": "external",
+      "gold": "POLICY_QA",
+      "text": "102元了提交订单没有优惠30啊",
+      "predicted": "ORDER_QUERY",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": 10200
+      },
+      "rule_latency_ms": 0.113,
+      "model": null
+    },
+    {
+      "id": "ext-policy-16",
+      "layer": "external",
+      "gold": "POLICY_QA",
+      "text": "我刚准备提交订单咋看我的没有减啊",
+      "predicted": "ORDER_QUERY",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.051,
+      "model": null
+    },
+    {
+      "id": "ext-policy-17",
+      "layer": "external",
+      "gold": "POLICY_QA",
+      "text": "问题是9点之前是399第二份359也就是减5块现在是499你让我怎么拍",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": 500
+      },
+      "rule_latency_ms": 0.047,
+      "model": null
+    },
+    {
+      "id": "ext-policy-18",
+      "layer": "external",
+      "gold": "POLICY_QA",
+      "text": "昨天客服回复太慢我睡着了16号多少钱跟年货价一样吗",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.039,
+      "model": null
+    },
+    {
+      "id": "ext-product-01",
+      "layer": "external",
+      "gold": "PRODUCT_QUERY",
+      "text": "这个质量怎么样这么便宜",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.031,
+      "model": null
+    },
+    {
+      "id": "ext-product-02",
+      "layer": "external",
+      "gold": "PRODUCT_QUERY",
+      "text": "我看还有一个是59的质量都一样吗",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.039,
+      "model": null
+    },
+    {
+      "id": "ext-product-03",
+      "layer": "external",
+      "gold": "PRODUCT_QUERY",
+      "text": "多大尺寸",
+      "predicted": "PRODUCT_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.043,
+      "model": null
+    },
+    {
+      "id": "ext-product-04",
+      "layer": "external",
+      "gold": "PRODUCT_QUERY",
+      "text": "这个好用吗",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.035,
+      "model": null
+    },
+    {
+      "id": "ext-product-05",
+      "layer": "external",
+      "gold": "PRODUCT_QUERY",
+      "text": "因为在家喂奶不太穿怎么用",
+      "predicted": "PRODUCT_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.031,
+      "model": null
+    },
+    {
+      "id": "ext-product-06",
+      "layer": "external",
+      "gold": "PRODUCT_QUERY",
+      "text": "哪个好点",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.029,
+      "model": null
+    },
+    {
+      "id": "ext-product-07",
+      "layer": "external",
+      "gold": "PRODUCT_QUERY",
+      "text": "质量如何",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.035,
+      "model": null
+    },
+    {
+      "id": "ext-product-08",
+      "layer": "external",
+      "gold": "PRODUCT_QUERY",
+      "text": "单张尺寸是多大",
+      "predicted": "PRODUCT_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.044,
+      "model": null
+    },
+    {
+      "id": "ext-product-09",
+      "layer": "external",
+      "gold": "PRODUCT_QUERY",
+      "text": "12包装的尺寸是不是更大",
+      "predicted": "PRODUCT_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.035,
+      "model": null
+    },
+    {
+      "id": "ext-product-10",
+      "layer": "external",
+      "gold": "PRODUCT_QUERY",
+      "text": "材质不一样吗",
+      "predicted": "PRODUCT_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.037,
+      "model": null
+    },
+    {
+      "id": "ext-product-11",
+      "layer": "external",
+      "gold": "PRODUCT_QUERY",
+      "text": "质量保证吧没有坏的吧",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.047,
+      "model": null
+    },
+    {
+      "id": "ext-product-12",
+      "layer": "external",
+      "gold": "PRODUCT_QUERY",
+      "text": "哪种好用",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.035,
+      "model": null
+    },
+    {
+      "id": "ext-product-13",
+      "layer": "external",
+      "gold": "PRODUCT_QUERY",
+      "text": "哪款尺寸大些",
+      "predicted": "PRODUCT_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.044,
+      "model": null
+    },
+    {
+      "id": "ext-product-14",
+      "layer": "external",
+      "gold": "PRODUCT_QUERY",
+      "text": "跟这个尺寸一样吗",
+      "predicted": "PRODUCT_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.037,
+      "model": null
+    },
+    {
+      "id": "ext-product-15",
+      "layer": "external",
+      "gold": "PRODUCT_QUERY",
+      "text": "这两款哪个好洗脸和私处",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.032,
+      "model": null
+    },
+    {
+      "id": "ext-product-16",
+      "layer": "external",
+      "gold": "PRODUCT_QUERY",
+      "text": "小号好用还是大号",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.046,
+      "model": null
+    },
+    {
+      "id": "ext-product-17",
+      "layer": "external",
+      "gold": "PRODUCT_QUERY",
+      "text": "这个怎么用",
+      "predicted": "PRODUCT_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.03,
+      "model": null
+    },
+    {
+      "id": "ext-product-18",
+      "layer": "external",
+      "gold": "PRODUCT_QUERY",
+      "text": "无纺布是什么材质为啥叫无纺布",
+      "predicted": "PRODUCT_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.031,
+      "model": null
+    },
+    {
+      "id": "ext-product-19",
+      "layer": "external",
+      "gold": "PRODUCT_QUERY",
+      "text": "那纯棉是什么材质的呀直接棉花做的布",
+      "predicted": "PRODUCT_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.031,
+      "model": null
+    },
+    {
+      "id": "ext-product-20",
+      "layer": "external",
+      "gold": "PRODUCT_QUERY",
+      "text": "这个尺寸是多大的",
+      "predicted": "PRODUCT_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.044,
+      "model": null
+    },
+    {
+      "id": "ext-product-21",
+      "layer": "external",
+      "gold": "PRODUCT_QUERY",
+      "text": "我买这么多不知道质量",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.045,
+      "model": null
+    },
+    {
+      "id": "ext-product-22",
+      "layer": "external",
+      "gold": "PRODUCT_QUERY",
+      "text": "这个和399有什么区别",
+      "predicted": "POLICY_QA",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.019,
+      "model": null
+    },
+    {
+      "id": "ext-product-23",
+      "layer": "external",
+      "gold": "PRODUCT_QUERY",
+      "text": "两种有什么区别",
+      "predicted": "POLICY_QA",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.027,
+      "model": null
+    },
+    {
+      "id": "ext-product-24",
+      "layer": "external",
+      "gold": "PRODUCT_QUERY",
+      "text": "你好这一款和79那个有什么区别",
+      "predicted": "POLICY_QA",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.019,
+      "model": null
+    },
+    {
+      "id": "ext-product-25",
+      "layer": "external",
+      "gold": "PRODUCT_QUERY",
+      "text": "嗯有2020的纯棉的棉柔巾么",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.05,
+      "model": null
+    },
+    {
+      "id": "ext-product-26",
+      "layer": "external",
+      "gold": "PRODUCT_QUERY",
+      "text": "客服236元三袋总重量是多少",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": 23600
+      },
+      "rule_latency_ms": 0.042,
+      "model": null
+    },
+    {
+      "id": "ext-product-27",
+      "layer": "external",
+      "gold": "PRODUCT_QUERY",
+      "text": "生产日期什么时候的",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.032,
+      "model": null
+    },
+    {
+      "id": "ext-product-28",
+      "layer": "external",
+      "gold": "PRODUCT_QUERY",
+      "text": "什么时候有货",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.03,
+      "model": null
+    },
+    {
+      "id": "ext-refundreq-01",
+      "layer": "external",
+      "gold": "REFUND_REQUEST",
+      "text": "还有两个订单帮我取消退款",
+      "predicted": "ORDER_QUERY",
+      "bucket": "write_intent_error",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.036,
+      "model": null
+    },
+    {
+      "id": "ext-refundreq-02",
+      "layer": "external",
+      "gold": "REFUND_REQUEST",
+      "text": "拦住的话我申请仅退款就行了",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.049,
+      "model": null
+    },
+    {
+      "id": "ext-refundreq-03",
+      "layer": "external",
+      "gold": "REFUND_REQUEST",
+      "text": "算了麻烦你同意一下退款吧",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.034,
+      "model": null
+    },
+    {
+      "id": "ext-refundreq-04",
+      "layer": "external",
+      "gold": "REFUND_REQUEST",
+      "text": "没有我退款",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.043,
+      "model": null
+    },
+    {
+      "id": "ext-refundreq-05",
+      "layer": "external",
+      "gold": "REFUND_REQUEST",
+      "text": "拦不下你给我退款",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.035,
+      "model": null
+    },
+    {
+      "id": "ext-refundreq-06",
+      "layer": "external",
+      "gold": "REFUND_REQUEST",
+      "text": "就申请退款行吗",
+      "predicted": "POLICY_QA",
+      "bucket": "write_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.027,
+      "model": null
+    },
+    {
+      "id": "ext-refundreq-07",
+      "layer": "external",
+      "gold": "REFUND_REQUEST",
+      "text": "我要求退款",
+      "predicted": "POLICY_QA",
+      "bucket": "write_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.015,
+      "model": null
+    },
+    {
+      "id": "ext-refundreq-08",
+      "layer": "external",
+      "gold": "REFUND_REQUEST",
+      "text": "我去别家拍你看一下记录我几号拍的都10天了退款",
+      "predicted": "POLICY_QA",
+      "bucket": "write_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.029,
+      "model": null
+    },
+    {
+      "id": "ext-refundreq-09",
+      "layer": "external",
+      "gold": "REFUND_REQUEST",
+      "text": "好了您同意退款申请吧",
+      "predicted": "REFUND_REQUEST",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 2,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.043,
+      "model": null
+    },
+    {
+      "id": "ext-refundreq-10",
+      "layer": "external",
+      "gold": "REFUND_REQUEST",
+      "text": "那我退款重新拍下",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.044,
+      "model": null
+    },
+    {
+      "id": "ext-refundreq-11",
+      "layer": "external",
+      "gold": "REFUND_REQUEST",
+      "text": "退款的请同意一下",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.043,
+      "model": null
+    },
+    {
+      "id": "ext-refundreq-12",
+      "layer": "external",
+      "gold": "REFUND_REQUEST",
+      "text": "要不我退款从新买吧",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.045,
+      "model": null
+    },
+    {
+      "id": "ext-refundreq-13",
+      "layer": "external",
+      "gold": "REFUND_REQUEST",
+      "text": "那就先退款吧然后再下单",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.045,
+      "model": null
+    },
+    {
+      "id": "ext-refundreq-14",
+      "layer": "external",
+      "gold": "REFUND_REQUEST",
+      "text": "我要退款丛新下单还要加一袋在吗亲",
+      "predicted": "REFUND_REQUEST",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 2,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.021,
+      "model": null
+    },
+    {
+      "id": "ext-refundreq-15",
+      "layer": "external",
+      "gold": "REFUND_REQUEST",
+      "text": "麻烦沐浴露退款又写错地址",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.035,
+      "model": null
+    },
+    {
+      "id": "ext-refundreq-16",
+      "layer": "external",
+      "gold": "REFUND_REQUEST",
+      "text": "还没发是不是那我退货了",
+      "predicted": "POLICY_QA",
+      "bucket": "write_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.02,
+      "model": null
+    },
+    {
+      "id": "ext-refundreq-17",
+      "layer": "external",
+      "gold": "REFUND_REQUEST",
+      "text": "这么久还没发退货",
+      "predicted": "POLICY_QA",
+      "bucket": "write_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.024,
+      "model": null
+    },
+    {
+      "id": "ext-refundreq-18",
+      "layer": "external",
+      "gold": "REFUND_REQUEST",
+      "text": "好不足我要退货的",
+      "predicted": "POLICY_QA",
+      "bucket": "write_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.016,
+      "model": null
+    },
+    {
+      "id": "ext-refundreq-19",
+      "layer": "external",
+      "gold": "REFUND_REQUEST",
+      "text": "别弄花样赶紧退款给我都没有发出来有什么的物流没有发货有毛物流没有发货有毛物流退款退款赶紧",
+      "predicted": "POLICY_QA",
+      "bucket": "write_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.027,
+      "model": null
+    },
+    {
+      "id": "ext-refundreq-20",
+      "layer": "external",
+      "gold": "REFUND_REQUEST",
+      "text": "昨天下的订单你现在都不发货什么我没有付款你们同意一下退款吧谢谢",
+      "predicted": "POLICY_QA",
+      "bucket": "write_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.023,
+      "model": null
+    },
+    {
+      "id": "ext-refundstatus-01",
+      "layer": "external",
+      "gold": "REFUND_STATUS",
+      "text": "退款金额的数字改不过来我重新拍那这个退的钱什么时候返还过来",
+      "predicted": "POLICY_QA",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.023,
+      "model": null
+    },
+    {
+      "id": "ext-refundstatus-02",
+      "layer": "external",
+      "gold": "REFUND_STATUS",
+      "text": "早已申请退款退货",
+      "predicted": "REFUND_REQUEST",
+      "bucket": "write_intent_error",
+      "cost": {
+        "clarifications": 2,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.027,
+      "model": null
+    },
+    {
+      "id": "ext-refundstatus-03",
+      "layer": "external",
+      "gold": "REFUND_STATUS",
+      "text": "运费没问题我是申请了四盒退款哦",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.048,
+      "model": null
+    },
+    {
+      "id": "ext-refundstatus-04",
+      "layer": "external",
+      "gold": "REFUND_STATUS",
+      "text": "那你什么时候退款",
+      "predicted": "POLICY_QA",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.02,
+      "model": null
+    },
+    {
+      "id": "ext-refundstatus-05",
+      "layer": "external",
+      "gold": "REFUND_STATUS",
+      "text": "看到量大的包装也不贵所以申请了退款",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.047,
+      "model": null
+    },
+    {
+      "id": "ext-refundstatus-06",
+      "layer": "external",
+      "gold": "REFUND_STATUS",
+      "text": "而且我当初办理退款的时候还没有物流显示呢就停在正在包裹正在等待揽收我一退款就有到嘉兴了我都没说什么了那我现在就等系统退款",
+      "predicted": "POLICY_QA",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.029,
+      "model": null
+    },
+    {
+      "id": "ext-refundstatus-07",
+      "layer": "external",
+      "gold": "REFUND_STATUS",
+      "text": "申请退款几天退款啊",
+      "predicted": "POLICY_QA",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.024,
+      "model": null
+    },
+    {
+      "id": "ext-refundstatus-08",
+      "layer": "external",
+      "gold": "REFUND_STATUS",
+      "text": "我的退款什么时候才能给我处理了",
+      "predicted": "REFUND_STATUS",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.018,
+      "model": null
+    },
+    {
+      "id": "ext-refundstatus-09",
+      "layer": "external",
+      "gold": "REFUND_STATUS",
+      "text": "我这边还没收到钱呀",
+      "predicted": "DELIVERY_ISSUE",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.041,
+      "model": null
+    },
+    {
+      "id": "ext-refundstatus-10",
+      "layer": "external",
+      "gold": "REFUND_STATUS",
+      "text": "我另外个还没退呢现在去寄了",
+      "predicted": "REFUND_STATUS",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.029,
+      "model": null
+    },
+    {
+      "id": "ext-refundstatus-11",
+      "layer": "external",
+      "gold": "REFUND_STATUS",
+      "text": "还没退吗",
+      "predicted": "REFUND_STATUS",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.032,
+      "model": null
+    },
+    {
+      "id": "ext-refundstatus-12",
+      "layer": "external",
+      "gold": "REFUND_STATUS",
+      "text": "什么时候钱到账不好意思哈",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.031,
+      "model": null
+    },
+    {
+      "id": "ext-refundstatus-13",
+      "layer": "external",
+      "gold": "REFUND_STATUS",
+      "text": "亲货发了款还没退呢",
+      "predicted": "REFUND_STATUS",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.027,
+      "model": null
+    },
+    {
+      "id": "ext-refundstatus-14",
+      "layer": "external",
+      "gold": "REFUND_STATUS",
+      "text": "退回来的快递收到没有啦把钱退给我啊",
+      "predicted": "LOGISTICS_QUERY",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.034,
+      "model": null
+    },
+    {
+      "id": "ext-refundstatus-15",
+      "layer": "external",
+      "gold": "REFUND_STATUS",
+      "text": "亲请问你家还没收货退回的货吗",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.037,
+      "model": null
+    },
+    {
+      "id": "ext-ticket-01",
+      "layer": "external",
+      "gold": "TICKET_CREATE",
+      "text": "你们店对于消费者就这么个态度我非投诉你们不可",
+      "predicted": "TICKET_CREATE",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 1,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.048,
+      "model": null
+    },
+    {
+      "id": "ext-ticket-02",
+      "layer": "external",
+      "gold": "TICKET_CREATE",
+      "text": "那我只能投诉",
+      "predicted": "TICKET_CREATE",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 1,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.042,
+      "model": null
+    },
+    {
+      "id": "ext-ticket-03",
+      "layer": "external",
+      "gold": "TICKET_CREATE",
+      "text": "我前天打了20分钟电话难道还要打吗妳们到底想干嘛不行我不要了我要投诉妳们",
+      "predicted": "TICKET_CREATE",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 1,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.025,
+      "model": null
+    },
+    {
+      "id": "ext-ticket-04",
+      "layer": "external",
+      "gold": "TICKET_CREATE",
+      "text": "我刚和他掛完电话在上海已经转了3天了你们到底想干嘛今天收不到我不要了我要去淘宝投诉你们",
+      "predicted": "TICKET_CREATE",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 1,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.035,
+      "model": null
+    },
+    {
+      "id": "ext-ticket-05",
+      "layer": "external",
+      "gold": "TICKET_CREATE",
+      "text": "我已经投诉到顺丰总部了他们每次都私下多要我们的钱这次这么小的东西都多要三块钱太气人了必须投诉他们",
+      "predicted": "POLICY_QA",
+      "bucket": "write_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.045,
+      "model": null
+    },
+    {
+      "id": "ext-ticket-06",
+      "layer": "external",
+      "gold": "TICKET_CREATE",
+      "text": "等着收差评我要投诉你",
+      "predicted": "TICKET_CREATE",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 1,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.027,
+      "model": null
+    },
+    {
+      "id": "ext-ticket-07",
+      "layer": "external",
+      "gold": "TICKET_CREATE",
+      "text": "要补就发顺丰不行就按照程序来快递和你们一起投诉就1这样",
+      "predicted": "TICKET_CREATE",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 1,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.046,
+      "model": null
+    },
+    {
+      "id": "ext-ticket-08",
+      "layer": "external",
+      "gold": "TICKET_CREATE",
+      "text": "顺便帮我投诉一下这个快递员态度非常恶劣谢谢了",
+      "predicted": "TICKET_CREATE",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 1,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.029,
+      "model": null
+    },
+    {
+      "id": "ext-ticket-09",
+      "layer": "external",
+      "gold": "TICKET_CREATE",
+      "text": "我准备投诉贵店",
+      "predicted": "TICKET_CREATE",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 1,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.029,
+      "model": null
+    },
+    {
+      "id": "ext-ticket-10",
+      "layer": "external",
+      "gold": "TICKET_CREATE",
+      "text": "想投诉明说明天现在不退款就投诉看我怎么给你们写",
+      "predicted": "POLICY_QA",
+      "bucket": "write_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.023,
+      "model": null
+    },
+    {
+      "id": "ext-unknown-01",
+      "layer": "external",
+      "gold": "UNKNOWN",
+      "text": "好的谢谢哦",
+      "predicted": "UNKNOWN",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.046,
+      "model": null
+    },
+    {
+      "id": "ext-unknown-02",
+      "layer": "external",
+      "gold": "UNKNOWN",
+      "text": "OK好的",
+      "predicted": "UNKNOWN",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.259,
+      "model": null
+    },
+    {
+      "id": "ext-unknown-03",
+      "layer": "external",
+      "gold": "UNKNOWN",
+      "text": "好的谢谢",
+      "predicted": "UNKNOWN",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.19,
+      "model": null
+    },
+    {
+      "id": "ext-unknown-04",
+      "layer": "external",
+      "gold": "UNKNOWN",
+      "text": "你好已经关注了",
+      "predicted": "UNKNOWN",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.149,
+      "model": null
+    },
+    {
+      "id": "ext-unknown-05",
+      "layer": "external",
+      "gold": "UNKNOWN",
+      "text": "哦哦明白了谢谢老板",
+      "predicted": "UNKNOWN",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.132,
+      "model": null
+    },
+    {
+      "id": "ext-unknown-06",
+      "layer": "external",
+      "gold": "UNKNOWN",
+      "text": "嗯嗯我都170啦",
+      "predicted": "UNKNOWN",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.127,
+      "model": null
+    },
+    {
+      "id": "ext-unknown-07",
+      "layer": "external",
+      "gold": "UNKNOWN",
+      "text": "哦亲:我买那么多请多送点试吃零食吧",
+      "predicted": "UNKNOWN",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.137,
+      "model": null
+    },
+    {
+      "id": "ext-unknown-08",
+      "layer": "external",
+      "gold": "UNKNOWN",
+      "text": "我先买40个好的话再买40个我就领了2张5块的",
+      "predicted": "UNKNOWN",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": 500
+      },
+      "rule_latency_ms": 0.179,
+      "model": null
+    },
+    {
+      "id": "ext-unknown-09",
+      "layer": "external",
+      "gold": "UNKNOWN",
+      "text": "那怎么搞",
+      "predicted": "UNKNOWN",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.085,
+      "model": null
+    },
+    {
+      "id": "ext-unknown-10",
+      "layer": "external",
+      "gold": "UNKNOWN",
+      "text": "你好昨天晚上联系我的是你吗还是其他客服呢",
+      "predicted": "UNKNOWN",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.112,
+      "model": null
+    },
+    {
+      "id": "ext-unknown-11",
+      "layer": "external",
+      "gold": "UNKNOWN",
+      "text": "你们客服服务态度都是那么好吗",
+      "predicted": "UNKNOWN",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.1,
+      "model": null
+    },
+    {
+      "id": "ext-unknown-12",
+      "layer": "external",
+      "gold": "UNKNOWN",
+      "text": "我是想你更好的给顾客服务",
+      "predicted": "UNKNOWN",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.047,
+      "model": null
+    },
+    {
+      "id": "ext-unknown-13",
+      "layer": "external",
+      "gold": "UNKNOWN",
+      "text": "客服在不",
+      "predicted": "UNKNOWN",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.043,
+      "model": null
+    },
+    {
+      "id": "ext-unknown-14",
+      "layer": "external",
+      "gold": "UNKNOWN",
+      "text": "客服在吗",
+      "predicted": "UNKNOWN",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.034,
+      "model": null
+    },
+    {
+      "id": "ext-unknown-15",
+      "layer": "external",
+      "gold": "UNKNOWN",
+      "text": "2个茶针你们换客服了",
+      "predicted": "UNKNOWN",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.046,
+      "model": null
+    },
+    {
+      "id": "ext-unknown-16",
+      "layer": "external",
+      "gold": "UNKNOWN",
+      "text": "经常在你这买了还有别的送吗都老客服了",
+      "predicted": "UNKNOWN",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.041,
+      "model": null
+    },
+    {
+      "id": "ext-unknown-17",
+      "layer": "external",
+      "gold": "UNKNOWN",
+      "text": "客服给了我一个搞笑的答案说她认错人了",
+      "predicted": "UNKNOWN",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.048,
+      "model": null
+    },
+    {
+      "id": "ext-unknown-18",
+      "layer": "external",
+      "gold": "UNKNOWN",
+      "text": "您好我是淘宝主播大轩轩big专业的电商客服需要淘宝主播合作吗主播专业做儿童类目的主播的每天开播目前粉丝1万3",
+      "predicted": "UNKNOWN",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.063,
+      "model": null
+    },
+    {
+      "id": "gap-analytics-01",
+      "layer": "authored_gap",
+      "gold": "SELF_ANALYTICS",
+      "text": "我上个月一共退了几笔",
+      "predicted": "SELF_ANALYTICS",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.032,
+      "model": null
+    },
+    {
+      "id": "gap-analytics-02",
+      "layer": "authored_gap",
+      "gold": "SELF_ANALYTICS",
+      "text": "我今年在你们店花了多少钱",
+      "predicted": "SELF_ANALYTICS",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.026,
+      "model": null
+    },
+    {
+      "id": "gap-analytics-03",
+      "layer": "authored_gap",
+      "gold": "SELF_ANALYTICS",
+      "text": "我的订单一共有几个",
+      "predicted": "SELF_ANALYTICS",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.022,
+      "model": null
+    },
+    {
+      "id": "gap-analytics-04",
+      "layer": "authored_gap",
+      "gold": "SELF_ANALYTICS",
+      "text": "最近三个月我提交过几次售后单",
+      "predicted": "POLICY_QA",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.02,
+      "model": null
+    },
+    {
+      "id": "gap-analytics-05",
+      "layer": "authored_gap",
+      "gold": "SELF_ANALYTICS",
+      "text": "我一共买过多少件",
+      "predicted": "SELF_ANALYTICS",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.054,
+      "model": null
+    },
+    {
+      "id": "gap-analytics-06",
+      "layer": "authored_gap",
+      "gold": "SELF_ANALYTICS",
+      "text": "帮我统计一下我的退款金额合计",
+      "predicted": "SELF_ANALYTICS",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.026,
+      "model": null
+    },
+    {
+      "id": "gap-analytics-07",
+      "layer": "authored_gap",
+      "gold": "SELF_ANALYTICS",
+      "text": "我名下有几笔待处理的退款",
+      "predicted": "POLICY_QA",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.023,
+      "model": null
+    },
+    {
+      "id": "gap-analytics-08",
+      "layer": "authored_gap",
+      "gold": "SELF_ANALYTICS",
+      "text": "这个账号累计消费了多少元",
+      "predicted": "SELF_ANALYTICS",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.023,
+      "model": null
+    },
+    {
+      "id": "gap-analytics-09",
+      "layer": "authored_gap",
+      "gold": "SELF_ANALYTICS",
+      "text": "我最近一周下了几个订单",
+      "predicted": "SELF_ANALYTICS",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.022,
+      "model": null
+    },
+    {
+      "id": "gap-analytics-10",
+      "layer": "authored_gap",
+      "gold": "SELF_ANALYTICS",
+      "text": "我所有订单加起来多少钱",
+      "predicted": "SELF_ANALYTICS",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.031,
+      "model": null
+    },
+    {
+      "id": "gap-analytics-11",
+      "layer": "authored_gap",
+      "gold": "SELF_ANALYTICS",
+      "text": "我买过几次",
+      "predicted": "SELF_ANALYTICS",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.021,
+      "model": null
+    },
+    {
+      "id": "gap-analytics-12",
+      "layer": "authored_gap",
+      "gold": "SELF_ANALYTICS",
+      "text": "我这几年的订单总额是多少",
+      "predicted": "SELF_ANALYTICS",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.022,
+      "model": null
+    },
+    {
+      "id": "gap-delivery-01",
+      "layer": "authored_gap",
+      "gold": "DELIVERY_ISSUE",
+      "text": "说好两天到，现在第五天了还没影",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.047,
+      "model": null
+    },
+    {
+      "id": "gap-delivery-02",
+      "layer": "authored_gap",
+      "gold": "DELIVERY_ISSUE",
+      "text": "包裹在途中停了四天不动",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.045,
+      "model": null
+    },
+    {
+      "id": "gap-delivery-03",
+      "layer": "authored_gap",
+      "gold": "DELIVERY_ISSUE",
+      "text": "收到时盒子压扁了，里面也碎了",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.045,
+      "model": null
+    },
+    {
+      "id": "gap-delivery-04",
+      "layer": "authored_gap",
+      "gold": "DELIVERY_ISSUE",
+      "text": "只收到两件，清单上是四件",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.044,
+      "model": null
+    },
+    {
+      "id": "gap-delivery-05",
+      "layer": "authored_gap",
+      "gold": "DELIVERY_ISSUE",
+      "text": "快递显示签收，但我没拿到",
+      "predicted": "LOGISTICS_QUERY",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.042,
+      "model": null
+    },
+    {
+      "id": "gap-delivery-06",
+      "layer": "authored_gap",
+      "gold": "DELIVERY_ISSUE",
+      "text": "发错货了，我要的东西没来",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.031,
+      "model": null
+    },
+    {
+      "id": "gap-delivery-07",
+      "layer": "authored_gap",
+      "gold": "DELIVERY_ISSUE",
+      "text": "漏发了一瓶",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.042,
+      "model": null
+    },
+    {
+      "id": "gap-delivery-08",
+      "layer": "authored_gap",
+      "gold": "DELIVERY_ISSUE",
+      "text": "同一个地址，别的快递都到了，这单一直没来",
+      "predicted": "LOGISTICS_QUERY",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.045,
+      "model": null
+    },
+    {
+      "id": "gap-delivery-09",
+      "layer": "authored_gap",
+      "gold": "DELIVERY_ISSUE",
+      "text": "物流三天没更新",
+      "predicted": "LOGISTICS_QUERY",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.042,
+      "model": null
+    },
+    {
+      "id": "gap-delivery-10",
+      "layer": "authored_gap",
+      "gold": "DELIVERY_ISSUE",
+      "text": "外包装完好，里面少了一件",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.045,
+      "model": null
+    },
+    {
+      "id": "gap-delivery-11",
+      "layer": "authored_gap",
+      "gold": "DELIVERY_ISSUE",
+      "text": "送来的不是我要的型号",
+      "predicted": "PRODUCT_QUERY",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.034,
+      "model": null
+    },
+    {
+      "id": "gap-delivery-12",
+      "layer": "authored_gap",
+      "gold": "DELIVERY_ISSUE",
+      "text": "说今天送，一直没人来",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.045,
+      "model": null
+    },
+    {
+      "id": "gap-eligibility-01",
+      "layer": "authored_gap",
+      "gold": "REFUND_ELIGIBILITY",
+      "text": "这双鞋穿过一次还能不能走退货",
+      "predicted": "POLICY_QA",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.021,
+      "model": null
+    },
+    {
+      "id": "gap-eligibility-02",
+      "layer": "authored_gap",
+      "gold": "REFUND_ELIGIBILITY",
+      "text": "买错颜色了，还可以退换吗",
+      "predicted": "PRODUCT_QUERY",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.041,
+      "model": null
+    },
+    {
+      "id": "gap-eligibility-03",
+      "layer": "authored_gap",
+      "gold": "REFUND_ELIGIBILITY",
+      "text": "拆封后发现问题，能退吗",
+      "predicted": "REFUND_ELIGIBILITY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.024,
+      "model": null
+    },
+    {
+      "id": "gap-eligibility-04",
+      "layer": "authored_gap",
+      "gold": "REFUND_ELIGIBILITY",
+      "text": "超过一个月了还有机会退吗",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.038,
+      "model": null
+    },
+    {
+      "id": "gap-eligibility-05",
+      "layer": "authored_gap",
+      "gold": "REFUND_ELIGIBILITY",
+      "text": "赠品要一起退吗，主商品可以退不",
+      "predicted": "PRODUCT_QUERY",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.039,
+      "model": null
+    },
+    {
+      "id": "gap-eligibility-06",
+      "layer": "authored_gap",
+      "gold": "REFUND_ELIGIBILITY",
+      "text": "这件衣服洗过一次，符合退货要求吗",
+      "predicted": "POLICY_QA",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.019,
+      "model": null
+    },
+    {
+      "id": "gap-eligibility-07",
+      "layer": "authored_gap",
+      "gold": "REFUND_ELIGIBILITY",
+      "text": "我这种情况算不算可以退",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.044,
+      "model": null
+    },
+    {
+      "id": "gap-eligibility-08",
+      "layer": "authored_gap",
+      "gold": "REFUND_ELIGIBILITY",
+      "text": "收到货十天了，还能不能退",
+      "predicted": "REFUND_ELIGIBILITY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.026,
+      "model": null
+    },
+    {
+      "id": "gap-eligibility-09",
+      "layer": "authored_gap",
+      "gold": "REFUND_ELIGIBILITY",
+      "text": "包装丢了还能退吗",
+      "predicted": "REFUND_ELIGIBILITY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.022,
+      "model": null
+    },
+    {
+      "id": "gap-eligibility-10",
+      "layer": "authored_gap",
+      "gold": "REFUND_ELIGIBILITY",
+      "text": "定制款做错了，可以退吗",
+      "predicted": "REFUND_ELIGIBILITY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.023,
+      "model": null
+    },
+    {
+      "id": "gap-eligibility-11",
+      "layer": "authored_gap",
+      "gold": "REFUND_ELIGIBILITY",
+      "text": "用了过敏，这个能全退吗",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.035,
+      "model": null
+    },
+    {
+      "id": "gap-eligibility-12",
+      "layer": "authored_gap",
+      "gold": "REFUND_ELIGIBILITY",
+      "text": "少发的那件能按缺货退吗",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.035,
+      "model": null
+    },
+    {
+      "id": "gap-handoff-01",
+      "layer": "authored_gap",
+      "gold": "HUMAN_HANDOFF",
+      "text": "帮我接一个能拍板的人",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.032,
+      "model": null
+    },
+    {
+      "id": "gap-handoff-02",
+      "layer": "authored_gap",
+      "gold": "HUMAN_HANDOFF",
+      "text": "机器人说不明白，换个人跟我说",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.046,
+      "model": null
+    },
+    {
+      "id": "gap-handoff-03",
+      "layer": "authored_gap",
+      "gold": "HUMAN_HANDOFF",
+      "text": "我要和你们主管聊",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.031,
+      "model": null
+    },
+    {
+      "id": "gap-handoff-04",
+      "layer": "authored_gap",
+      "gold": "HUMAN_HANDOFF",
+      "text": "麻烦叫一位同事来处理这件事",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.034,
+      "model": null
+    },
+    {
+      "id": "gap-handoff-05",
+      "layer": "authored_gap",
+      "gold": "HUMAN_HANDOFF",
+      "text": "别让系统回了，我要活人",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.032,
+      "model": null
+    },
+    {
+      "id": "gap-handoff-06",
+      "layer": "authored_gap",
+      "gold": "HUMAN_HANDOFF",
+      "text": "你们这有人能负责吗",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.036,
+      "model": null
+    },
+    {
+      "id": "gap-handoff-07",
+      "layer": "authored_gap",
+      "gold": "HUMAN_HANDOFF",
+      "text": "给我转售后服务专员",
+      "predicted": "POLICY_QA",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.017,
+      "model": null
+    },
+    {
+      "id": "gap-handoff-08",
+      "layer": "authored_gap",
+      "gold": "HUMAN_HANDOFF",
+      "text": "我想找一位能处理退款的人谈谈",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.034,
+      "model": null
+    },
+    {
+      "id": "gap-handoff-09",
+      "layer": "authored_gap",
+      "gold": "HUMAN_HANDOFF",
+      "text": "让你们的负责人联系我",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.044,
+      "model": null
+    },
+    {
+      "id": "gap-handoff-10",
+      "layer": "authored_gap",
+      "gold": "HUMAN_HANDOFF",
+      "text": "客服从哪里接入，我要真人对话",
+      "predicted": "HUMAN_HANDOFF",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 1,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.021,
+      "model": null
+    },
+    {
+      "id": "gap-handoff-11",
+      "layer": "authored_gap",
+      "gold": "HUMAN_HANDOFF",
+      "text": "这单我信不过自动回复，安排个人跟进",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.049,
+      "model": null
+    },
+    {
+      "id": "gap-handoff-12",
+      "layer": "authored_gap",
+      "gold": "HUMAN_HANDOFF",
+      "text": "把你们值班的同事叫来",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.044,
+      "model": null
+    },
+    {
+      "id": "gap-logistics-01",
+      "layer": "authored_gap",
+      "gold": "LOGISTICS_QUERY",
+      "text": "发的是什么快递",
+      "predicted": "LOGISTICS_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.027,
+      "model": null
+    },
+    {
+      "id": "gap-logistics-02",
+      "layer": "authored_gap",
+      "gold": "LOGISTICS_QUERY",
+      "text": "现在到哪个城市了",
+      "predicted": "LOGISTICS_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.03,
+      "model": null
+    },
+    {
+      "id": "gap-logistics-03",
+      "layer": "authored_gap",
+      "gold": "LOGISTICS_QUERY",
+      "text": "明天能送到吗",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.037,
+      "model": null
+    },
+    {
+      "id": "gap-logistics-04",
+      "layer": "authored_gap",
+      "gold": "LOGISTICS_QUERY",
+      "text": "单号发我一下",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.043,
+      "model": null
+    },
+    {
+      "id": "gap-logistics-05",
+      "layer": "authored_gap",
+      "gold": "LOGISTICS_QUERY",
+      "text": "从哪个仓发货",
+      "predicted": "LOGISTICS_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.027,
+      "model": null
+    },
+    {
+      "id": "gap-logistics-06",
+      "layer": "authored_gap",
+      "gold": "LOGISTICS_QUERY",
+      "text": "大概几天能到",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.073,
+      "model": null
+    },
+    {
+      "id": "gap-logistics-07",
+      "layer": "authored_gap",
+      "gold": "LOGISTICS_QUERY",
+      "text": "能指定顺丰吗",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.041,
+      "model": null
+    },
+    {
+      "id": "gap-logistics-08",
+      "layer": "authored_gap",
+      "gold": "LOGISTICS_QUERY",
+      "text": "今天下单什么时候发出",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.033,
+      "model": null
+    },
+    {
+      "id": "gap-logistics-09",
+      "layer": "authored_gap",
+      "gold": "LOGISTICS_QUERY",
+      "text": "派送员电话是多少",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.041,
+      "model": null
+    },
+    {
+      "id": "gap-logistics-10",
+      "layer": "authored_gap",
+      "gold": "LOGISTICS_QUERY",
+      "text": "包裹现在在哪个中转站",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.034,
+      "model": null
+    },
+    {
+      "id": "gap-logistics-11",
+      "layer": "authored_gap",
+      "gold": "LOGISTICS_QUERY",
+      "text": "你们默认走哪家物流",
+      "predicted": "LOGISTICS_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.048,
+      "model": null
+    },
+    {
+      "id": "gap-logistics-12",
+      "layer": "authored_gap",
+      "gold": "LOGISTICS_QUERY",
+      "text": "订单 ORD-DEMO-1001 的运输进度呢",
+      "predicted": "ORDER_QUERY",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": "ORD-DEMO-1001",
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.054,
+      "model": null
+    },
+    {
+      "id": "gap-order-01",
+      "layer": "authored_gap",
+      "gold": "ORDER_QUERY",
+      "text": "帮我看看上周买的那笔付款了没有",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.039,
+      "model": null
+    },
+    {
+      "id": "gap-order-02",
+      "layer": "authored_gap",
+      "gold": "ORDER_QUERY",
+      "text": "我买的那个订单信息对吗",
+      "predicted": "ORDER_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.041,
+      "model": null
+    },
+    {
+      "id": "gap-order-03",
+      "layer": "authored_gap",
+      "gold": "ORDER_QUERY",
+      "text": "订单里的地址能改吗",
+      "predicted": "ORDER_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.04,
+      "model": null
+    },
+    {
+      "id": "gap-order-04",
+      "layer": "authored_gap",
+      "gold": "ORDER_QUERY",
+      "text": "查一下我最近一笔订单",
+      "predicted": "ORDER_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.049,
+      "model": null
+    },
+    {
+      "id": "gap-order-05",
+      "layer": "authored_gap",
+      "gold": "ORDER_QUERY",
+      "text": "订单显示已下单，但我没看到详情",
+      "predicted": "ORDER_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.049,
+      "model": null
+    },
+    {
+      "id": "gap-order-06",
+      "layer": "authored_gap",
+      "gold": "ORDER_QUERY",
+      "text": "我的订单号是多少",
+      "predicted": "ORDER_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.034,
+      "model": null
+    },
+    {
+      "id": "gap-order-07",
+      "layer": "authored_gap",
+      "gold": "ORDER_QUERY",
+      "text": "这笔订单买的是什么",
+      "predicted": "ORDER_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.031,
+      "model": null
+    },
+    {
+      "id": "gap-order-08",
+      "layer": "authored_gap",
+      "gold": "ORDER_QUERY",
+      "text": "订单被取消了，原因是什么",
+      "predicted": "ORDER_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.032,
+      "model": null
+    },
+    {
+      "id": "gap-order-09",
+      "layer": "authored_gap",
+      "gold": "ORDER_QUERY",
+      "text": "能查一下订单的付款状态吗",
+      "predicted": "ORDER_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.038,
+      "model": null
+    },
+    {
+      "id": "gap-order-10",
+      "layer": "authored_gap",
+      "gold": "ORDER_QUERY",
+      "text": "我想确认订单里的收货人",
+      "predicted": "ORDER_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.034,
+      "model": null
+    },
+    {
+      "id": "gap-order-11",
+      "layer": "authored_gap",
+      "gold": "ORDER_QUERY",
+      "text": "订单 ORD-DEMO-1001 现在是什么状态",
+      "predicted": "ORDER_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": "ORD-DEMO-1001",
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.04,
+      "model": null
+    },
+    {
+      "id": "gap-order-12",
+      "layer": "authored_gap",
+      "gold": "ORDER_QUERY",
+      "text": "帮我把订单里的电话改一下",
+      "predicted": "ORDER_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.035,
+      "model": null
+    },
+    {
+      "id": "gap-policy-01",
+      "layer": "authored_gap",
+      "gold": "POLICY_QA",
+      "text": "你们退货要满足哪些条件",
+      "predicted": "POLICY_QA",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.017,
+      "model": null
+    },
+    {
+      "id": "gap-policy-02",
+      "layer": "authored_gap",
+      "gold": "POLICY_QA",
+      "text": "七天无理由从哪天开始算",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.036,
+      "model": null
+    },
+    {
+      "id": "gap-policy-03",
+      "layer": "authored_gap",
+      "gold": "POLICY_QA",
+      "text": "退款一般几天能到账，规则怎么写的",
+      "predicted": "POLICY_QA",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.017,
+      "model": null
+    },
+    {
+      "id": "gap-policy-04",
+      "layer": "authored_gap",
+      "gold": "POLICY_QA",
+      "text": "运费险怎么赔",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.031,
+      "model": null
+    },
+    {
+      "id": "gap-policy-05",
+      "layer": "authored_gap",
+      "gold": "POLICY_QA",
+      "text": "超过时效还能申请售后吗",
+      "predicted": "POLICY_QA",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.024,
+      "model": null
+    },
+    {
+      "id": "gap-policy-06",
+      "layer": "authored_gap",
+      "gold": "POLICY_QA",
+      "text": "审批退款需要谁签字",
+      "predicted": "POLICY_QA",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.019,
+      "model": null
+    },
+    {
+      "id": "gap-policy-07",
+      "layer": "authored_gap",
+      "gold": "POLICY_QA",
+      "text": "什么情况下平台会介入",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.031,
+      "model": null
+    },
+    {
+      "id": "gap-policy-08",
+      "layer": "authored_gap",
+      "gold": "POLICY_QA",
+      "text": "破损赔偿的标准是什么",
+      "predicted": "POLICY_QA",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.016,
+      "model": null
+    },
+    {
+      "id": "gap-policy-09",
+      "layer": "authored_gap",
+      "gold": "POLICY_QA",
+      "text": "退货运费由谁承担",
+      "predicted": "POLICY_QA",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.019,
+      "model": null
+    },
+    {
+      "id": "gap-policy-10",
+      "layer": "authored_gap",
+      "gold": "POLICY_QA",
+      "text": "订单满多少免运费",
+      "predicted": "ORDER_QUERY",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.035,
+      "model": null
+    },
+    {
+      "id": "gap-policy-11",
+      "layer": "authored_gap",
+      "gold": "POLICY_QA",
+      "text": "优惠券和满减能一起用吗",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.038,
+      "model": null
+    },
+    {
+      "id": "gap-policy-12",
+      "layer": "authored_gap",
+      "gold": "POLICY_QA",
+      "text": "发票开错了怎么重开",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.03,
+      "model": null
+    },
+    {
+      "id": "gap-product-01",
+      "layer": "authored_gap",
+      "gold": "PRODUCT_QUERY",
+      "text": "这款的承重是多少",
+      "predicted": "PRODUCT_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.031,
+      "model": null
+    },
+    {
+      "id": "gap-product-02",
+      "layer": "authored_gap",
+      "gold": "PRODUCT_QUERY",
+      "text": "有别的颜色可选吗",
+      "predicted": "PRODUCT_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.035,
+      "model": null
+    },
+    {
+      "id": "gap-product-03",
+      "layer": "authored_gap",
+      "gold": "PRODUCT_QUERY",
+      "text": "这个材质会不会过敏",
+      "predicted": "PRODUCT_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.042,
+      "model": null
+    },
+    {
+      "id": "gap-product-04",
+      "layer": "authored_gap",
+      "gold": "PRODUCT_QUERY",
+      "text": "机器怎么安装",
+      "predicted": "PRODUCT_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.03,
+      "model": null
+    },
+    {
+      "id": "gap-product-05",
+      "layer": "authored_gap",
+      "gold": "PRODUCT_QUERY",
+      "text": "尺寸 120 和 150 差多少",
+      "predicted": "PRODUCT_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.037,
+      "model": null
+    },
+    {
+      "id": "gap-product-06",
+      "layer": "authored_gap",
+      "gold": "PRODUCT_QUERY",
+      "text": "保修多久",
+      "predicted": "PRODUCT_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.033,
+      "model": null
+    },
+    {
+      "id": "gap-product-07",
+      "layer": "authored_gap",
+      "gold": "PRODUCT_QUERY",
+      "text": "配件清单里有什么",
+      "predicted": "PRODUCT_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.03,
+      "model": null
+    },
+    {
+      "id": "gap-product-08",
+      "layer": "authored_gap",
+      "gold": "PRODUCT_QUERY",
+      "text": "这个型号支持蓝牙吗",
+      "predicted": "PRODUCT_QUERY",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.039,
+      "model": null
+    },
+    {
+      "id": "gap-product-09",
+      "layer": "authored_gap",
+      "gold": "PRODUCT_QUERY",
+      "text": "怎么清洗比较合适",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.03,
+      "model": null
+    },
+    {
+      "id": "gap-product-10",
+      "layer": "authored_gap",
+      "gold": "PRODUCT_QUERY",
+      "text": "和另一款比哪个更轻",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.031,
+      "model": null
+    },
+    {
+      "id": "gap-product-11",
+      "layer": "authored_gap",
+      "gold": "PRODUCT_QUERY",
+      "text": "这个适合放在多大房间",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.052,
+      "model": null
+    },
+    {
+      "id": "gap-product-12",
+      "layer": "authored_gap",
+      "gold": "PRODUCT_QUERY",
+      "text": "标准版和加厚版用料一样吗",
+      "predicted": "POLICY_QA",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.02,
+      "model": null
+    },
+    {
+      "id": "gap-refundreq-01",
+      "layer": "authored_gap",
+      "gold": "REFUND_REQUEST",
+      "text": "这单 129 元我不要了，钱原路返回",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": 12900
+      },
+      "rule_latency_ms": 0.061,
+      "model": null
+    },
+    {
+      "id": "gap-refundreq-02",
+      "layer": "authored_gap",
+      "gold": "REFUND_REQUEST",
+      "text": "货没发，把 129 元付款退回来",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": 12900
+      },
+      "rule_latency_ms": 0.055,
+      "model": null
+    },
+    {
+      "id": "gap-refundreq-03",
+      "layer": "authored_gap",
+      "gold": "REFUND_REQUEST",
+      "text": "麻烦把这 258 元退到我账户",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": 25800
+      },
+      "rule_latency_ms": 0.04,
+      "model": null
+    },
+    {
+      "id": "gap-refundreq-04",
+      "layer": "authored_gap",
+      "gold": "REFUND_REQUEST",
+      "text": "我不等了，199 元直接退",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": 19900
+      },
+      "rule_latency_ms": 0.049,
+      "model": null
+    },
+    {
+      "id": "gap-refundreq-05",
+      "layer": "authored_gap",
+      "gold": "REFUND_REQUEST",
+      "text": "帮我退款 ORD-DEMO-1001 129 元",
+      "predicted": "REFUND_REQUEST",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 1,
+        "approvals": 1,
+        "handoffs": 0,
+        "amount_exposed_cents": 12900
+      },
+      "slots": {
+        "order_id": "ORD-DEMO-1001",
+        "amount_cents": 12900
+      },
+      "rule_latency_ms": 0.039,
+      "model": null
+    },
+    {
+      "id": "gap-refundreq-06",
+      "layer": "authored_gap",
+      "gold": "REFUND_REQUEST",
+      "text": "这笔交易给我撤了",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.034,
+      "model": null
+    },
+    {
+      "id": "gap-refundreq-07",
+      "layer": "authored_gap",
+      "gold": "REFUND_REQUEST",
+      "text": "付的钱请原数返还",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.044,
+      "model": null
+    },
+    {
+      "id": "gap-refundreq-08",
+      "layer": "authored_gap",
+      "gold": "REFUND_REQUEST",
+      "text": "我要把这单撤掉并拿回款",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.033,
+      "model": null
+    },
+    {
+      "id": "gap-refundreq-09",
+      "layer": "authored_gap",
+      "gold": "REFUND_REQUEST",
+      "text": "东西不要了，走退款",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.044,
+      "model": null
+    },
+    {
+      "id": "gap-refundreq-10",
+      "layer": "authored_gap",
+      "gold": "REFUND_REQUEST",
+      "text": "请把 129 元退给我",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": 12900
+      },
+      "rule_latency_ms": 0.037,
+      "model": null
+    },
+    {
+      "id": "gap-refundreq-11",
+      "layer": "authored_gap",
+      "gold": "REFUND_REQUEST",
+      "text": "这个订单 ORD-DEMO-1001 帮我退 129 元",
+      "predicted": "ORDER_QUERY",
+      "bucket": "write_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": "ORD-DEMO-1001",
+        "amount_cents": 12900
+      },
+      "rule_latency_ms": 0.047,
+      "model": null
+    },
+    {
+      "id": "gap-refundreq-12",
+      "layer": "authored_gap",
+      "gold": "REFUND_REQUEST",
+      "text": "我不想买了，把 99 元退回来",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": 9900
+      },
+      "rule_latency_ms": 0.052,
+      "model": null
+    },
+    {
+      "id": "gap-refundstatus-01",
+      "layer": "authored_gap",
+      "gold": "REFUND_STATUS",
+      "text": "我上周提交的退款现在到哪一步了",
+      "predicted": "POLICY_QA",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.029,
+      "model": null
+    },
+    {
+      "id": "gap-refundstatus-02",
+      "layer": "authored_gap",
+      "gold": "REFUND_STATUS",
+      "text": "钱怎么还没回到卡里",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.031,
+      "model": null
+    },
+    {
+      "id": "gap-refundstatus-03",
+      "layer": "authored_gap",
+      "gold": "REFUND_STATUS",
+      "text": "退款单号能查一下吗",
+      "predicted": "POLICY_QA",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.027,
+      "model": null
+    },
+    {
+      "id": "gap-refundstatus-04",
+      "layer": "authored_gap",
+      "gold": "REFUND_STATUS",
+      "text": "这笔钱退了一个星期还没动静",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.049,
+      "model": null
+    },
+    {
+      "id": "gap-refundstatus-05",
+      "layer": "authored_gap",
+      "gold": "REFUND_STATUS",
+      "text": "我的退款现在是什么情况",
+      "predicted": "POLICY_QA",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.021,
+      "model": null
+    },
+    {
+      "id": "gap-refundstatus-06",
+      "layer": "authored_gap",
+      "gold": "REFUND_STATUS",
+      "text": "退款到账要多久，我已经等三天了",
+      "predicted": "REFUND_STATUS",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.022,
+      "model": null
+    },
+    {
+      "id": "gap-refundstatus-07",
+      "layer": "authored_gap",
+      "gold": "REFUND_STATUS",
+      "text": "退款申请已经提交，129 元还没到账",
+      "predicted": "REFUND_REQUEST",
+      "bucket": "write_intent_error",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 12900
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": 12900
+      },
+      "rule_latency_ms": 0.052,
+      "model": null
+    },
+    {
+      "id": "gap-refundstatus-08",
+      "layer": "authored_gap",
+      "gold": "REFUND_STATUS",
+      "text": "退款处理到哪了",
+      "predicted": "POLICY_QA",
+      "bucket": "read_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.025,
+      "model": null
+    },
+    {
+      "id": "gap-refundstatus-09",
+      "layer": "authored_gap",
+      "gold": "REFUND_STATUS",
+      "text": "钱退回来了吗，我没看到",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.038,
+      "model": null
+    },
+    {
+      "id": "gap-refundstatus-10",
+      "layer": "authored_gap",
+      "gold": "REFUND_STATUS",
+      "text": "帮我看看退款有没有成功",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.033,
+      "model": null
+    },
+    {
+      "id": "gap-refundstatus-11",
+      "layer": "authored_gap",
+      "gold": "REFUND_STATUS",
+      "text": "申请提交后有回音吗，钱一直没到",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.038,
+      "model": null
+    },
+    {
+      "id": "gap-refundstatus-12",
+      "layer": "authored_gap",
+      "gold": "REFUND_STATUS",
+      "text": "我退的那笔款什么时候能到账",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.03,
+      "model": null
+    },
+    {
+      "id": "gap-ticket-01",
+      "layer": "authored_gap",
+      "gold": "TICKET_CREATE",
+      "text": "我要把这次体验登记成正式问题，让上面跟进",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.034,
+      "model": null
+    },
+    {
+      "id": "gap-ticket-02",
+      "layer": "authored_gap",
+      "gold": "TICKET_CREATE",
+      "text": "给我开一个售后记录，我要留档",
+      "predicted": "POLICY_QA",
+      "bucket": "write_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.017,
+      "model": null
+    },
+    {
+      "id": "gap-ticket-03",
+      "layer": "authored_gap",
+      "gold": "TICKET_CREATE",
+      "text": "这件事我要走正式反馈渠道",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.034,
+      "model": null
+    },
+    {
+      "id": "gap-ticket-04",
+      "layer": "authored_gap",
+      "gold": "TICKET_CREATE",
+      "text": "我要把快递丢件这件事报上去",
+      "predicted": "DELIVERY_ISSUE",
+      "bucket": "write_intent_error",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.03,
+      "model": null
+    },
+    {
+      "id": "gap-ticket-05",
+      "layer": "authored_gap",
+      "gold": "TICKET_CREATE",
+      "text": "帮我登记一下，我要追究这次延误",
+      "predicted": "DELIVERY_ISSUE",
+      "bucket": "write_intent_error",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.033,
+      "model": null
+    },
+    {
+      "id": "gap-ticket-06",
+      "layer": "authored_gap",
+      "gold": "TICKET_CREATE",
+      "text": "我要正式反映客服态度问题",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.032,
+      "model": null
+    },
+    {
+      "id": "gap-ticket-07",
+      "layer": "authored_gap",
+      "gold": "TICKET_CREATE",
+      "text": "请把这次破损记成需要处理的案件",
+      "predicted": "DELIVERY_ISSUE",
+      "bucket": "write_intent_error",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.045,
+      "model": null
+    },
+    {
+      "id": "gap-ticket-08",
+      "layer": "authored_gap",
+      "gold": "TICKET_CREATE",
+      "text": "我要立案，商品和描述完全不符",
+      "predicted": "PRODUCT_QUERY",
+      "bucket": "write_intent_error",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.033,
+      "model": null
+    },
+    {
+      "id": "gap-ticket-09",
+      "layer": "authored_gap",
+      "gold": "TICKET_CREATE",
+      "text": "这次问题我要留个书面记录",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.033,
+      "model": null
+    },
+    {
+      "id": "gap-ticket-10",
+      "layer": "authored_gap",
+      "gold": "TICKET_CREATE",
+      "text": "我要向平台反映你们不发货",
+      "predicted": "LOGISTICS_QUERY",
+      "bucket": "write_intent_error",
+      "cost": {
+        "clarifications": 1,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.03,
+      "model": null
+    },
+    {
+      "id": "gap-ticket-11",
+      "layer": "authored_gap",
+      "gold": "TICKET_CREATE",
+      "text": "把这次少发登记成待跟进事项",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.046,
+      "model": null
+    },
+    {
+      "id": "gap-ticket-12",
+      "layer": "authored_gap",
+      "gold": "TICKET_CREATE",
+      "text": "我要一个可查询的处理编号",
+      "predicted": "UNKNOWN",
+      "bucket": "false_unknown",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.032,
+      "model": null
+    },
+    {
+      "id": "gap-unknown-01",
+      "layer": "authored_gap",
+      "gold": "UNKNOWN",
+      "text": "你好",
+      "predicted": "UNKNOWN",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.04,
+      "model": null
+    },
+    {
+      "id": "gap-unknown-02",
+      "layer": "authored_gap",
+      "gold": "UNKNOWN",
+      "text": "谢谢",
+      "predicted": "UNKNOWN",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.039,
+      "model": null
+    },
+    {
+      "id": "gap-unknown-03",
+      "layer": "authored_gap",
+      "gold": "UNKNOWN",
+      "text": "嗯嗯",
+      "predicted": "UNKNOWN",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.039,
+      "model": null
+    },
+    {
+      "id": "gap-unknown-04",
+      "layer": "authored_gap",
+      "gold": "UNKNOWN",
+      "text": "好的我知道了",
+      "predicted": "UNKNOWN",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.043,
+      "model": null
+    },
+    {
+      "id": "gap-unknown-05",
+      "layer": "authored_gap",
+      "gold": "UNKNOWN",
+      "text": "在吗",
+      "predicted": "UNKNOWN",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.032,
+      "model": null
+    },
+    {
+      "id": "gap-unknown-06",
+      "layer": "authored_gap",
+      "gold": "UNKNOWN",
+      "text": "今天天气不错",
+      "predicted": "UNKNOWN",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.043,
+      "model": null
+    },
+    {
+      "id": "gap-unknown-07",
+      "layer": "authored_gap",
+      "gold": "UNKNOWN",
+      "text": "你们公司在哪里",
+      "predicted": "UNKNOWN",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.043,
+      "model": null
+    },
+    {
+      "id": "gap-unknown-08",
+      "layer": "authored_gap",
+      "gold": "UNKNOWN",
+      "text": "我随便看看",
+      "predicted": "UNKNOWN",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.042,
+      "model": null
+    },
+    {
+      "id": "gap-unknown-09",
+      "layer": "authored_gap",
+      "gold": "UNKNOWN",
+      "text": "这个字怎么念",
+      "predicted": "UNKNOWN",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.029,
+      "model": null
+    },
+    {
+      "id": "gap-unknown-10",
+      "layer": "authored_gap",
+      "gold": "UNKNOWN",
+      "text": "麻烦帮我写个好评",
+      "predicted": "UNKNOWN",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.033,
+      "model": null
+    },
+    {
+      "id": "gap-unknown-11",
+      "layer": "authored_gap",
+      "gold": "UNKNOWN",
+      "text": "你们招人吗",
+      "predicted": "UNKNOWN",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.034,
+      "model": null
+    },
+    {
+      "id": "gap-unknown-12",
+      "layer": "authored_gap",
+      "gold": "UNKNOWN",
+      "text": "我想聊聊别的事情",
+      "predicted": "UNKNOWN",
+      "bucket": "correct",
+      "cost": {
+        "clarifications": 0,
+        "tasks": 0,
+        "approvals": 0,
+        "handoffs": 0,
+        "amount_exposed_cents": 0
+      },
+      "slots": {
+        "order_id": null,
+        "amount_cents": null
+      },
+      "rule_latency_ms": 0.031,
+      "model": null
+    }
+  ],
+  "layers": {
+    "authored_gap": {
+      "cases": 144,
+      "correct": 58,
+      "wrong": 26,
+      "false_unknown": 60,
+      "false_unknown_write": 16,
+      "gold_unknown": 12,
+      "unknown_predictions": 72,
+      "unknown_matched": 12,
+      "unknown_misread": 0,
+      "answerable": 132,
+      "coverage": 0.5,
+      "accuracy": 0.4028,
+      "answerable_accuracy": 0.3485,
+      "rule_latency_ms": 5.066,
+      "per_intent": {
+        "HUMAN_HANDOFF": {
+          "support": 12,
+          "correct": 1,
+          "unknown": 10,
+          "wrong": 1,
+          "coverage": 0.1667,
+          "accuracy": 0.0833,
+          "predicted": {
+            "HUMAN_HANDOFF": 1,
+            "POLICY_QA": 1,
+            "UNKNOWN": 10
+          }
+        },
+        "REFUND_REQUEST": {
+          "support": 12,
+          "correct": 1,
+          "unknown": 10,
+          "wrong": 1,
+          "coverage": 0.1667,
+          "accuracy": 0.0833,
+          "predicted": {
+            "ORDER_QUERY": 1,
+            "REFUND_REQUEST": 1,
+            "UNKNOWN": 10
+          }
+        },
+        "TICKET_CREATE": {
+          "support": 12,
+          "correct": 0,
+          "unknown": 6,
+          "wrong": 6,
+          "coverage": 0.5,
+          "accuracy": 0.0,
+          "predicted": {
+            "DELIVERY_ISSUE": 3,
+            "LOGISTICS_QUERY": 1,
+            "POLICY_QA": 1,
+            "PRODUCT_QUERY": 1,
+            "UNKNOWN": 6
+          }
+        },
+        "REFUND_STATUS": {
+          "support": 12,
+          "correct": 1,
+          "unknown": 6,
+          "wrong": 5,
+          "coverage": 0.5,
+          "accuracy": 0.0833,
+          "predicted": {
+            "POLICY_QA": 4,
+            "REFUND_REQUEST": 1,
+            "REFUND_STATUS": 1,
+            "UNKNOWN": 6
+          }
+        },
+        "REFUND_ELIGIBILITY": {
+          "support": 12,
+          "correct": 4,
+          "unknown": 4,
+          "wrong": 4,
+          "coverage": 0.6667,
+          "accuracy": 0.3333,
+          "predicted": {
+            "POLICY_QA": 2,
+            "PRODUCT_QUERY": 2,
+            "REFUND_ELIGIBILITY": 4,
+            "UNKNOWN": 4
+          }
+        },
+        "POLICY_QA": {
+          "support": 12,
+          "correct": 6,
+          "unknown": 5,
+          "wrong": 1,
+          "coverage": 0.5833,
+          "accuracy": 0.5,
+          "predicted": {
+            "ORDER_QUERY": 1,
+            "POLICY_QA": 6,
+            "UNKNOWN": 5
+          }
+        },
+        "DELIVERY_ISSUE": {
+          "support": 12,
+          "correct": 0,
+          "unknown": 8,
+          "wrong": 4,
+          "coverage": 0.3333,
+          "accuracy": 0.0,
+          "predicted": {
+            "LOGISTICS_QUERY": 3,
+            "PRODUCT_QUERY": 1,
+            "UNKNOWN": 8
+          }
+        },
+        "LOGISTICS_QUERY": {
+          "support": 12,
+          "correct": 4,
+          "unknown": 7,
+          "wrong": 1,
+          "coverage": 0.4167,
+          "accuracy": 0.3333,
+          "predicted": {
+            "LOGISTICS_QUERY": 4,
+            "ORDER_QUERY": 1,
+            "UNKNOWN": 7
+          }
+        },
+        "SELF_ANALYTICS": {
+          "support": 12,
+          "correct": 10,
+          "unknown": 0,
+          "wrong": 2,
+          "coverage": 1.0,
+          "accuracy": 0.8333,
+          "predicted": {
+            "POLICY_QA": 2,
+            "SELF_ANALYTICS": 10
+          }
+        },
+        "PRODUCT_QUERY": {
+          "support": 12,
+          "correct": 8,
+          "unknown": 3,
+          "wrong": 1,
+          "coverage": 0.75,
+          "accuracy": 0.6667,
+          "predicted": {
+            "POLICY_QA": 1,
+            "PRODUCT_QUERY": 8,
+            "UNKNOWN": 3
+          }
+        },
+        "ORDER_QUERY": {
+          "support": 12,
+          "correct": 11,
+          "unknown": 1,
+          "wrong": 0,
+          "coverage": 0.9167,
+          "accuracy": 0.9167,
+          "predicted": {
+            "ORDER_QUERY": 11,
+            "UNKNOWN": 1
+          }
+        },
+        "UNKNOWN": {
+          "support": 12,
+          "correct": 12,
+          "unknown": 12,
+          "wrong": 0,
+          "coverage": null,
+          "accuracy": 1.0,
+          "predicted": {
+            "UNKNOWN": 12
+          }
+        }
+      },
+      "cost_matrix": {
+        "correct": {
+          "cases": 58,
+          "share": 0.4028,
+          "clarifications": 19,
+          "tasks": 1,
+          "approvals": 1,
+          "handoffs": 1,
+          "amount_exposed_cents": 12900,
+          "tokens": 0,
+          "rule_latency_ms": 1.846
+        },
+        "write_intent_error": {
+          "cases": 8,
+          "share": 0.0556,
+          "clarifications": 5,
+          "tasks": 0,
+          "approvals": 0,
+          "handoffs": 0,
+          "amount_exposed_cents": 12900,
+          "tokens": 0,
+          "rule_latency_ms": 0.286,
+          "breakdown": {
+            "extra_write": 1,
+            "missed_write": 7,
+            "write_to_write": 0
+          }
+        },
+        "read_intent_error": {
+          "cases": 18,
+          "share": 0.125,
+          "clarifications": 4,
+          "tasks": 0,
+          "approvals": 0,
+          "handoffs": 0,
+          "amount_exposed_cents": 0,
+          "tokens": 0,
+          "rule_latency_ms": 0.553
+        },
+        "false_unknown": {
+          "cases": 60,
+          "share": 0.4167,
+          "clarifications": 0,
+          "tasks": 0,
+          "approvals": 0,
+          "handoffs": 0,
+          "amount_exposed_cents": 0,
+          "tokens": 0,
+          "rule_latency_ms": 2.381
+        }
+      }
+    },
+    "external": {
+      "cases": 201,
+      "correct": 91,
+      "wrong": 37,
+      "false_unknown": 73,
+      "false_unknown_write": 9,
+      "gold_unknown": 18,
+      "unknown_predictions": 91,
+      "unknown_matched": 18,
+      "unknown_misread": 0,
+      "answerable": 183,
+      "coverage": 0.5473,
+      "accuracy": 0.4527,
+      "answerable_accuracy": 0.3989,
+      "rule_latency_ms": 8.629,
+      "per_intent": {
+        "HUMAN_HANDOFF": {
+          "support": 10,
+          "correct": 0,
+          "unknown": 9,
+          "wrong": 1,
+          "coverage": 0.1,
+          "accuracy": 0.0,
+          "predicted": {
+            "TICKET_CREATE": 1,
+            "UNKNOWN": 9
+          }
+        },
+        "REFUND_REQUEST": {
+          "support": 20,
+          "correct": 2,
+          "unknown": 9,
+          "wrong": 9,
+          "coverage": 0.55,
+          "accuracy": 0.1,
+          "predicted": {
+            "ORDER_QUERY": 1,
+            "POLICY_QA": 8,
+            "REFUND_REQUEST": 2,
+            "UNKNOWN": 9
+          }
+        },
+        "TICKET_CREATE": {
+          "support": 10,
+          "correct": 8,
+          "unknown": 0,
+          "wrong": 2,
+          "coverage": 1.0,
+          "accuracy": 0.8,
+          "predicted": {
+            "POLICY_QA": 2,
+            "TICKET_CREATE": 8
+          }
+        },
+        "REFUND_STATUS": {
+          "support": 15,
+          "correct": 4,
+          "unknown": 4,
+          "wrong": 7,
+          "coverage": 0.7333,
+          "accuracy": 0.2667,
+          "predicted": {
+            "DELIVERY_ISSUE": 1,
+            "LOGISTICS_QUERY": 1,
+            "POLICY_QA": 4,
+            "REFUND_REQUEST": 1,
+            "REFUND_STATUS": 4,
+            "UNKNOWN": 4
+          }
+        },
+        "REFUND_ELIGIBILITY": {
+          "support": 15,
+          "correct": 7,
+          "unknown": 0,
+          "wrong": 8,
+          "coverage": 1.0,
+          "accuracy": 0.4667,
+          "predicted": {
+            "POLICY_QA": 8,
+            "REFUND_ELIGIBILITY": 7
+          }
+        },
+        "POLICY_QA": {
+          "support": 18,
+          "correct": 7,
+          "unknown": 8,
+          "wrong": 3,
+          "coverage": 0.5556,
+          "accuracy": 0.3889,
+          "predicted": {
+            "ORDER_QUERY": 3,
+            "POLICY_QA": 7,
+            "UNKNOWN": 8
+          }
+        },
+        "DELIVERY_ISSUE": {
+          "support": 27,
+          "correct": 10,
+          "unknown": 14,
+          "wrong": 3,
+          "coverage": 0.4815,
+          "accuracy": 0.3704,
+          "predicted": {
+            "DELIVERY_ISSUE": 10,
+            "LOGISTICS_QUERY": 2,
+            "ORDER_QUERY": 1,
+            "UNKNOWN": 14
+          }
+        },
+        "LOGISTICS_QUERY": {
+          "support": 24,
+          "correct": 17,
+          "unknown": 6,
+          "wrong": 1,
+          "coverage": 0.75,
+          "accuracy": 0.7083,
+          "predicted": {
+            "LOGISTICS_QUERY": 17,
+            "ORDER_QUERY": 1,
+            "UNKNOWN": 6
+          }
+        },
+        "PRODUCT_QUERY": {
+          "support": 28,
+          "correct": 11,
+          "unknown": 14,
+          "wrong": 3,
+          "coverage": 0.5,
+          "accuracy": 0.3929,
+          "predicted": {
+            "POLICY_QA": 3,
+            "PRODUCT_QUERY": 11,
+            "UNKNOWN": 14
+          }
+        },
+        "ORDER_QUERY": {
+          "support": 16,
+          "correct": 7,
+          "unknown": 9,
+          "wrong": 0,
+          "coverage": 0.4375,
+          "accuracy": 0.4375,
+          "predicted": {
+            "ORDER_QUERY": 7,
+            "UNKNOWN": 9
+          }
+        },
+        "UNKNOWN": {
+          "support": 18,
+          "correct": 18,
+          "unknown": 18,
+          "wrong": 0,
+          "coverage": null,
+          "accuracy": 1.0,
+          "predicted": {
+            "UNKNOWN": 18
+          }
+        }
+      },
+      "cost_matrix": {
+        "correct": {
+          "cases": 91,
+          "share": 0.4527,
+          "clarifications": 49,
+          "tasks": 8,
+          "approvals": 0,
+          "handoffs": 0,
+          "amount_exposed_cents": 0,
+          "tokens": 0,
+          "rule_latency_ms": 4.423
+        },
+        "write_intent_error": {
+          "cases": 13,
+          "share": 0.0647,
+          "clarifications": 3,
+          "tasks": 1,
+          "approvals": 0,
+          "handoffs": 0,
+          "amount_exposed_cents": 0,
+          "tokens": 0,
+          "rule_latency_ms": 0.351,
+          "breakdown": {
+            "extra_write": 2,
+            "missed_write": 11,
+            "write_to_write": 0
+          }
+        },
+        "read_intent_error": {
+          "cases": 24,
+          "share": 0.1194,
+          "clarifications": 9,
+          "tasks": 0,
+          "approvals": 0,
+          "handoffs": 0,
+          "amount_exposed_cents": 0,
+          "tokens": 0,
+          "rule_latency_ms": 0.789
+        },
+        "false_unknown": {
+          "cases": 73,
+          "share": 0.3632,
+          "clarifications": 0,
+          "tasks": 0,
+          "approvals": 0,
+          "handoffs": 0,
+          "amount_exposed_cents": 0,
+          "tokens": 0,
+          "rule_latency_ms": 3.066
+        }
+      }
+    }
+  },
+  "cue_overlap": {
+    "cases": 201,
+    "with_gold_cue": 61,
+    "rate": 0.3035,
+    "exact_cue_texts": 0,
+    "by_intent": {
+      "DELIVERY_ISSUE": 10,
+      "LOGISTICS_QUERY": 17,
+      "ORDER_QUERY": 7,
+      "POLICY_QA": 5,
+      "PRODUCT_QUERY": 11,
+      "REFUND_ELIGIBILITY": 7,
+      "REFUND_STATUS": 4
+    },
+    "note": "Diagnostic only. The score in this report is produced by classify_support; this rate is never added to it."
+  },
+  "model_gap": null,
+  "cost_note": "The rule path calls no model, so tokens are 0 in every cost bucket. A refund amount is amount_exposed_cents (the user typed it on a turn routed to REFUND_REQUEST), never an amount paid; approvals are the upper bound for a refund task that has all its slots.",
+  "invariants": {
+    "ok": true,
+    "failures": []
+  }
+}

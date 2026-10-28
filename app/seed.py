@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.core.time import utcnow
 from app.models.commerce import Logistics, Order
 from app.models.enums import LogisticsStatus, OrderStatus, ProactiveEventType
-from app.models.memory import ProactiveRule
+from app.models.memory import ProactiveRule, ProactiveRuleVersion
 from app.retrieval.ingestion import ingest_document
 
 POLICY_DIR = Path(__file__).resolve().parent / "resources" / "policies"
@@ -153,6 +153,30 @@ def seed_proactive_rules(session: Session) -> int:
         if session.get(ProactiveRule, row["id"]) is not None:
             continue
         session.add(ProactiveRule(**row))
+    session.flush()
+    # The live rule is version 1, so the history starts with a snapshot rather
+    # than a gap: a notification produced before the first edit can still name
+    # the words it used.
+    for row in rules:
+        version_id = f"prv_{str(row['id'])[5:][:30]}"
+        if session.get(ProactiveRuleVersion, version_id) is not None:
+            continue
+        session.add(
+            ProactiveRuleVersion(
+                id=version_id,
+                tenant_id=row["tenant_id"],
+                event_type=row["event_type"],
+                version=1,
+                template=row["template"],
+                enabled=True,
+                requires_confirmation=row["requires_confirmation"],
+                cooldown_minutes=row["cooldown_minutes"],
+                change_id="seed",
+                submitted_by="system",
+                approved_by="system",
+                reason="seed",
+            )
+        )
     session.flush()
     return len(rules)
 

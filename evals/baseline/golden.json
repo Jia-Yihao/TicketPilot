@@ -1,0 +1,16 @@
+{
+  "_meta": {
+    "command": [
+      "evals/run.py",
+      "--json",
+      "<tmp>"
+    ],
+    "recorded_at": "2026-10-28T12:52:59",
+    "source": "golden"
+  },
+  "readings": {
+    "failed_count": 0,
+    "passed": 40,
+    "total": 40
+  }
+}

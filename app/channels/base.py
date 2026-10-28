@@ -7,7 +7,7 @@ import time
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Protocol, cast
+from typing import Any, Protocol, TypeGuard, cast
 
 from pydantic import SecretStr
 
@@ -33,6 +33,7 @@ __all__ = [
     "json_object",
     "required_str",
     "resolve_identity",
+    "secret_is_configured",
     "verify_hmac",
 ]
 
@@ -203,6 +204,21 @@ def resolve_identity(
     )
 
 
+def secret_is_configured(secret: SecretStr | None) -> TypeGuard[SecretStr]:
+    """Whether a signing secret is present and non-empty.
+
+    The one place the "missing credential" test lives: ``verify_hmac`` below
+    and the availability predicate in ``app/channels/availability.py`` both
+    read it, so the two can never disagree about which secret counts.
+
+    The return is a ``TypeGuard`` rather than a plain ``bool`` so the caller
+    keeps the ``None`` narrowing it had when the test was written inline; the
+    runtime value is exactly the negation of the old ``secret is None or not
+    secret.get_secret_value()`` check.
+    """
+    return secret is not None and bool(secret.get_secret_value())
+
+
 def verify_hmac(
     request: InboundRequest,
     secret: SecretStr | None,
@@ -215,7 +231,7 @@ def verify_hmac(
     with a fresh header fails. A missing secret is a configuration error
     (503), not a silent accept.
     """
-    if secret is None or not secret.get_secret_value():
+    if not secret_is_configured(secret):
         raise DependencyUnavailableError(
             "This channel has no webhook secret configured."
         )

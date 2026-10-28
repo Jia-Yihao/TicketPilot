@@ -1,17 +1,50 @@
 from __future__ import annotations
 
+import hashlib
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import Path
+from typing import TYPE_CHECKING
 
+from app.agent.refund_reason_rules import match_refund_reason
 from app.core.money import parse_yuan_to_cents
-from app.models.enums import Intent
+from app.models.enums import Intent, RefundReason, RefundType
 from app.sql.planner import asks_for_aggregate, names_dataset
+
+if TYPE_CHECKING:
+    from app.agent.intent_catalog import IntentSpec
+
+
+def ruleset_fingerprint() -> str:
+    """A digest of the three code files below, and only those.
+
+    A model decision is only reusable against the rule set that produced it.
+    Hashing the source means a code change invalidates the record without
+    anyone remembering to bump a version. The write-intent cues that now live
+    in app/agent/intents.yaml are not covered here, so editing that data leaves
+    cached decisions valid -- registered as a gap in section 9 of
+    docs/adr/ADR-037-写意图判定迁到意图目录.md.
+    """
+    digest = hashlib.sha256()
+    root = Path(__file__).resolve().parents[1]
+    for path in (
+        Path(__file__).resolve(),
+        root / "sql" / "planner.py",
+        root / "core" / "money.py",
+    ):
+        digest.update(path.name.encode("utf-8"))
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
+# Read once: the process serves one rule set, and a record from another
+# process is rejected unless it was produced against the same bytes.
+RULESET_FINGERPRINT = ruleset_fingerprint()
 
 _ORDER_ID = re.compile(r"ORD-[A-Za-z0-9-]+", re.IGNORECASE)
 _AMOUNT = re.compile(r"(?:¥\s*)?(\d+(?:\.\d{1,2})?)\s*(?:元|块|rmb|cny)", re.IGNORECASE)
 
-_REFUND_ACTION = ("申请退款", "我要退款", "帮我退款", "退钱", "退款申请", "refund")
 _REFUND_ELIGIBILITY = (
     "是否符合退款条件",
     "退款条件",
@@ -23,7 +56,6 @@ _REFUND_ELIGIBILITY = (
     "为什么不能退款",
     "为什么无法退款",
 )
-_TICKET = ("工单", "投诉", "转人工", "人工客服", "ticket")
 _LOGISTICS = ("物流", "快递", "运单", "到哪", "配送", "延迟", "没收到", "发货")
 _POLICY = ("政策", "规则", "条件", "期限", "售后", "退货", "保修", "流程")
 _ORDER = ("订单", "order")
@@ -133,6 +165,32 @@ class RoutePlan:
     order_id: str | None = None
     amount_cents: int | None = None
     amount_invalid: bool = False
+    refund_reason: RefundReason | None = None
+    refund_type: RefundType | None = None
+
+
+def _refund_reason(value: object) -> RefundReason | None:
+    """A refund reason that is present *and* legal; anything else is absent."""
+    if isinstance(value, RefundReason):
+        return value
+    if isinstance(value, str):
+        try:
+            return RefundReason(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _refund_type(value: object) -> RefundType | None:
+    """A refund type that is present *and* legal; anything else is absent."""
+    if isinstance(value, RefundType):
+        return value
+    if isinstance(value, str):
+        try:
+            return RefundType(value)
+        except ValueError:
+            return None
+    return None
 
 
 def extract_order_id(text: str) -> str | None:
@@ -209,6 +267,42 @@ def is_analytics_question(text: str) -> bool:
     return asks_for_aggregate(text) and names_dataset(text) is not None
 
 
+# Only these Intent members can be claimed by classify(); a new write row must
+# extend the enum (or be exempted below with a reason) before it can be read.
+_WRITE_INTENT_IDS = frozenset({Intent.REFUND_REQUEST, Intent.TICKET_CREATE})
+# Catalog rows that are write_path but have no Intent member, so classify()
+# never judged them and still cannot: DELIVERY_ISSUE is decided by the catalog
+# alone, in classify_support().
+# This set is also a registration surface, not just a skip list: the subset
+# assertion in tests/test_intent_catalog.py compares it against
+# _WRITE_INTENT_IDS, so adding an id here on its own turns that assertion green.
+# That is why every entry must spell out its reason (DELIVERY_ISSUE: no Intent
+# member, which is what the three lines above say).
+_WRITE_INTENT_EXEMPT = frozenset({"DELIVERY_ISSUE"})
+
+
+def _match_write_intent(text: str) -> IntentSpec | None:
+    """The first catalog write row whose cues appear in the text.
+
+    Imported inside the function on purpose: the catalog reads
+    blocks_write_action from this module, so a module-level import would close
+    a cycle. Rows that classify() cannot claim are skipped, never silently
+    dropped -- the subset rule is asserted by a test, not by this loop.
+    """
+    from app.agent.intent_catalog import get_catalog
+
+    for spec in get_catalog().ordered_specs():
+        if not spec.write_path:
+            continue
+        if spec.intent_id in _WRITE_INTENT_EXEMPT:
+            continue
+        if spec.intent_id not in _WRITE_INTENT_IDS:
+            continue
+        if any(cue in text for cue in spec.cues):
+            return spec
+    return None
+
+
 def classify(request: str, context: Mapping[str, object] | None = None) -> RoutePlan:
     context = context or {}
     text = request.lower()
@@ -232,11 +326,20 @@ def classify(request: str, context: Mapping[str, object] | None = None) -> Route
             amount_cents = context_amount
             amount_invalid = amount_cents <= 0
 
+    # The reason has two paths and no third: what the caller supplied, or what
+    # the keyword table reads out of the message. A value the context already
+    # carries wins, so a turn that only adds information keeps the answer the
+    # customer already gave. A miss stays missing -- it is a clarification,
+    # not a guess. The rule table runs only on a turn this function reads as a
+    # refund request (口径 §1「发起退款时」、§5.6.2): an "其他" or "坏了" in a
+    # sentence that is not a refund is not a reason choice and must not latch.
+    # Turns that reach REFUND_REQUEST later (resume / model adoption) run the
+    # table at the call site instead.
+
     blocked = blocks_write_action(text)
-    if any(word in text for word in _REFUND_ACTION) and not blocked:
-        intent = Intent.REFUND_REQUEST
-    elif any(word in text for word in _TICKET) and not blocked:
-        intent = Intent.TICKET_CREATE
+    write_spec = None if blocked else _match_write_intent(text)
+    if write_spec is not None:
+        intent = Intent(write_spec.intent_id)
     elif any(word in text for word in _REFUND_ELIGIBILITY):
         intent = Intent.POLICY_QA
     elif is_policy_question(text):
@@ -250,9 +353,16 @@ def classify(request: str, context: Mapping[str, object] | None = None) -> Route
     else:
         intent = Intent.UNKNOWN
 
+    refund_reason = _refund_reason(context.get("refund_reason"))
+    if refund_reason is None and intent is Intent.REFUND_REQUEST:
+        refund_reason = match_refund_reason(request)
+    refund_type = _refund_type(context.get("refund_type"))
+
     return RoutePlan(
         intent=intent,
         order_id=order_id,
         amount_cents=amount_cents,
         amount_invalid=amount_invalid,
+        refund_reason=refund_reason,
+        refund_type=refund_type,
     )

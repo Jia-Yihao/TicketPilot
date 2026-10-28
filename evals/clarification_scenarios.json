@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "description": "澄清候选降级前后对比用的剧本。每轮问法都缺少 order_id，persona 决定客户拿到候选后是否点选。措辞来源在 source/provenance 里逐条声明：external_phrasing 只借用外部语料的用户原话，不采用外部语料的任何问答或意图标签。",
+  "personas": {
+    "cooperative": "拿到自己的订单列表后就地选一个发出去，于是自助走完，不需要人工。",
+    "stuck": "始终说不出单号，第三次仍然失败，必须由人工接手。"
+  },
+  "scenarios": [
+    {
+      "id": "order-list-plain",
+      "persona": "cooperative",
+      "opening": "帮我查一下订单",
+      "followups": [
+        "我忘了单号"
+      ],
+      "source": "authored",
+      "provenance": "",
+      "note": "最短路径：一次追问、一次候选、一次点选。"
+    },
+    {
+      "id": "order-list-external-120",
+      "persona": "cooperative",
+      "opening": "看一下我的订单",
+      "followups": [
+        "单号我不知道在哪里看"
+      ],
+      "source": "external_phrasing",
+      "provenance": "evals/intent/external_phrasings.jsonl#L120",
+      "note": "措辞取自外部语料的用户原话前段；外部语料的标签不采用。"
+    },
+    {
+      "id": "order-list-external-156",
+      "persona": "cooperative",
+      "opening": "你看我的这个订单还会到吗",
+      "followups": [
+        "我不记得订单号了"
+      ],
+      "source": "external_phrasing",
+      "provenance": "evals/intent/external_phrasings.jsonl#L156",
+      "note": "物流类问法，缺的还是 order_id。"
+    },
+    {
+      "id": "order-list-stuck-120",
+      "persona": "stuck",
+      "opening": "看一下我的订单",
+      "followups": [
+        "单号在哪里看啊",
+        "我真想不起来单号"
+      ],
+      "source": "external_phrasing",
+      "provenance": "evals/intent/external_phrasings.jsonl#L120",
+      "note": "同一个外部原话开头，换成始终补不上单号的 persona。"
+    },
+    {
+      "id": "order-list-stuck-plain",
+      "persona": "stuck",
+      "opening": "帮我看看我的订单",
+      "followups": [
+        "没有单号",
+        "不清楚单号是什么"
+      ],
+      "source": "authored",
+      "provenance": "",
+      "note": "与 cooperative 只差在是否点选候选。"
+    }
+  ]
+}

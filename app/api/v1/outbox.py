@@ -69,6 +69,7 @@ def list_outbox(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> dict[str, Any]:
+    """列本租户外发队列，可按状态与事件类型过滤；需要 support 或 approver 角色。"""
     _require_seat(identity)
     repo = OutboxRepository(session)
     rows = repo.list_for(

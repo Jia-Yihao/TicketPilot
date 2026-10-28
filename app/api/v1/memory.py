@@ -24,9 +24,13 @@ from app.schemas.memory import (
     NotificationView,
     ProactiveEventRequest,
     ProactiveEventResponse,
+    ProactiveRuleChangeListResponse,
+    ProactiveRuleChangeView,
+    ProactiveRuleDecisionRequest,
     ProactiveRuleListResponse,
+    ProactiveRuleRollbackRequest,
     ProactiveRuleUpdateRequest,
-    ProactiveRuleView,
+    ProactiveRuleVersionListResponse,
 )
 from app.services.memory import MemoryService
 from app.services.proactive import ProactiveService
@@ -39,11 +43,17 @@ def _require_seat(identity: Identity) -> None:
         raise ForbiddenError("Support role required.")
 
 
+def _require_staff(identity: Identity) -> None:
+    if not identity.has_role("support") and not identity.has_role("approver"):
+        raise ForbiddenError("Support or approver role required.")
+
+
 @router.get("", response_model=MemoryProfileResponse)
 def get_memory(
     identity: Identity = Depends(get_identity),
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
+    """读调用者自己的记忆画像；只能读自己的。"""
     return MemoryService(session, identity).get()
 
 
@@ -73,6 +83,7 @@ def export_memory(
     identity: Identity = Depends(get_identity),
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
+    """导出调用者自己的画像与通知，供客户带走自己的数据。"""
     return MemoryService(session, identity).export()
 
 
@@ -98,6 +109,7 @@ def list_notifications(
     session: Session = Depends(get_session),
     limit: int = Query(default=50, ge=1, le=100),
 ) -> dict[str, Any]:
+    """列调用者自己的主动通知，最新的在前。"""
     rows = ProactiveService(session, identity).list_notifications(limit=limit)
     return {"notifications": rows}
 
@@ -108,6 +120,7 @@ def confirm_notification(
     identity: Identity = Depends(get_identity),
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
+    """确认一条待确认通知；确认后才写进外发队列。"""
     return ProactiveService(session, identity).confirm(notification_id)
 
 
@@ -117,6 +130,7 @@ def cancel_notification(
     identity: Identity = Depends(get_identity),
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
+    """撤销一条还没发出的通知；只能撤自己的。"""
     return ProactiveService(session, identity).cancel(notification_id)
 
 
@@ -125,23 +139,111 @@ def list_rules(
     identity: Identity = Depends(get_identity),
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
+    """列本租户的主动规则；需要 support 角色。"""
     _require_seat(identity)
     return {"rules": ProactiveService(session, identity).rules()}
 
 
-@router.put("/rules/{event_type}", response_model=ProactiveRuleView)
-def update_rule(
+@router.get("/rules/changes", response_model=ProactiveRuleChangeListResponse)
+def list_rule_changes(
+    identity: Identity = Depends(get_identity),
+    session: Session = Depends(get_session),
+    status: str | None = Query(default=None),
+) -> dict[str, Any]:
+    """列规则提案，可按状态过滤；需要 support 或 approver 角色。"""
+    _require_staff(identity)
+    return {"changes": ProactiveService(session, identity).changes(status=status)}
+
+
+@router.get("/rules/changes/{change_id}", response_model=ProactiveRuleChangeView)
+def get_rule_change(
+    change_id: str,
+    identity: Identity = Depends(get_identity),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """读一条规则提案；需要 support 或 approver 角色。"""
+    _require_staff(identity)
+    return ProactiveService(session, identity).change(change_id)
+
+
+@router.post(
+    "/rules/changes/{change_id}/approve", response_model=ProactiveRuleChangeView
+)
+def approve_rule_change(
+    change_id: str,
+    body: ProactiveRuleDecisionRequest | None = None,
+    identity: Identity = Depends(get_identity),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """A second person applies the proposal; the submitter is refused."""
+    return ProactiveService(session, identity).approve_change(
+        change_id, note=body.note if body is not None else None
+    )
+
+
+@router.post(
+    "/rules/changes/{change_id}/reject", response_model=ProactiveRuleChangeView
+)
+def reject_rule_change(
+    change_id: str,
+    body: ProactiveRuleDecisionRequest | None = None,
+    identity: Identity = Depends(get_identity),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """驳回一条规则提案；需要 approver 角色，提交人不能审自己那条。"""
+    return ProactiveService(session, identity).reject_change(
+        change_id, note=body.note if body is not None else None
+    )
+
+
+@router.get(
+    "/rules/{event_type}/versions", response_model=ProactiveRuleVersionListResponse
+)
+def list_rule_versions(
+    event_type: str,
+    identity: Identity = Depends(get_identity),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """列某个事件类型的规则版本历史；需要 support 或 approver 角色。"""
+    _require_staff(identity)
+    return {"versions": ProactiveService(session, identity).versions(event_type)}
+
+
+@router.post(
+    "/rules/{event_type}/rollback",
+    response_model=ProactiveRuleChangeView,
+    status_code=202,
+)
+def rollback_rule(
+    event_type: str,
+    body: ProactiveRuleRollbackRequest,
+    identity: Identity = Depends(get_identity),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Propose restoring a version. The approval path is not bypassed."""
+    _require_seat(identity)
+    return ProactiveService(session, identity).submit_rollback(
+        event_type, body.version, reason=body.reason
+    )
+
+
+@router.put("/rules/{event_type}", response_model=ProactiveRuleChangeView, status_code=202)
+def submit_rule_change(
     event_type: str,
     body: ProactiveRuleUpdateRequest,
     identity: Identity = Depends(get_identity),
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
-    """Change the words this tenant sends for one known event type.
+    """Propose a change to the words this tenant sends for one event type.
 
-    Upsert by ``(tenant, event_type)``, so a tenant the seed never covered can
-    turn proactive service on without a code change. The template is validated
-    here, which is the point of putting the surface behind an API.
+    Nothing is applied here. The seat's proposal waits for another approver;
+    until then the live rule and every customer-facing outcome stay as they
+    were. The template is still validated here, which is the point of putting
+    the surface behind an API.
     """
     _require_seat(identity)
     changes = body.model_dump(exclude_unset=True)
-    return ProactiveService(session, identity).update_rule(event_type, changes)
+    reason = changes.pop("reason", None)
+    return ProactiveService(session, identity).submit_change(
+        event_type, changes, reason=reason
+    )

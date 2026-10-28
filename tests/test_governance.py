@@ -5,11 +5,12 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
+from app.core.approval_tiers import get_approval_tiers
 from app.core.config import Settings
 from app.core.errors import ApprovalRequiredError, NotFoundError
 from app.core.security import Identity
 from app.models.commerce import Order
-from app.models.enums import RiskLevel
+from app.models.enums import RefundReason, RefundType, RiskLevel
 from app.services.approvals import canonical_digest, refund_payload
 from app.tools.base import ToolContext, ToolManifest
 from app.tools.registry import ToolRegistry
@@ -67,9 +68,36 @@ def test_digest_is_canonical_and_binding_changes_with_version() -> None:
         currency="CNY",
         version=1,
     )
-    first = canonical_digest(refund_payload(order, 12900, "refund-policy-v3"))
-    second = canonical_digest(refund_payload(order, 12900, "refund-policy-v3"))
-    changed = canonical_digest(refund_payload(order, 12800, "refund-policy-v3"))
+    first = canonical_digest(
+        refund_payload(
+            order,
+            12900,
+            "refund-policy-v3",
+            refund_reason=RefundReason.QUALITY,
+            refund_type=RefundType.FULL,
+            approval_tier=get_approval_tiers().tier_for(12900).snapshot(),
+        )
+    )
+    second = canonical_digest(
+        refund_payload(
+            order,
+            12900,
+            "refund-policy-v3",
+            refund_reason=RefundReason.QUALITY,
+            refund_type=RefundType.FULL,
+            approval_tier=get_approval_tiers().tier_for(12900).snapshot(),
+        )
+    )
+    changed = canonical_digest(
+        refund_payload(
+            order,
+            12800,
+            "refund-policy-v3",
+            refund_reason=RefundReason.QUALITY,
+            refund_type=RefundType.FULL,
+            approval_tier=get_approval_tiers().tier_for(12800).snapshot(),
+        )
+    )
 
     assert first == second
     assert first != changed

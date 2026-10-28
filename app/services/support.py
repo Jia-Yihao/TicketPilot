@@ -10,6 +10,7 @@ from app.core.money import format_cents
 from app.core.policy import PolicyEngine
 from app.core.security import Identity
 from app.core.time import utcnow
+from app.models.commerce import Order
 from app.models.document import Document, DocumentChunk
 from app.repositories.commerce import CommerceRepository
 from app.retrieval.search import PolicySearch, PolicySearchService, RetrievedChunk
@@ -45,6 +46,16 @@ REFUND_STATUS_LABELS = {
     "UNKNOWN": "状态待确认，需要先与渠道对账",
 }
 
+ORDER_STATUS_LABELS = {
+    "PLACED": "已下单",
+    "SHIPPED": "已发货",
+    "DELIVERED": "已签收",
+    "CANCELLED": "已取消",
+}
+
+# How many orders a clarification may offer as candidates.
+CANDIDATE_LIMIT = 3
+
 
 def _preview(text: str, limit: int = 96) -> str:
     compact = " ".join(text.split())
@@ -67,6 +78,38 @@ def _card_sections(
             }
         )
     return items, total_chars
+
+
+def order_candidate(order: Order, product: CatalogProduct | None) -> dict[str, Any]:
+    """One L1 candidate: what a customer who cannot remember an order number
+    is shown instead of being asked the same question again.
+
+    Four facts and nothing else — order number, product name, status, delivery
+    time. No amount, no balance, no logistics: a candidate only has to be
+    recognisable, and opening it is a separate, scoped read of the full card.
+    """
+    name = product.name if product is not None else "最近订单"
+    status_label = ORDER_STATUS_LABELS.get(order.status.value, order.status.value)
+    delivered = (
+        f"{order.delivered_at.date().isoformat()} 签收" if order.delivered_at else "未签收"
+    )
+    return {
+        "kind": "order_candidate",
+        "card_id": order.id,
+        "title": f"订单 {order.id}",
+        "subtitle": name,
+        "summary": f"{status_label} · {delivered}",
+        "badges": [],
+        "fields": {
+            "order_id": order.id,
+            "product_name": name,
+            "status": order.status.value,
+            "delivered_at": order.delivered_at.isoformat() if order.delivered_at else None,
+        },
+        "sections": [],
+        "source": None,
+        "total_chars": 0,
+    }
 
 
 class SupportContextService:
@@ -213,6 +256,23 @@ class SupportContextService:
     # --------------------------------------------------------------- order
     def order_card(self, identity: Identity, order_id: str) -> dict[str, Any]:
         return self._order_payload(identity, order_id)[0]
+
+    def order_candidates(
+        self, identity: Identity, *, limit: int = CANDIDATE_LIMIT
+    ) -> list[dict[str, Any]]:
+        """The caller's own recent orders, as the L1 facts a chip can carry.
+
+        A customer who cannot remember an order number does not need a second
+        asking — they need their own list. Both the tenant and the user are in
+        the predicate and neither is relaxed, so a seat asking on someone's
+        behalf never gets that someone's order numbers back as chips.
+        ``sections`` stays empty on purpose: opening a candidate is a request
+        for the full ``kind=order`` card, which is scoped and audited separately.
+        """
+        orders = self.commerce.list_recent_orders(
+            identity.tenant_id, identity.user_id, limit=limit
+        )
+        return [order_candidate(order, self.catalog.for_order(order.id)) for order in orders]
 
     def order_section(
         self, identity: Identity, card_id: str, section_id: str

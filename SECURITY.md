@@ -2,7 +2,7 @@
 
 TicketPilot 是**工程演示与作品集项目**，不是一个可以直接承载真实资金流转的退款系统。
 本页说明已实现的防护、明确的边界，以及发现问题的上报方式。
-完整的威胁模型与逐条控制见 [docs/SECURITY.md](docs/SECURITY.md)。
+完整的威胁模型与逐条控制见 [docs/guide/安全说明.md](docs/guide/安全说明.md)。
 
 ## 支持版本
 

@@ -18,7 +18,7 @@ def _request_refund(client: TestClient) -> dict:
     response = client.post(
         "/api/v1/tasks",
         headers=ALICE,
-        json={"request": "我要申请退款，订单 ORD-DEMO-1001，金额 129 元"},
+        json={"request": "我要申请退款，订单 ORD-DEMO-1001，金额 129 元，商品有质量问题"},
     )
     assert response.status_code == 201, response.text
     return response.json()

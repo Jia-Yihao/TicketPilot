@@ -1,0 +1,76 @@
+# 代码锚点守卫的清单（tests/test_doc_code_anchors.py 使用）。
+#
+# 这份清单登记的是「哪份文档的哪一处，点名了哪个源码符号」。
+# 符号名不写在这里的「值」上——它的唯一定义在代码里，由守卫用 AST 现算比对：
+#
+#     文档点名的符号  存在于  代码定义名集合   →  通过
+#     文档点名的符号  不存在于  代码定义名集合  →  守卫失败，并指出是哪一处
+#
+# 背景：docs/下一步规划.md 曾把退款写路径处理器写成 _request_refund（函数根本不存在），
+# 行号也整批漂过，而当时测试全绿。这份清单把这类假引用变成会红的断言。
+#
+# 字段（anchors）：
+#   id           唯一标识
+#   doc          被核对的文档（仓库相对路径）
+#   anchor       该文档里唯一、且**不含数字**的一小段文字，用来定位那一处引用
+#                （不含行号是硬要求：行号会漂，抄进清单就成了第二份会过期的事实）
+#   source_file  被引用的源码文件（仓库相对路径）
+#   symbol       被点名的限定名：模块级写 `name`，类级写 `Class.member`
+#   reason       为什么要登记这一条（对齐 architecture-guard 的「登记必须写清 why」）
+#
+# 字段（exempt_files）：通用路径/行号检查的逐条豁免，按 **(文档, 文件) 二元组**生效。
+#   file / doc / reason —— 必须具体到单个文件与单个文档，不许整目录或通配放行。
+#   通用检查覆盖两类锚点：带行号的 `path.py:NN` 查越界，不带行号的 `path.py` 查文件存在。
+#   test_exemptions_are_all_used 会反向核对每条豁免确实挡住一个现存锚点，不许留陈旧条目。
+
+anchors:
+  - id: handle-refund
+    doc: docs/下一步规划.md
+    anchor: "根本没读"
+    source_file: app/services/runtime.py
+    symbol: TaskRuntime._handle_refund
+    reason: "退款写路径处理器；本轮曾被文档误写成 _request_refund（函数不存在），测试仍全绿"
+
+  - id: create-refund-approval
+    doc: docs/下一步规划.md
+    anchor: "无条件 `create_refund_approval`"
+    source_file: app/services/approvals.py
+    symbol: ApprovalService.create_refund_approval
+    reason: "资格通过后建审批的调用方；与 _handle_refund 同段被引用，一起登记防止再漂"
+
+  - id: refund-payload
+    doc: docs/下一步规划.md
+    anchor: "进 `refund_payload` 与 `action_digest`"
+    source_file: app/services/approvals.py
+    symbol: refund_payload
+    reason: "审批摘要绑定的载荷构造函数（approvals.py 模块级）；缺口审计点名它只有六个字段"
+
+  - id: refund-policy-check
+    doc: docs/下一步规划.md
+    anchor: "→ `EligibilityResult` + `eligibility_sentence`"
+    source_file: app/services/refund_policy.py
+    symbol: RefundPolicy.check
+    reason: "退款资格校验入口，返回 EligibilityResult；被点名是阈值应生效却未被读的那一步"
+
+  - id: policy-requires-approval
+    doc: docs/下一步规划.md
+    anchor: "阈值是有的"
+    source_file: app/core/policy.py
+    symbol: PolicyEngine.requires_approval
+    reason: "把退款阈值算进是否需审批的策略入口；文档用它论证『阈值存在但没接进写路径』"
+
+  - id: config-refund-threshold
+    doc: docs/records/历史记录.md
+    anchor: "退款审批**有**阈值配置"
+    source_file: app/core/config.py
+    symbol: Settings.refund_approval_threshold_cents
+    reason: "退款审批阈值的配置项（Settings 字段）；被点名以纠正『没有金额阈值』的误记"
+
+exempt_files:
+  - file: app/agent/memory.py
+    doc: docs/records/智能体平台设想.md
+    reason: "前瞻规划：客户记忆模块尚未创建，档案现位于 app/services/memory.py；此处描述未来能力而非现状"
+
+  - file: evals/trace_assert.py
+    doc: docs/records/智能体平台设想.md
+    reason: "前瞻规划：独立轨迹断言模块尚未创建，属未排期的未来能力；不作为对现状的断言"

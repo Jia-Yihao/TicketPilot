@@ -64,6 +64,7 @@ def handoff_metrics(
     policy: PolicyEngine = Depends(get_policy),
     window_minutes: int | None = Query(default=None, ge=1, le=60 * 24 * 90),
 ) -> dict[str, Any]:
+    """现算转人工相关指标；需要 support 角色，窗口外的数据不计入分母。"""
     _require_seat(identity)
     return HandoffMetrics(session, policy=policy).collect(
         identity, window_minutes=window_minutes
@@ -78,6 +79,7 @@ def list_abandons(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> dict[str, Any]:
+    """列本租户的弃单事件；需要 support 角色。"""
     _require_seat(identity)
     abandons = AbandonService(session, policy=policy)
     events = abandons.list_events(identity, limit=limit, offset=offset)
@@ -108,6 +110,7 @@ def list_handoffs(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> dict[str, Any]:
+    """列坐席队列，默认只看还需要人处理的案卷；需要 support 角色。"""
     _require_seat(identity)
     handoffs = HandoffService(session, policy=policy)
     # A pending case nobody claimed is already late; show the queue as it is.
@@ -133,6 +136,7 @@ def get_handoff(
     session: Session = Depends(get_session),
     policy: PolicyEngine = Depends(get_policy),
 ) -> dict[str, Any]:
+    """读一条移交案卷的完整上下文包；需要 support 角色。"""
     _require_seat(identity)
     handoffs = HandoffService(session, policy=policy)
     return handoffs.detail(handoffs.require_event(identity, event_id))
@@ -145,6 +149,7 @@ def claim_handoff(
     session: Session = Depends(get_session),
     policy: PolicyEngine = Depends(get_policy),
 ) -> dict[str, Any]:
+    """坐席认领一个案卷，会话随之进入接管；已被认领则冲突。"""
     _require_seat(identity)
     handoffs = HandoffService(session, policy=policy)
     event = handoffs.claim(identity, event_id)
@@ -160,6 +165,7 @@ def release_handoff(
     session: Session = Depends(get_session),
     policy: PolicyEngine = Depends(get_policy),
 ) -> dict[str, Any]:
+    """把会话交回智能体，并留下交接备注；需要 support 角色。"""
     _require_seat(identity)
     handoffs = HandoffService(session, policy=policy)
     note = body.note if body and body.note else ""
@@ -176,6 +182,7 @@ def close_handoff(
     session: Session = Depends(get_session),
     policy: PolicyEngine = Depends(get_policy),
 ) -> dict[str, Any]:
+    """结案并写结论；需要 support 角色。"""
     _require_seat(identity)
     handoffs = HandoffService(session, policy=policy)
     resolution = body.resolution if body and body.resolution else "RESOLVED"

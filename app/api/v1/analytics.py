@@ -48,6 +48,7 @@ def run_query(
     session: Session = Depends(get_session),
     analytics: SqlAnalyticsService = Depends(get_analytics),
 ) -> dict[str, Any]:
+    """用一句自然语言问统计问题；只查调用者被允许的数据集，被拒也要入账。"""
     try:
         answer = analytics.answer(body.question, identity, session)
     except SqlRejected as exc:
@@ -67,6 +68,7 @@ def run_query(
                 answer.plan.time_range.label if answer.plan.time_range else None
             ),
         },
+        "route": answer.route,
         "sql": answer.sql,
         "columns": list(answer.columns),
         "rows": [dict(row) for row in answer.rows],
@@ -101,6 +103,7 @@ def list_queries(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> dict[str, Any]:
+    """列调用者自己的查询台账，可按数据集与状态过滤。"""
     repository = SqlQueryRepository(session)
     rows = repository.list(
         identity, dataset=dataset, status=status, limit=limit, offset=offset
@@ -119,11 +122,19 @@ def get_query(
     identity: Identity = Depends(get_identity),
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
+    """读一条查询台账；别人的记录与不存在的记录返回同一种 404。"""
     row = SqlQueryRepository(session).get(identity, query_id)
     if row is None:
         # Another user's query must look exactly like a missing one.
         raise NotFoundError("Query not found.")
     return _summary(row)
+
+
+def _route_of(row: Any) -> str:
+    """The path a recorded query took, derived from what the ledger kept."""
+    if getattr(row, "status", None) == "REJECTED":
+        return "REFUSED"
+    return "SQL" if row.sql_text else "PREFETCH"
 
 
 def _summary(row: Any) -> dict[str, Any]:
@@ -135,6 +146,7 @@ def _summary(row: Any) -> dict[str, Any]:
         "group_by": row.group_by,
         "row_status": row.row_status,
         "time_range": row.time_range,
+        "route": _route_of(row),
         "sql_text": row.sql_text,
         "row_count": row.row_count,
         "duration_ms": row.duration_ms,

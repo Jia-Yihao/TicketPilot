@@ -16,9 +16,13 @@ import type {
   NotificationListResponse,
   NotificationView,
   OutboxQueueResponse,
-  ProactiveRule,
+  ProactiveRuleChange,
+  ProactiveRuleChangeListResponse,
+  ProactiveRuleDecisionPayload,
   ProactiveRuleListResponse,
+  ProactiveRuleRollbackPayload,
   ProactiveRuleUpdatePayload,
+  ProactiveRuleVersionListResponse,
   SecurityMetrics,
   SupportReply,
   TaskEvent,
@@ -198,45 +202,170 @@ export function approveTask(
   })
 }
 
-function parseSse(text: string): TaskEvent[] {
-  const events: TaskEvent[] = []
-  for (const block of text.split(/\n\n+/)) {
-    if (!block.trim()) continue
-    let id = ''
-    let event = ''
-    const dataLines: string[] = []
-    for (const line of block.split('\n')) {
-      if (line.startsWith('id: ')) id = line.slice(4)
-      else if (line.startsWith('event: ')) event = line.slice(7)
-      else if (line.startsWith('data: ')) dataLines.push(line.slice(6))
-    }
-    if (!event) continue
-    let data: Record<string, unknown> = {}
-    try {
-      data = dataLines.length ? (JSON.parse(dataLines.join('\n')) as Record<string, unknown>) : {}
-    } catch {
-      data = { raw: dataLines.join('\n') }
-    }
-    const createdAt =
-      typeof data.created_at === 'string' ? data.created_at : new Date().toISOString()
-    events.push({ id, event, data, created_at: createdAt })
-  }
-  return events
+const TERMINAL_EVENTS = new Set([
+  'task.succeeded',
+  'task.failed',
+  'task.cancelled',
+  'task.timed_out',
+  'task.rejected',
+  'task.expired',
+])
+
+export type TaskEventStreamState =
+  | 'connecting'
+  | 'live'
+  | 'reconnecting'
+  | 'closed'
+
+interface FollowTaskEventsOptions {
+  signal?: AbortSignal
+  /** Resume after this event; the server replays whatever comes next. */
+  lastEventId?: string
+  /** True while the page still expects new events. */
+  shouldReconnect?: () => boolean
+  onEvent: (event: TaskEvent) => void
+  onState?: (state: TaskEventStreamState) => void
 }
 
-export async function getTaskEvents(
+function parseSseBlock(block: string): TaskEvent | null {
+  let id = ''
+  let event = ''
+  const dataLines: string[] = []
+  for (const raw of block.split('\n')) {
+    const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw
+    if (!line) continue
+    // A line starting with ":" is a comment; a heartbeat is one of these.
+    if (line.startsWith(':')) continue
+    const colon = line.indexOf(':')
+    const field = colon === -1 ? line : line.slice(0, colon)
+    let value = colon === -1 ? '' : line.slice(colon + 1)
+    if (value.startsWith(' ')) value = value.slice(1)
+    if (field === 'id') id = value
+    else if (field === 'event') event = value
+    else if (field === 'data') dataLines.push(value)
+  }
+  if (!event) return null
+  let data: Record<string, unknown> = {}
+  try {
+    data = dataLines.length
+      ? (JSON.parse(dataLines.join('\n')) as Record<string, unknown>)
+      : {}
+  } catch {
+    data = { raw: dataLines.join('\n') }
+  }
+  const createdAt =
+    typeof data.created_at === 'string'
+      ? data.created_at
+      : new Date().toISOString()
+  return { id, event, data, created_at: createdAt }
+}
+
+async function readEventStream(
+  response: Response,
+  onEvent: (event: TaskEvent) => boolean,
+): Promise<boolean> {
+  if (!response.body) {
+    throw new Error('当前浏览器不支持流式事件读取。')
+  }
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let terminal = false
+  try {
+    for (;;) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      let boundary = buffer.indexOf('\n\n')
+      while (boundary >= 0) {
+        const block = buffer.slice(0, boundary)
+        buffer = buffer.slice(boundary + 2)
+        const event = parseSseBlock(block)
+        if (event && onEvent(event)) terminal = true
+        boundary = buffer.indexOf('\n\n')
+      }
+    }
+    buffer += decoder.decode()
+    const tail = parseSseBlock(buffer)
+    if (tail && onEvent(tail)) terminal = true
+  } finally {
+    reader.releaseLock()
+  }
+  return terminal
+}
+
+function wait(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = window.setTimeout(resolve, ms)
+    signal?.addEventListener(
+      'abort',
+      () => {
+        window.clearTimeout(timer)
+        resolve()
+      },
+      { once: true },
+    )
+  })
+}
+
+/**
+ * Follow a task's event stream until it reaches a terminal state.
+ *
+ * The server keeps the response open and pushes new events, so the console
+ * must read the body incrementally — `response.text()` would wait for the
+ * connection to close. A dropped connection resumes from the last id; the
+ * page decides whether a clean close is worth reconnecting (an idle timeout
+ * can end an open task, a terminal task cannot produce more events).
+ */
+export async function followTaskEvents(
   identity: Identity,
   taskId: string,
-): Promise<TaskEvent[]> {
-  const headers = new Headers(identityHeaders(identity))
-  const response = await fetch(
-    `/api/v1/tasks/${encodeURIComponent(taskId)}/events`,
-    { headers },
-  )
-  if (!response.ok) {
-    throw new ApiError(response.status, `HTTP_${response.status}`, '读取任务事件失败。')
+  options: FollowTaskEventsOptions,
+): Promise<void> {
+  let lastEventId = options.lastEventId
+  let retryDelay = 1000
+  let firstAttempt = true
+  while (!options.signal?.aborted) {
+    options.onState?.(firstAttempt ? 'connecting' : 'reconnecting')
+    firstAttempt = false
+    try {
+      const headers = new Headers(identityHeaders(identity))
+      headers.set('Accept', 'text/event-stream')
+      if (lastEventId) headers.set('Last-Event-ID', lastEventId)
+      const response = await fetch(
+        `/api/v1/tasks/${encodeURIComponent(taskId)}/events`,
+        { headers, signal: options.signal, cache: 'no-store' },
+      )
+      if (!response.ok) {
+        throw new ApiError(
+          response.status,
+          `HTTP_${response.status}`,
+          '读取任务事件失败。',
+        )
+      }
+      options.onState?.('live')
+      retryDelay = 1000
+      const terminal = await readEventStream(response, (event) => {
+        if (event.id) lastEventId = event.id
+        options.onEvent(event)
+        return TERMINAL_EVENTS.has(event.event)
+      })
+      if (terminal || !(options.shouldReconnect?.() ?? false)) {
+        options.onState?.('closed')
+        return
+      }
+      options.onState?.('reconnecting')
+    } catch (error) {
+      if (options.signal?.aborted) return
+      if (error instanceof ApiError) {
+        options.onState?.('closed')
+        throw error
+      }
+      options.onState?.('reconnecting')
+    }
+    await wait(retryDelay, options.signal)
+    retryDelay = Math.min(retryDelay * 2, 8000)
   }
-  return parseSse(await response.text())
 }
 
 export async function checkHealth(): Promise<boolean> {
@@ -456,9 +585,62 @@ export function updateProactiveRule(
   identity: Identity,
   eventType: string,
   changes: ProactiveRuleUpdatePayload,
-): Promise<ProactiveRule> {
+): Promise<ProactiveRuleChange> {
   return request(`/memory/rules/${encodeURIComponent(eventType)}`, identity, {
     method: 'PUT',
     body: JSON.stringify(changes),
+  })
+}
+
+export function listProactiveRuleChanges(
+  identity: Identity,
+  status?: string,
+): Promise<ProactiveRuleChangeListResponse> {
+  const query = status ? `?status=${encodeURIComponent(status)}` : ''
+  return request(`/memory/rules/changes${query}`, identity)
+}
+
+export function approveProactiveRuleChange(
+  identity: Identity,
+  changeId: string,
+  payload: ProactiveRuleDecisionPayload = {},
+): Promise<ProactiveRuleChange> {
+  return request(
+    `/memory/rules/changes/${encodeURIComponent(changeId)}/approve`,
+    identity,
+    { method: 'POST', body: JSON.stringify(payload) },
+  )
+}
+
+export function rejectProactiveRuleChange(
+  identity: Identity,
+  changeId: string,
+  payload: ProactiveRuleDecisionPayload = {},
+): Promise<ProactiveRuleChange> {
+  return request(
+    `/memory/rules/changes/${encodeURIComponent(changeId)}/reject`,
+    identity,
+    { method: 'POST', body: JSON.stringify(payload) },
+  )
+}
+
+export function listProactiveRuleVersions(
+  identity: Identity,
+  eventType: string,
+): Promise<ProactiveRuleVersionListResponse> {
+  return request(
+    `/memory/rules/${encodeURIComponent(eventType)}/versions`,
+    identity,
+  )
+}
+
+export function rollbackProactiveRule(
+  identity: Identity,
+  eventType: string,
+  payload: ProactiveRuleRollbackPayload,
+): Promise<ProactiveRuleChange> {
+  return request(`/memory/rules/${encodeURIComponent(eventType)}/rollback`, identity, {
+    method: 'POST',
+    body: JSON.stringify(payload),
   })
 }

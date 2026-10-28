@@ -34,6 +34,7 @@ def list_approvals(
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> dict[str, Any]:
+    """列本租户的审批单，可按状态过滤；需要 approver 角色。"""
     return runtime.list_approvals(
         identity,
         statuses=_parse_statuses(status),
@@ -48,4 +49,5 @@ def get_approval(
     identity: Identity = Depends(get_identity),
     runtime: TaskRuntime = Depends(get_runtime),
 ) -> dict[str, Any]:
+    """读一条审批详情，多出载荷摘要与坐席可见的补充说明；需要 approver 角色。"""
     return runtime.get_approval(identity, approval_id)

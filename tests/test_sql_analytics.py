@@ -33,7 +33,9 @@ def planner() -> HeuristicSqlPlanner:
 
 @pytest.fixture
 def service(app: FastAPI) -> SqlAnalyticsService:
-    return SqlAnalyticsService(max_limit=200)
+    # This module pins the controlled-SQL path; the prefetch path has its own
+    # cases in ``test_analytics_prefetch.py``.
+    return SqlAnalyticsService(max_limit=200, prefetch_enabled=False)
 
 
 def _session(app: FastAPI):  # type: ignore[no-untyped-def]

@@ -137,7 +137,7 @@ SCENARIOS: list[Scenario] = [
         Scenario(
             key=f"refund-approved-{index}",
             user="alice",
-            turns=[f"我要申请退款，订单 {order}，金额 {amount} 元"],
+            turns=[f"我要申请退款，订单 {order}，金额 {amount} 元，商品有质量问题"],
             decide="approve",
         )
         for index, (order, amount) in enumerate(
@@ -156,7 +156,7 @@ SCENARIOS: list[Scenario] = [
             user="alice",
             # A rejection never moves money, so the order stays eligible and the
             # same order can carry the three rejection threads.
-            turns=["我要申请退款，订单 ORD-EVAL-4002，金额 180 元"],
+            turns=["我要申请退款，订单 ORD-EVAL-4002，金额 180 元，商品有质量问题"],
             decide="reject",
         )
         for index in range(3)
@@ -165,7 +165,7 @@ SCENARIOS: list[Scenario] = [
         Scenario(
             key=f"refund-out-of-window-{index}",
             user="alice",
-            turns=["我要申请退款，订单 ORD-EVAL-4006，金额 60 元"],
+            turns=["我要申请退款，订单 ORD-EVAL-4006，金额 60 元，商品有质量问题"],
         )
         for index in range(4)
     ],

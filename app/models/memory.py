@@ -77,12 +77,94 @@ class ProactiveRule(Base):
         Boolean, default=True, nullable=False
     )
     cooldown_minutes: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
+    # Which approved state is live. Only ``approve_change`` moves it forward;
+    # every move writes one immutable ``ProactiveRuleVersion`` row.
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=utcnow, nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=utcnow, onupdate=utcnow, nullable=False
     )
+
+
+class ProactiveRuleVersion(Base):
+    """An immutable snapshot of one tenant's rule after an approved change.
+
+    Rows are only inserted. Nothing in the service updates or deletes them, so
+    a notification can name the exact words it used and an operator can diff
+    two versions or roll back to one without trusting an audit digest alone.
+    """
+
+    __tablename__ = "proactive_rule_versions"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "event_type",
+            "version",
+            name="uq_proactive_rule_versions_number",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(64), index=True)
+    event_type: Mapped[str] = mapped_column(String(48), index=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    template: Mapped[str] = mapped_column(Text)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    requires_confirmation: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    cooldown_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
+    change_id: Mapped[str] = mapped_column(String(40), index=True)
+    submitted_by: Mapped[str] = mapped_column(String(64))
+    approved_by: Mapped[str] = mapped_column(String(64))
+    reason: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=utcnow, nullable=False
+    )
+
+
+class ProactiveRuleChange(Base):
+    """A proposed rule state waiting for a second pair of eyes.
+
+    ``pending_key`` equals the event type while the change is pending and is
+    cleared on any decision; the unique constraint on ``(tenant_id,
+    pending_key)`` is what makes two concurrent submissions collide instead of
+    both looking valid to a read-then-write check.
+    """
+
+    __tablename__ = "proactive_rule_changes"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "pending_key",
+            name="uq_proactive_rule_changes_pending",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(64), index=True)
+    event_type: Mapped[str] = mapped_column(String(48), index=True)
+    kind: Mapped[str] = mapped_column(String(16))
+    status: Mapped[str] = mapped_column(String(16), index=True)
+    pending_key: Mapped[str | None] = mapped_column(String(48), nullable=True)
+    base_version: Mapped[int] = mapped_column(Integer)
+    target_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    template: Mapped[str] = mapped_column(Text)
+    enabled: Mapped[bool] = mapped_column(Boolean)
+    requires_confirmation: Mapped[bool] = mapped_column(Boolean)
+    cooldown_minutes: Mapped[int] = mapped_column(Integer)
+    old_template: Mapped[str | None] = mapped_column(Text, nullable=True)
+    old_enabled: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    old_cooldown_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reason: Mapped[str] = mapped_column(Text, default="")
+    submitted_by: Mapped[str] = mapped_column(String(64))
+    submitted_at: Mapped[datetime] = mapped_column(
+        DateTime, default=utcnow, nullable=False
+    )
+    decided_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    decision_note: Mapped[str] = mapped_column(Text, default="")
+    applied_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class Notification(Base):
@@ -110,6 +192,9 @@ class Notification(Base):
     event_type: Mapped[str] = mapped_column(String(48), index=True)
     event_key: Mapped[str] = mapped_column(String(120))
     rule_id: Mapped[str] = mapped_column(String(40), index=True)
+    # Which approved rule snapshot produced this body. The text stays as it
+    # was rendered; a later change or rollback never rewrites it.
+    rule_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     status: Mapped[str] = mapped_column(String(24), index=True)
     title: Mapped[str] = mapped_column(String(120))
     body: Mapped[str] = mapped_column(Text)

@@ -30,6 +30,7 @@ REASON_CODES: tuple[str, ...] = (
     "SCOPE_MISSING",
     "SCOPE_NOT_TOP_LEVEL",
     "NO_PLAN",
+    "UNSUPPORTED_DIMENSION",
 )
 
 

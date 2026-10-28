@@ -1,0 +1,3 @@
+{"text": "我刚拍的刀纸地址选错了", "predicted": "UNKNOWN", "tenant_id": "demo", "signals": ["false_unknown"], "provenance": {"dataset": "modelscope_mp_677764216/E_commerce_Customer_Service", "file": "dev_clean_v2.jsonl", "line": 106}}
+{"text": "能早点发吗我这离预产期没几天了发晚了就用不上了", "predicted": "UNKNOWN", "tenant_id": "demo", "signals": ["false_unknown"], "provenance": {"dataset": "modelscope_mp_677764216/E_commerce_Customer_Service", "file": "dev_clean_v2.jsonl", "line": 108}}
+{"text": "退回去的邮费也是你们承担吗有问题的也一起退回啊", "predicted": "UNKNOWN", "tenant_id": "demo", "signals": ["false_unknown"], "provenance": {"dataset": "modelscope_mp_677764216/E_commerce_Customer_Service", "file": "dev_clean_v2.jsonl", "line": 132}}

@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   cancelTask,
   errorText,
+  followTaskEvents,
   getTask,
-  getTaskEvents,
 } from '../api'
 import { CopyValue } from '../components/CopyValue'
 import { ErrorPanel } from '../components/ErrorPanel'
@@ -21,6 +21,7 @@ import {
 } from '../format'
 import { usePageTitle } from '../hooks'
 import { IDENTITY_PRESETS, useIdentity } from '../identity'
+import type { TaskEventStreamState } from '../api'
 import type { TaskEvent, TaskSnapshot } from '../types'
 
 const TERMINAL = new Set([
@@ -31,6 +32,13 @@ const TERMINAL = new Set([
   'REJECTED',
   'EXPIRED',
 ])
+
+const STREAM_LABEL: Record<TaskEventStreamState, string> = {
+  connecting: 'SSE 连接中',
+  live: 'SSE 实时',
+  reconnecting: 'SSE 重连中',
+  closed: 'SSE 已结束',
+}
 
 const EVENT_META: Record<string, { label: string; tone: string }> = {
   'task.created': { label: '任务创建', tone: 'neutral' },
@@ -146,9 +154,14 @@ export function TaskDetailPage() {
   const navigate = useNavigate()
   const [task, setTask] = useState<TaskSnapshot | null>(null)
   const [events, setEvents] = useState<TaskEvent[]>([])
+  const [streamState, setStreamState] =
+    useState<TaskEventStreamState>('connecting')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<unknown>(null)
   const [refreshTick, setRefreshTick] = useState(0)
+  const lastEventRef = useRef<{ taskId: string; id?: string }>({ taskId: '' })
+  const taskStatusRef = useRef<string | null>(null)
+  taskStatusRef.current = task?.status ?? null
   const [cancelOpen, setCancelOpen] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -161,34 +174,67 @@ export function TaskDetailPage() {
   useEffect(() => {
     if (!taskId) return
     let cancelled = false
+    const controller = new AbortController()
     if (!task) setLoading(true)
-    Promise.all([getTask(identity, taskId), getTaskEvents(identity, taskId)])
-      .then(([snapshot, eventList]) => {
+    if (lastEventRef.current.taskId !== taskId) {
+      lastEventRef.current = { taskId }
+      setEvents([])
+    }
+
+    const refresh = () =>
+      getTask(identity, taskId).then((snapshot) => {
+        if (!cancelled) setTask(snapshot)
+        return snapshot
+      })
+
+    refresh()
+      .then(() => {
         if (cancelled) return
-        setTask(snapshot)
-        setEvents(eventList)
         setError(null)
+        setLoading(false)
       })
       .catch((errorValue: unknown) => {
-        if (!cancelled) setError(errorValue)
+        if (cancelled) return
+        setError(errorValue)
+        setLoading(false)
       })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
+
+    followTaskEvents(identity, taskId, {
+      signal: controller.signal,
+      lastEventId: lastEventRef.current.id,
+      shouldReconnect: () => {
+        const status = taskStatusRef.current
+        return status === null || !TERMINAL.has(status)
+      },
+      onState: (state) => {
+        if (!cancelled) setStreamState(state)
+      },
+      onEvent: (event) => {
+        if (cancelled) return
+        if (event.id) lastEventRef.current = { taskId, id: event.id }
+        setEvents((current) =>
+          current.some((item) => item.id === event.id)
+            ? current
+            : [...current, event],
+        )
+        // The stream carries events, not the task snapshot. Re-read the
+        // snapshot after an event so the header and the approval rail do not
+        // wait for a manual refresh.
+        refresh().catch(() => undefined)
+      },
+    }).catch(() => {
+      if (!cancelled && !controller.signal.aborted) setStreamState('closed')
+    })
+
     return () => {
       cancelled = true
+      controller.abort()
     }
+    // ``task`` is intentionally absent: the effect owns the stream, and
+    // refreshing the snapshot must not tear the connection down.
   }, [identity, taskId, refreshTick])
 
   const isTerminal = !task || TERMINAL.has(task.status)
-
-  useEffect(() => {
-    if (isTerminal || !taskId) return
-    const timer = window.setInterval(() => {
-      setRefreshTick((value) => value + 1)
-    }, 15_000)
-    return () => window.clearInterval(timer)
-  }, [isTerminal, taskId])
 
   async function handleCancel() {
     if (!taskId) return
@@ -424,7 +470,7 @@ export function TaskDetailPage() {
                 <h2>事件时间线</h2>
               </div>
               <span className="mono panel__tag">
-                SSE REPLAY · {events.length}
+                {STREAM_LABEL[streamState]} · {events.length}
               </span>
             </header>
             <div className="panel__body">

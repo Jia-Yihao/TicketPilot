@@ -1,0 +1,431 @@
+{
+  "version": "2026-10-28",
+  "description": "答案层四项判据的金标语料：问题 + 期望引用的章节 + 不可说清单。期望章节是判断题而不是唯一答案；不可说清单里既有过期版本 refund-v2.md 独占的说法（15 天 / 只能已签收），也有政策不支持的承诺。",
+  "thresholds": {
+    "citation_hit_rate": 0.9,
+    "fabrication_rate": 0.0,
+    "untraceable_number_rate": 0.0
+  },
+  "cases": [
+    {
+      "id": "refund-scope-unshipped",
+      "question": "还没发货的订单还能走退款流程吗？",
+      "policy_id": "POLICY-REFUND",
+      "sections": ["适用范围"],
+      "forbidden": ["15 天", "15天", "只能已签收", "未发货也能退"]
+    },
+    {
+      "id": "refund-scope-cancelled",
+      "question": "已经取消的订单还可以申请退款吗？",
+      "policy_id": "POLICY-REFUND",
+      "sections": ["退款条件"],
+      "forbidden": ["15 天", "15天", "只能已签收"]
+    },
+    {
+      "id": "refund-window-days",
+      "question": "签收之后最晚多久还能提退款？",
+      "policy_id": "POLICY-REFUND",
+      "sections": ["退款条件"],
+      "forbidden": ["15 天", "15天", "只能已签收"]
+    },
+    {
+      "id": "refund-window-count",
+      "question": "从签收那天开始算，退款申请的期限是几天？",
+      "policy_id": "POLICY-REFUND",
+      "sections": ["退款条件"],
+      "forbidden": ["15 天", "15天", "只能已签收"]
+    },
+    {
+      "id": "refund-balance",
+      "question": "可退余额不够时，申请金额超过余额按什么规则处理？",
+      "policy_id": "POLICY-REFUND",
+      "sections": ["退款金额", "退款条件"],
+      "forbidden": ["15 天", "15天", "只能已签收"]
+    },
+    {
+      "id": "refund-duplicate",
+      "question": "同一张订单存在审批中的退款记录时，规则允许再发起一笔吗？",
+      "policy_id": "POLICY-REFUND",
+      "sections": ["退款条件"],
+      "forbidden": ["15 天", "15天", "只能已签收"]
+    },
+    {
+      "id": "refund-amount-unit",
+      "question": "退款金额是按元还是按分来算的？",
+      "policy_id": "POLICY-REFUND",
+      "sections": ["退款金额"],
+      "forbidden": ["15 天", "15天", "只能已签收", "运费会自动分摊"]
+    },
+    {
+      "id": "refund-amount-shipping",
+      "question": "退钱的时候运费和优惠券会自动分摊扣除吗？",
+      "policy_id": "POLICY-REFUND",
+      "sections": ["退款金额"],
+      "forbidden": ["15 天", "15天", "只能已签收", "运费会自动分摊"]
+    },
+    {
+      "id": "refund-approval-who",
+      "question": "谁有权批准一笔退款？人工审批是必须的吗？",
+      "policy_id": "POLICY-REFUND",
+      "sections": ["审批要求"],
+      "forbidden": ["15 天", "15天", "只能已签收", "无需审批"]
+    },
+    {
+      "id": "refund-approval-version",
+      "question": "审批期间订单数据变了，原来的审批还有效吗？",
+      "policy_id": "POLICY-REFUND",
+      "sections": ["审批要求"],
+      "forbidden": ["15 天", "15天", "只能已签收", "无需审批"]
+    },
+    {
+      "id": "refund-approval-required",
+      "question": "每笔退款都要人工过一遍吗？",
+      "policy_id": "POLICY-REFUND",
+      "sections": ["审批要求"],
+      "forbidden": ["15 天", "15天", "只能已签收", "无需审批"]
+    },
+    {
+      "id": "refund-result-pending",
+      "question": "退款接口返回成功就算钱到账了吗？",
+      "policy_id": "POLICY-REFUND",
+      "sections": ["结果确认"],
+      "forbidden": ["15 天", "15天", "只能已签收", "一定到账"]
+    },
+    {
+      "id": "refund-result-timeout",
+      "question": "调用退款超时了，能直接重新提交吗？",
+      "policy_id": "POLICY-REFUND",
+      "sections": ["结果确认"],
+      "forbidden": ["15 天", "15天", "只能已签收", "一定到账"]
+    },
+    {
+      "id": "refund-result-reconcile",
+      "question": "外部渠道超时后的对账流程是什么？",
+      "policy_id": "POLICY-REFUND",
+      "sections": ["结果确认"],
+      "forbidden": ["15 天", "15天", "只能已签收", "一定到账"]
+    },
+    {
+      "id": "refund-scope-paid",
+      "question": "付款了但还没发货的单子适用退款政策吗？",
+      "policy_id": "POLICY-REFUND",
+      "sections": ["适用范围"],
+      "forbidden": ["15 天", "15天", "只能已签收", "未发货也能退"]
+    },
+    {
+      "id": "refund-amount-zero",
+      "question": "申请退款时金额可以填 0 元吗？",
+      "policy_id": "POLICY-REFUND",
+      "sections": ["退款金额"],
+      "forbidden": ["15 天", "15天", "只能已签收", "运费会自动分摊"]
+    },
+    {
+      "id": "refund-approval-expire",
+      "question": "审批等太久会不会失效？",
+      "policy_id": "POLICY-REFUND",
+      "sections": ["审批要求"],
+      "forbidden": ["15 天", "15天", "只能已签收", "无需审批"]
+    },
+    {
+      "id": "refund-record-unknown",
+      "question": "退款记录显示状态未知时，按规则该怎么处理？",
+      "policy_id": "POLICY-REFUND",
+      "sections": ["退款条件"],
+      "forbidden": ["15 天", "15天", "只能已签收"]
+    },
+    {
+      "id": "refund-balance-exceed",
+      "question": "申请金额超过可退余额，按规则会怎么样？",
+      "policy_id": "POLICY-REFUND",
+      "sections": ["退款金额"],
+      "forbidden": ["15 天", "15天", "只能已签收", "运费会自动分摊"]
+    },
+    {
+      "id": "refund-window-expired",
+      "question": "签收超过一个月再申请退款还能受理吗？",
+      "policy_id": "POLICY-REFUND",
+      "sections": ["退款条件"],
+      "forbidden": ["15 天", "15天", "只能已签收"]
+    },
+    {
+      "id": "refund-scope-transit",
+      "question": "订单还在运输途中可以申请退款吗？",
+      "policy_id": "POLICY-REFUND",
+      "sections": ["适用范围", "退款条件"],
+      "forbidden": ["15 天", "15天", "只能已签收"]
+    },
+    {
+      "id": "refund-amount-currency",
+      "question": "退款金额用什么币种和单位记录？",
+      "policy_id": "POLICY-REFUND",
+      "sections": ["退款金额"],
+      "forbidden": ["15 天", "15天", "只能已签收", "运费会自动分摊"]
+    },
+    {
+      "id": "return-window-days",
+      "question": "没拆封的商品按退货政策多久之内可以无理由退？",
+      "policy_id": "POLICY-RETURN",
+      "sections": ["七天无理由退货"],
+      "forbidden": ["十五天无理由", "无需寄回", "无需包装"]
+    },
+    {
+      "id": "return-window-start",
+      "question": "无理由退货的期限从哪天开始算？",
+      "policy_id": "POLICY-RETURN",
+      "sections": ["七天无理由退货"],
+      "forbidden": ["十五天无理由", "无需寄回"]
+    },
+    {
+      "id": "return-condition",
+      "question": "无理由退货对商品状态有什么要求？",
+      "policy_id": "POLICY-RETURN",
+      "sections": ["七天无理由退货"],
+      "forbidden": ["十五天无理由", "无需寄回"]
+    },
+    {
+      "id": "return-gifts",
+      "question": "无理由退货对赠品和包装有什么要求？",
+      "policy_id": "POLICY-RETURN",
+      "sections": ["七天无理由退货"],
+      "forbidden": ["十五天无理由", "无需寄回", "无需包装"]
+    },
+    {
+      "id": "return-vs-refund-state",
+      "question": "同意退货是不是等于退款已经完成？",
+      "policy_id": "POLICY-RETURN",
+      "sections": ["退货与退款的区别"],
+      "forbidden": ["退货即退款", "无需寄回"]
+    },
+    {
+      "id": "return-vs-refund-order",
+      "question": "退货和退款到底先做哪一步？",
+      "policy_id": "POLICY-RETURN",
+      "sections": ["退货与退款的区别"],
+      "forbidden": ["退货即退款", "无需寄回"]
+    },
+    {
+      "id": "return-vs-refund-recheck",
+      "question": "退货验收通过以后还要重新检查资格吗？",
+      "policy_id": "POLICY-RETURN",
+      "sections": ["退货与退款的区别"],
+      "forbidden": ["退货即退款", "无需寄回"]
+    },
+    {
+      "id": "return-excluded-personal",
+      "question": "退货规定里，拆封的贴身用品可以申请吗？",
+      "policy_id": "POLICY-RETURN",
+      "sections": ["不予退货的情形"],
+      "forbidden": ["十五天无理由", "所有商品都能退"]
+    },
+    {
+      "id": "return-excluded-food",
+      "question": "食品和定制商品支持退货吗？",
+      "policy_id": "POLICY-RETURN",
+      "sections": ["不予退货的情形"],
+      "forbidden": ["十五天无理由", "所有商品都能退"]
+    },
+    {
+      "id": "return-excluded-parts",
+      "question": "关键部件缺失的商品，按退货政策属于可以退的吗？",
+      "policy_id": "POLICY-RETURN",
+      "sections": ["不予退货的情形"],
+      "forbidden": ["十五天无理由", "所有商品都能退"]
+    },
+    {
+      "id": "return-excluded-quality",
+      "question": "超过七天又不是质量问题，按退货条件是否允许？",
+      "policy_id": "POLICY-RETURN",
+      "sections": ["不予退货的情形", "七天无理由退货"],
+      "forbidden": ["十五天无理由", "所有商品都能退"]
+    },
+    {
+      "id": "return-excluded-resale",
+      "question": "影响二次销售的商品符合退货条件吗？",
+      "policy_id": "POLICY-RETURN",
+      "sections": ["不予退货的情形"],
+      "forbidden": ["十五天无理由", "所有商品都能退"]
+    },
+    {
+      "id": "return-wording",
+      "question": "回答退货问题时能不能直接说已经退款？",
+      "policy_id": "POLICY-RETURN",
+      "sections": ["操作要求"],
+      "forbidden": ["退货即退款", "不需要引用版本"]
+    },
+    {
+      "id": "return-version",
+      "question": "回答退货问题要引用哪个版本的政策？",
+      "policy_id": "POLICY-RETURN",
+      "sections": ["操作要求"],
+      "forbidden": ["不需要引用版本", "无需寄回"]
+    },
+    {
+      "id": "delay-severe-days",
+      "question": "严重延迟是怎么规定的，多久才算？",
+      "policy_id": "POLICY-DELAY",
+      "sections": ["延迟判定"],
+      "forbidden": ["一定赔偿", "保证赔钱", "立刻判定丢件"]
+    },
+    {
+      "id": "delay-tracking-stuck",
+      "question": "物流轨迹一直不动，规则上多久要先找承运商核实？",
+      "policy_id": "POLICY-DELAY",
+      "sections": ["延迟判定"],
+      "forbidden": ["一定赔偿", "保证赔钱", "立刻判定丢件"]
+    },
+    {
+      "id": "delay-lost",
+      "question": "判定丢件的规则是什么？",
+      "policy_id": "POLICY-DELAY",
+      "sections": ["延迟判定"],
+      "forbidden": ["一定赔偿", "保证赔钱", "立刻判定丢件"]
+    },
+    {
+      "id": "delay-ticket",
+      "question": "严重延迟在规则上可以开高优先级工单吗？",
+      "policy_id": "POLICY-DELAY",
+      "sections": ["处理方式"],
+      "forbidden": ["一定赔偿", "保证赔钱", "延迟就自动退款"]
+    },
+    {
+      "id": "delay-compensation",
+      "question": "包裹晚了会赔钱吗，政策上怎么说的？",
+      "policy_id": "POLICY-DELAY",
+      "sections": ["处理方式"],
+      "forbidden": ["一定赔偿", "保证赔钱", "延迟就自动退款"]
+    },
+    {
+      "id": "delay-refund-eligibility",
+      "question": "延迟本身会自动带来退款资格吗？",
+      "policy_id": "POLICY-DELAY",
+      "sections": ["处理方式"],
+      "forbidden": ["一定赔偿", "保证赔钱", "延迟就自动退款"]
+    },
+    {
+      "id": "delay-refund-check",
+      "question": "延迟的订单想申请退款，处理方式上要按什么来？",
+      "policy_id": "POLICY-DELAY",
+      "sections": ["处理方式"],
+      "forbidden": ["一定赔偿", "保证赔钱", "延迟就自动退款"]
+    },
+    {
+      "id": "delay-promise",
+      "question": "客服能不能先答应一个赔偿金额？",
+      "policy_id": "POLICY-DELAY",
+      "sections": ["处理方式"],
+      "forbidden": ["一定赔偿", "保证赔钱", "延迟就自动退款"]
+    },
+    {
+      "id": "delay-evidence-logistics",
+      "question": "回答物流问题的证据要求有哪些？",
+      "policy_id": "POLICY-DELAY",
+      "sections": ["证据要求"],
+      "forbidden": ["一定赔偿", "只凭客户描述"]
+    },
+    {
+      "id": "delay-evidence-version",
+      "question": "判断包裹丢失的证据要求是什么，只看客户描述可以吗？",
+      "policy_id": "POLICY-DELAY",
+      "sections": ["证据要求"],
+      "forbidden": ["一定赔偿", "只凭客户描述"]
+    },
+    {
+      "id": "delay-evidence-policy",
+      "question": "回答配送问题要引用什么版本的规则？",
+      "policy_id": "POLICY-DELAY",
+      "sections": ["证据要求"],
+      "forbidden": ["一定赔偿", "只凭客户描述"]
+    },
+    {
+      "id": "delay-evidence-carrier",
+      "question": "承运商核实这一步要走什么流程？",
+      "policy_id": "POLICY-DELAY",
+      "sections": ["证据要求", "处理方式"],
+      "forbidden": ["一定赔偿", "保证赔钱", "只凭客户描述"]
+    },
+    {
+      "id": "ticket-urgent",
+      "question": "哪些情况算最高优先级的工单？",
+      "policy_id": "POLICY-TICKET",
+      "sections": ["优先级定义"],
+      "forbidden": ["重复建单没问题", "无需幂等键", "所有工单都紧急"]
+    },
+    {
+      "id": "ticket-high",
+      "question": "投诉和审批受阻算哪个优先级？",
+      "policy_id": "POLICY-TICKET",
+      "sections": ["优先级定义"],
+      "forbidden": ["重复建单没问题", "无需幂等键", "所有工单都紧急"]
+    },
+    {
+      "id": "ticket-normal",
+      "question": "政策咨询要开什么优先级的工单？",
+      "policy_id": "POLICY-TICKET",
+      "sections": ["优先级定义"],
+      "forbidden": ["重复建单没问题", "无需幂等键", "所有工单都紧急"]
+    },
+    {
+      "id": "ticket-low",
+      "question": "功能建议这种算什么优先级？",
+      "policy_id": "POLICY-TICKET",
+      "sections": ["优先级定义"],
+      "forbidden": ["重复建单没问题", "无需幂等键", "所有工单都紧急"]
+    },
+    {
+      "id": "ticket-tenant",
+      "question": "建工单必须绑定租户和用户吗？",
+      "policy_id": "POLICY-TICKET",
+      "sections": ["创建规则"],
+      "forbidden": ["重复建单没问题", "无需幂等键"]
+    },
+    {
+      "id": "ticket-other-order",
+      "question": "只用订单号就能给别人建工单吗？",
+      "policy_id": "POLICY-TICKET",
+      "sections": ["创建规则"],
+      "forbidden": ["重复建单没问题", "无需幂等键"]
+    },
+    {
+      "id": "ticket-idempotent",
+      "question": "重复提交同一个工单会生成几张？",
+      "policy_id": "POLICY-TICKET",
+      "sections": ["创建规则"],
+      "forbidden": ["重复建单没问题", "无需幂等键"]
+    },
+    {
+      "id": "ticket-dedup-key",
+      "question": "工单重复提交时要带什么幂等键？",
+      "policy_id": "POLICY-TICKET",
+      "sections": ["创建规则"],
+      "forbidden": ["重复建单没问题", "无需幂等键"]
+    },
+    {
+      "id": "ticket-handoff-when",
+      "question": "证据不足的时候是转人工还是继续自动处理？",
+      "policy_id": "POLICY-TICKET",
+      "sections": ["转人工"],
+      "forbidden": ["转人工就是任务成功", "无需幂等键"]
+    },
+    {
+      "id": "ticket-handoff-status",
+      "question": "转人工以后算不算任务成功？",
+      "policy_id": "POLICY-TICKET",
+      "sections": ["转人工"],
+      "forbidden": ["转人工就是任务成功", "无需幂等键"]
+    },
+    {
+      "id": "ticket-handoff-final",
+      "question": "转人工之后最终状态要怎么告诉客户？",
+      "policy_id": "POLICY-TICKET",
+      "sections": ["转人工"],
+      "forbidden": ["转人工就是任务成功", "无需幂等键"]
+    },
+    {
+      "id": "ticket-conflict",
+      "question": "政策之间冲突了要不要转人工？",
+      "policy_id": "POLICY-TICKET",
+      "sections": ["转人工"],
+      "forbidden": ["转人工就是任务成功", "无需幂等键"]
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+# The approval tier table: which approval spec an amount falls into.
+#
+# This is data, not code. The loader reads it and nothing else may decide a
+# tier; changing the table and restarting the process changes the answer.
+#
+# One row per tier, ordered by ascending `max_cents`. The loader refuses a
+# table that breaks the contract instead of skipping the broken row, because a
+# skipped row would resolve to a tier nobody wrote.
+#
+# The default table has a single tier, so every refund is approved by one
+# approver - the behaviour before tiering existed. `max_cents` mirrors the
+# refund cap default (`refund_max_amount_cents`, 5_000_000 cents). An amount
+# above every row falls back to the *highest* tier, never to the lowest.
+#
+# This table answers "which spec does the approver apply". Whether an
+# approval is needed at all is a different question, answered by the
+# threshold `refund_approval_threshold_cents`; the two never substitute for
+# each other.
+
+version: "2026-10-26"
+tiers:
+  - tier_id: T1
+    max_cents: 5000000
+    roles:
+      - approver
+    required_approvals: 1

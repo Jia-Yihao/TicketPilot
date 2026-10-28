@@ -31,6 +31,17 @@ class Settings(BaseSettings):
     policy_min_score: float = 0.01
     # How many rows one self-service question may pull back.
     analytics_max_limit: int = 200
+    # P3-b: controlled SQL and prefetch coexist. The row count comes from a
+    # scoped COUNT, never from a model estimate; turning prefetch off restores
+    # the P3-a behaviour byte for byte.
+    analytics_prefetch_enabled: bool = True
+    analytics_prefetch_max_rows: int = 200
+    # L3 rows stay in this process only; an expired snapshot asks the
+    # customer to re-ask instead of serving stale rows (declared boundary).
+    analytics_snapshot_ttl_seconds: int = 900
+    # Expression is the only model call on the prefetch path. It stays off in
+    # rules mode regardless of this flag.
+    analytics_narration_enabled: bool = True
 
     # Policy thresholds. These are the numbers the agent obeys; nothing in
     # the code may decide a refund window or an escalation trigger on its own.
@@ -39,6 +50,11 @@ class Settings(BaseSettings):
     refund_max_amount_cents: int = 5_000_000
     refund_approval_threshold_cents: int = 0
     escalation_frustration_rounds: int = 2
+    # The clarification budget is its own number: the agent asks once, asks again
+    # with the customer's own order candidates, and only hands over when the
+    # third turn still has no order. Reusing frustration_rounds would hand the
+    # conversation over before the customer ever sees a candidate.
+    escalation_clarification_rounds: int = 3
     handoff_after_failed_attempts: int = 2
     escalation_no_evidence_score: float = 0.35
     session_idle_minutes: int = 20
@@ -72,6 +88,24 @@ class Settings(BaseSettings):
     rerank_top_n: int = 20
     rerank_failure_threshold: int = 3
     rerank_cooldown_seconds: float = 30.0
+    # Query-side rewrite of the *retrieval text* only: the customer's message,
+    # the intent route, the slot extraction and the reply keep the original
+    # words. The transforms are local string rules (numbers, synonyms, ACTIVE
+    # section titles), so the feature is deterministic and reversible; turning
+    # the master switch off restores the pre-rewrite ranking.
+    retrieval_query_rewrite_enabled: bool = True
+    retrieval_query_rewrite_numbers: bool = True
+    retrieval_query_rewrite_synonyms: bool = True
+    retrieval_query_rewrite_sections: bool = True
+    retrieval_query_rewrite_max_section_hints: int = 1
+    retrieval_query_rewrite_max_expansions: int = 8
+
+    # P8: the model may only name an intent the server has evidence for. The
+    # cap bounds how many evidence-bearing rows are offered; HUMAN_HANDOFF and
+    # UNKNOWN are always offered and never take a slot in it. Turning the
+    # switch off restores the pre-candidate model face byte for byte.
+    intent_candidates_enabled: bool = True
+    intent_candidates_max: int = 6
 
     agent_mode: Literal["rules", "pydantic_ai"] = "rules"
     agent_model: str = "anthropic:claude-sonnet-4-5"

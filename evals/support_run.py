@@ -15,6 +15,12 @@ Three kinds of assertions matter here:
 Task operations (cancel, approve, expire) are applied between turns through
 the public task API, so a conversation that produced a task can be followed
 to its final state.
+
+A case may also carry a profile precondition (``setup_profile``) written
+through the public memory API before its first turn, and a dataset may ask for
+every case to start from no profile at all (``reset_profile``). Those two,
+plus the per-turn ``new_conversation`` flag, are how the memory and multi-turn
+set pins "what is remembered across sessions" and "what is not".
 """
 
 from __future__ import annotations
@@ -29,33 +35,74 @@ from typing import Any
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy import func, select
 
 from app.agent.intent_catalog import get_catalog
 from app.core.config import Settings
 from app.core.time import utcnow
 from app.main import create_app
-from app.models.conversation import Conversation
+from app.models.audit import AuditEvent
+from app.models.conversation import Conversation, ConversationMessage
 from app.seed import seed_all
 
 try:
     from evals.fixtures import apply_fixtures
     from evals.run import (
         _expire_pending_approvals,
+        _fill_summary,
         _headers,
         _leftover_state,
         _reset_state,
+        _write_summary,
     )
 except ModuleNotFoundError:  # `python evals/support_run.py` puts evals/ on sys.path
     from fixtures import apply_fixtures
     from run import (
         _expire_pending_approvals,
+        _fill_summary,
         _headers,
         _leftover_state,
         _reset_state,
+        _write_summary,
     )
 
 MIN_SUPPORT_CASES = 60
 _KINDS = frozenset({"normal", "boundary", "failure"})
+
+# Every key a turn's ``expect`` block may use. An unknown key is a typo, and a
+# typo used to be the quietest kind of failure: the assertion you meant to make
+# simply never ran, and the case passed while proving nothing. So the set is
+# closed and a key outside it is reported like any other failure.
+_EXPECT_KEYS = frozenset(
+    {
+        # assertions the support set already used
+        "agent_silent",
+        "clarification",
+        "handoff",
+        "http_status",
+        "inherited_slots",
+        "intent",
+        "reply_contains",
+        "reply_not_contains",
+        "slot_contains",
+        "slot_not_contains",
+        "slots",
+        "span_absent",
+        "span_attrs",
+        "spans",
+        "task",
+        # assertions the memory / multi-turn set needs
+        "card_ids",
+        "inherited_slots_empty",
+        "memory_audit_unchanged",
+        "personalization",
+        "stored_messages",
+        "stored_messages_max",
+        "suggestion_count",
+        "suggestion_count_min",
+        "suggestions_not_contains",
+    }
+)
 
 
 # ------------------------------------------------------------------ helpers
@@ -171,6 +218,76 @@ def _trace_failures(
     return failures
 
 
+def _personalization_failures(
+    label: str, expect: Any, body: dict[str, Any]
+) -> list[str]:
+    """``null`` means the answer was not reshaped at all; a dict names effects.
+
+    A missing body field reads as the empty result, so a case that only needs
+    "this effect did not run" does not have to spell out ``null``.
+    """
+    actual = body.get("personalization")
+    if expect is None:
+        if actual is not None:
+            return [
+                f"{label}.personalization: expected none, got {actual.get('effects')!r}"
+            ]
+        return []
+    effects = list((actual or {}).get("effects") or [])
+    fields = list((actual or {}).get("fields") or [])
+    failures: list[str] = []
+    for effect in expect.get("effects_contains", []):
+        if effect not in effects:
+            failures.append(
+                f"{label}.personalization.effects: missing {effect!r}, got {effects}"
+            )
+    for effect in expect.get("effects_absent", []):
+        if effect in effects:
+            failures.append(f"{label}.personalization.effects: unexpected {effect!r}")
+    if "fields" in expect and fields != list(expect["fields"]):
+        failures.append(
+            f"{label}.personalization.fields: expected {list(expect['fields'])!r}, "
+            f"got {fields!r}"
+        )
+    return failures
+
+
+def _stored_message_count(app: FastAPI, conversation_id: str | None) -> int:
+    """How many transcript rows this conversation still holds after the turn."""
+    if not conversation_id:
+        return 0
+    with app.state.session_factory() as session:
+        return int(
+            session.scalar(
+                select(func.count())
+                .select_from(ConversationMessage)
+                .where(ConversationMessage.conversation_id == conversation_id)
+            )
+            or 0
+        )
+
+
+def _memory_audit_count(app: FastAPI, actor: dict[str, Any]) -> int:
+    """``memory.%`` audit rows this caller already has.
+
+    The answer path must add none: reading the profile is not an event, and a
+    customer denying their memory must not create one either.
+    """
+    with app.state.session_factory() as session:
+        return int(
+            session.scalar(
+                select(func.count())
+                .select_from(AuditEvent)
+                .where(
+                    AuditEvent.action.like("memory.%"),
+                    AuditEvent.tenant_id == str(actor["tenant"]),
+                    AuditEvent.actor_id == str(actor["user"]),
+                )
+            )
+            or 0
+        )
+
+
 def _turn_failures(
     turn: dict[str, Any],
     index: int,
@@ -181,6 +298,10 @@ def _turn_failures(
     expect = turn.get("expect") or {}
     label = f"turns[{index}]"
     failures: list[str] = []
+
+    for key in expect:
+        if key not in _EXPECT_KEYS:
+            failures.append(f"{label}.expect: unknown key {key!r}")
 
     if response.status_code != expect.get("http_status", 200):
         failures.append(
@@ -242,6 +363,37 @@ def _turn_failures(
     for slot in expect.get("inherited_slots", []):
         if slot not in inherited:
             failures.append(f"{label}.inherited_slots: missing {slot!r}, got {inherited}")
+    if expect.get("inherited_slots_empty") and inherited:
+        failures.append(f"{label}.inherited_slots: expected none, got {inherited}")
+
+    if "personalization" in expect:
+        failures.extend(_personalization_failures(label, expect["personalization"], body))
+
+    suggestions = [str(item) for item in (body.get("suggestions") or [])]
+    if "suggestion_count" in expect and len(suggestions) != expect["suggestion_count"]:
+        failures.append(
+            f"{label}.suggestions: expected {expect['suggestion_count']} item(s), "
+            f"got {len(suggestions)}"
+        )
+    if (
+        "suggestion_count_min" in expect
+        and len(suggestions) < expect["suggestion_count_min"]
+    ):
+        failures.append(
+            f"{label}.suggestions: expected at least {expect['suggestion_count_min']} "
+            f"item(s), got {len(suggestions)}"
+        )
+    for needle in expect.get("suggestions_not_contains", []):
+        if any(needle in item for item in suggestions):
+            failures.append(f"{label}.suggestions: leaked {needle!r}")
+
+    if "card_ids" in expect:
+        card_ids = [card.get("card_id") for card in body.get("context_cards") or []]
+        if card_ids != list(expect["card_ids"]):
+            failures.append(
+                f"{label}.context_cards: expected {list(expect['card_ids'])!r}, "
+                f"got {card_ids!r}"
+            )
 
     failures.extend(_trace_failures(label, expect, trace_body))
     return failures
@@ -351,14 +503,35 @@ def _apply_task_op(
     return failures
 
 
-def _run_conversation(app: FastAPI, client: TestClient, case: dict[str, Any]) -> list[str]:
+def _run_conversation(
+    app: FastAPI,
+    client: TestClient,
+    case: dict[str, Any],
+    *,
+    reset_profile: bool = False,
+) -> list[str]:
     failures: list[str] = []
     actor = {"tenant": case["tenant"], "user": case["user"]}
     headers = _headers(actor)
     conversation_id: str | None = None
     turn_tasks: list[str | None] = []
     ops = list(case.get("task_ops") or [])
+    profile_ops = list(case.get("profile_ops") or [])
     turns = case["turns"]
+
+    if reset_profile:
+        # Every case starts from "this customer has no profile": one case's
+        # setup must never become the next case's precondition.
+        status = client.delete("/api/v1/memory", headers=headers).status_code
+        if status != 204:
+            failures.append(f"reset_profile.http_status: expected 204, got {status}")
+
+    if case.get("setup_profile") is not None:
+        status = client.put(
+            "/api/v1/memory", headers=headers, json=case["setup_profile"]
+        ).status_code
+        if status != 200:
+            failures.append(f"setup_profile.http_status: expected 200, got {status}")
 
     for index, turn in enumerate(turns):
         for op_index, op in enumerate(ops):
@@ -374,6 +547,18 @@ def _run_conversation(app: FastAPI, client: TestClient, case: dict[str, Any]) ->
                     )
                 )
 
+        if turn.get("new_conversation"):
+            # The profile travels with the customer; the conversation slots do
+            # not. Dropping the id is the whole mechanism.
+            conversation_id = None
+
+        expect = turn.get("expect") or {}
+        audit_before = (
+            _memory_audit_count(app, actor)
+            if expect.get("memory_audit_unchanged")
+            else None
+        )
+
         payload: dict[str, Any] = {"message": turn["message"]}
         if conversation_id is not None:
             payload["conversation_id"] = conversation_id
@@ -387,6 +572,27 @@ def _run_conversation(app: FastAPI, client: TestClient, case: dict[str, Any]) ->
         trace_body = _fetch_trace(client, body.get("trace_id"), headers)
         failures.extend(_turn_failures(turn, index, response, body, trace_body))
 
+        if "stored_messages" in expect or "stored_messages_max" in expect:
+            stored = _stored_message_count(app, conversation_id)
+            if "stored_messages" in expect and stored != expect["stored_messages"]:
+                failures.append(
+                    f"turns[{index}].stored_messages: expected "
+                    f"{expect['stored_messages']}, got {stored}"
+                )
+            if "stored_messages_max" in expect and stored > expect["stored_messages_max"]:
+                failures.append(
+                    f"turns[{index}].stored_messages: expected at most "
+                    f"{expect['stored_messages_max']}, got {stored}"
+                )
+
+        if audit_before is not None:
+            audit_after = _memory_audit_count(app, actor)
+            if audit_after != audit_before:
+                failures.append(
+                    f"turns[{index}].memory_audit: expected no new memory.% rows, "
+                    f"got {audit_before} -> {audit_after}"
+                )
+
         for op_index, op in enumerate(ops):
             if op.get("after_turn") == index:
                 failures.extend(
@@ -394,6 +600,21 @@ def _run_conversation(app: FastAPI, client: TestClient, case: dict[str, Any]) ->
                     for item in _apply_task_op(
                         app, client, conversation_id or "", task.get("task_id"), op
                     )
+                )
+
+        for op_index, op in enumerate(profile_ops):
+            if op.get("after_turn") != index:
+                continue
+            action = op.get("action")
+            if action != "delete":
+                failures.append(
+                    f"profile_ops[{op_index}]: unsupported action {action!r}"
+                )
+                continue
+            status = client.delete("/api/v1/memory", headers=headers).status_code
+            if status != 204:
+                failures.append(
+                    f"profile_ops[{op_index}].http_status: expected 204, got {status}"
                 )
     return failures
 
@@ -442,11 +663,72 @@ def _validate_dataset(dataset: dict[str, Any]) -> list[str]:
     return failures
 
 
-def _run_dataset(dataset: dict[str, Any], database_url: str, reset: bool = False) -> int:
-    dataset_failures = _validate_dataset(dataset)
-    if dataset_failures:
-        for item in dataset_failures:
+def _validate_classes(dataset: dict[str, Any]) -> list[str]:
+    """The dataset-class contract, checked in partial mode too.
+
+    A set that only proves "the thing we wanted to remember was remembered"
+    quietly rewards an agent that injects memory everywhere. So every required
+    class must carry both a positive and a negative case, and a class nobody
+    wrote a case for is reported rather than silently skipped.
+    """
+    required = dataset.get("required_classes")
+    if not required:
+        return []
+    failures: list[str] = []
+    seen: dict[str, set[str]] = {str(name): set() for name in required}
+    for index, case in enumerate(dataset.get("cases") or []):
+        label = case.get("id", f"case[{index}]")
+        name = case.get("class")
+        polarity = case.get("polarity")
+        if not isinstance(name, str) or not name:
+            failures.append(f"{label}: missing class")
+            continue
+        if name not in seen:
+            failures.append(f"{label}: class {name!r} is not in required_classes")
+        if polarity not in ("positive", "negative"):
+            failures.append(f"{label}: unknown polarity {polarity!r}")
+            continue
+        if name in seen:
+            seen[name].add(str(polarity))
+    for name, polarities in seen.items():
+        if not polarities:
+            failures.append(f"class {name}: no cases")
+            continue
+        if "positive" not in polarities:
+            failures.append(f"class {name}: missing positive case")
+        if "negative" not in polarities:
+            failures.append(f"class {name}: missing negative case")
+    return failures
+
+
+def _run_dataset(
+    dataset: dict[str, Any],
+    database_url: str,
+    reset: bool = False,
+    partial: bool = False,
+    summary: dict[str, Any] | None = None,
+) -> int:
+    if partial:
+        # A targeted regression set (one behaviour, a handful of cases) must
+        # not be forced to cover all 12 intents; it is run separately and never
+        # replaces the full 62-case gate.
+        if not dataset.get("cases"):
+            print("DATASET partial set has no cases")
+            _fill_summary(summary, 0, 0, [])
+            return 2
+    else:
+        dataset_failures = _validate_dataset(dataset)
+        if dataset_failures:
+            for item in dataset_failures:
+                print(f"DATASET {item}")
+            _fill_summary(summary, 0, len(dataset.get("cases") or []), [])
+            return 2
+
+    class_failures = _validate_classes(dataset)
+    if class_failures:
+        for item in class_failures:
             print(f"DATASET {item}")
+        _fill_summary(summary, 0, len(dataset.get("cases") or []), [])
         return 2
 
     settings = Settings(
@@ -468,6 +750,7 @@ def _run_dataset(dataset: dict[str, Any], database_url: str, reset: bool = False
                 f"{ {k: v for k, v in leftover.items() if v} }。"
                 " 加 --reset 清空演示租户的事务数据，或换一个空库。",
             )
+            _fill_summary(summary, 0, len(dataset.get("cases") or []), [])
             return 2
     seed_all(app.state.session_factory)
     apply_fixtures(app.state.session_factory)
@@ -475,9 +758,12 @@ def _run_dataset(dataset: dict[str, Any], database_url: str, reset: bool = False
 
     passed = 0
     failures: list[tuple[str, list[str]]] = []
+    reset_profile = bool(dataset.get("reset_profile"))
     for case in dataset["cases"]:
         try:
-            case_failures = _run_conversation(app, client, case)
+            case_failures = _run_conversation(
+                app, client, case, reset_profile=reset_profile
+            )
         except Exception as exc:  # one broken case must not hide the rest
             case_failures = [f"exception: {type(exc).__name__}: {exc}"]
         if case_failures:
@@ -492,6 +778,7 @@ def _run_dataset(dataset: dict[str, Any], database_url: str, reset: bool = False
     total = len(dataset["cases"])
     print(f"\n{passed}/{total} support cases passed")
     app.state.engine.dispose()
+    _fill_summary(summary, passed, total, failures)
     return 0 if passed == total else 1
 
 
@@ -513,15 +800,37 @@ def main() -> int:
         action="store_true",
         help="Clear the dataset tenants' transactional rows before running.",
     )
+    parser.add_argument(
+        "--partial",
+        action="store_true",
+        help="Run a targeted behaviour set without the 60-case / 12-intent shape checks.",
+    )
+    parser.add_argument(
+        "--json",
+        nargs="?",
+        const="-",
+        metavar="PATH",
+        help="Write the pass/fail summary as JSON to PATH; with no PATH, print it to stdout.",
+    )
     args = parser.parse_args()
 
     dataset = json.loads(args.dataset.read_text(encoding="utf-8"))
+    summary: dict[str, Any] = {}
     if args.database_url:
-        return _run_dataset(dataset, args.database_url, reset=args.reset)
-
-    with tempfile.TemporaryDirectory() as directory:
-        url = f"sqlite+pysqlite:///{Path(directory) / 'support.db'}"
-        return _run_dataset(dataset, url)
+        code = _run_dataset(
+            dataset,
+            args.database_url,
+            reset=args.reset,
+            partial=args.partial,
+            summary=summary,
+        )
+    else:
+        with tempfile.TemporaryDirectory() as directory:
+            url = f"sqlite+pysqlite:///{Path(directory) / 'support.db'}"
+            code = _run_dataset(dataset, url, partial=args.partial, summary=summary)
+    if args.json:
+        _write_summary(args.json, summary)
+    return code
 
 
 if __name__ == "__main__":

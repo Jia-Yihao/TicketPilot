@@ -23,6 +23,7 @@ class AnalyticsQueryResponse(BaseModel):
     query_id: str
     question: str
     plan: AnalyticsPlanView
+    route: str = "SQL"
     sql: str
     columns: list[str] = Field(default_factory=list)
     rows: list[dict[str, Any]] = Field(default_factory=list)
@@ -38,6 +39,7 @@ class AnalyticsQuerySummary(BaseModel):
     group_by: str | None = None
     row_status: str | None = None
     time_range: str | None = None
+    route: str = "SQL"
     sql_text: str
     row_count: int
     duration_ms: int

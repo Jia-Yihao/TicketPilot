@@ -8,8 +8,9 @@ from typing import Any
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.agent.support_agent import SupportAgent
+from app.channels.availability import inbound_availability
 from app.channels.base import ChannelAdapter, InboundRequest, RenderedMessage
-from app.channels.registry import build_adapters
+from app.channels.registry import WEBHOOK_INBOUND, build_adapters
 from app.channels.render import capabilities_for
 from app.channels.store import ChannelMessageStore
 from app.core.config import Settings
@@ -19,7 +20,10 @@ from app.models.enums import Channel
 
 __all__ = ["ChannelGateway"]
 
-_WEBHOOK_CHANNELS = frozenset({Channel.EMAIL, Channel.WECHAT, Channel.WECOM})
+# Derived from the registry's inbound set, never restated here: the channels
+# that accept a signed provider callback are "inbound implemented" minus the
+# console's own path. The 404 below keeps its existing wording either way.
+_WEBHOOK_CHANNELS = WEBHOOK_INBOUND
 
 
 class ChannelGateway:
@@ -178,6 +182,9 @@ class ChannelGateway:
                 {
                     "channel": channel.value,
                     "enabled": channel in self.adapters,
+                    "availability": inbound_availability(
+                        channel, self.adapters.get(channel)
+                    ),
                     "supports_stream": capabilities.supports_stream,
                     "supports_rich_card": capabilities.supports_rich_card,
                     "supports_voice": capabilities.supports_voice,

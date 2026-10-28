@@ -20,6 +20,7 @@ def create_ticket(
     identity: Identity = Depends(get_identity),
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
+    """建一张工单，幂等键必需且重复提交不产生第二张；调用者只能建自己的单。"""
     creation = TicketService(session).create(
         identity,
         category=body.category,
@@ -47,6 +48,7 @@ def get_ticket(
     identity: Identity = Depends(get_identity),
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
+    """读一张工单；跨租户与不属于调用者的工单都返回同一种 404。"""
     ticket = TicketService(session).get(identity, ticket_id)
     return {
         "ticket_id": ticket.id,

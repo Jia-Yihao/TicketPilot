@@ -114,14 +114,22 @@ class EscalationEngine:
         clarified: bool,
         failed: bool,
     ) -> EscalationState:
-        """The state after the outcome of the turn is counted."""
+        """The state after the outcome of the turn is counted.
+
+        The clarification counter stops at its own budget: once the budget is
+        spent the conversation is handed over, and a counter that kept climbing
+        behind a silent agent would be a number nothing reads.
+        """
         failures = dict(state.failed_intents)
         if failed:
             failures[intent] = failures.get(intent, 0) + 1
+        budget = int(self.policy.escalation.threshold("clarification_rounds"))
         return replace(
             state,
             failed_intents=failures,
-            clarification_count=state.clarification_count + (1 if clarified else 0),
+            clarification_count=min(
+                state.clarification_count + (1 if clarified else 0), budget
+            ),
         )
 
     # ------------------------------------------------------------ decisions

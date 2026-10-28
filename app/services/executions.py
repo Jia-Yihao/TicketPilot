@@ -24,6 +24,7 @@ class ExecutionService:
         request_digest: str,
         request_payload: dict[str, Any],
     ) -> tuple[ToolExecution, bool]:
+        """按（任务，幂等键）建或取一条待执行台账，返回（台账，是否本次新建）。"""
         existing = self.repo.get_by_idempotency(task_id, idempotency_key)
         if existing is not None:
             return existing, False
@@ -40,9 +41,11 @@ class ExecutionService:
         return execution, True
 
     def latest(self, task_id: str) -> ToolExecution | None:
+        """取某任务最新的一条执行台账；没有就是 None。"""
         return self.repo.latest_for_task(task_id)
 
     def cancel_pending(self, task_id: str, *, reason: str) -> None:
+        """把还在途（PENDING / UNKNOWN）的台账标成取消；已经落定的台账不动。"""
         execution = self.repo.latest_for_task(task_id)
         if execution is not None and execution.status in {
             ToolExecutionStatus.PENDING,

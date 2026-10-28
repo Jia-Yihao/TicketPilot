@@ -31,7 +31,7 @@ from app.models.outbox import OutboxMessage
 from app.observability.redaction import redact
 from app.repositories.audit import AuditRepository
 
-__all__ = ["MemoryService", "notification_view", "profile_view"]
+__all__ = ["MemoryService", "load_history_summary", "notification_view", "profile_view"]
 
 _PREFERENCE_KEYS = frozenset(
     {"contact_channel", "contact_window", "product_interests", "tone"}
@@ -67,6 +67,33 @@ def profile_view(profile: CustomerProfile | None) -> dict[str, Any]:
         "max_notifications_per_day": profile.max_notifications_per_day,
         "updated_at": _iso(profile.updated_at),
     }
+
+
+def load_history_summary(session: Session, identity: Identity) -> str | None:
+    """Read one customer's own history summary, and nothing else.
+
+    Columns, not the entity: a loaded ``CustomerProfile`` would join the
+    session the caller is about to commit, and an accidental attribute write
+    would persist it with a fresh ``updated_at``. No row is created, no
+    audit is written — this is an internal read on the way to the handoff
+    bundle, not a customer looking at their own profile.
+
+    The value is masked again on the way out. The write path already masks
+    what it stores and masking is idempotent, so a summary that reached the
+    column by any other route still leaves here masked.
+    """
+    row = session.execute(
+        select(CustomerProfile.history_summary).where(
+            CustomerProfile.tenant_id == identity.tenant_id,
+            CustomerProfile.user_id == identity.user_id,
+        )
+    ).one_or_none()
+    if row is None:
+        return None
+    summary = redact(row.history_summary or "")
+    if not summary.strip():
+        return None
+    return summary
 
 
 class MemoryService:
@@ -334,6 +361,7 @@ def notification_view(row: Notification) -> dict[str, Any]:
         "status": row.status,
         "title": row.title,
         "body": redact(row.body),
+        "rule_version": row.rule_version,
         "created_at": _iso(row.created_at),
         "confirmed_at": _iso(row.confirmed_at),
         "cancelled_at": _iso(row.cancelled_at),

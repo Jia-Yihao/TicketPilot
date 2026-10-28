@@ -67,6 +67,17 @@ def test_escalation_happens_after_the_configured_attempts() -> None:
     assert engine.should_escalate(failed_attempts=0, frustrated_rounds=3) is True
 
 
+def test_the_clarification_budget_is_its_own_threshold() -> None:
+    """追问预算与挫败度分开：改一个不该顺带改掉另一个。"""
+    default = _engine()
+    tuned = _engine(escalation_clarification_rounds=4, escalation_frustration_rounds=2)
+
+    assert default.escalation.clarification_rounds == 3
+    assert default.escalation.threshold("clarification_rounds") == 3
+    assert tuned.escalation.threshold("clarification_rounds") == 4
+    assert tuned.escalation.threshold("frustration_rounds") == 2
+
+
 def test_a_configured_window_changes_the_runtime_answer(
     app_factory,  # type: ignore[no-untyped-def]
 ) -> None:
@@ -85,7 +96,7 @@ def test_a_configured_cap_blocks_an_oversized_refund(
     response = TestClient(capped).post(
         "/api/v1/tasks",
         headers={"X-Tenant-Id": "demo", "X-User-Id": "alice"},
-        json={"request": "我要申请退款，订单 ORD-DEMO-1001，金额 129 元"},
+        json={"request": "我要申请退款，订单 ORD-DEMO-1001，金额 129 元，商品有质量问题"},
     )
     assert response.status_code == 201
     body = response.json()

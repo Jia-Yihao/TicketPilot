@@ -1,9 +1,7 @@
-"""The takeover state machine and the seat-side queue.
+"""接管状态机与坐席侧队列：转人工之后到底发生什么。
 
-Escalation is not a ticket intent: it is a state the conversation enters.
-The agent keeps serving while the conversation is ``AGENT_ACTIVE``; once a
-handoff is raised the agent goes silent until a seat takes the case over and
-hands the conversation back.
+转人工不是一种工单意图，而是会话进入的一种状态。``AGENT_ACTIVE`` 期间智能体
+照常服务；一旦挂起移交，智能体就不再多说一个字，直到坐席接手或把会话交回。
 
     AGENT_ACTIVE --escalate--> HANDOFF_PENDING --claim--> HUMAN_ACTIVE
          ^                            |                      |
@@ -11,13 +9,20 @@ hands the conversation back.
          +---------release------------+----------------------+
     HUMAN_ACTIVE --close--> CLOSED
 
-The bundle is stored with the event, so the seat's first screen and the audit
-trail can never disagree about what was handed over.
+一条取舍：移交包与移交事件同一次写入。坐席第一屏看到的、审计留痕里记的，因此
+永远是同一份东西——「少写一次库」不值当拿这个换。另一条：队列里的案卷
+（含 ``NOTED``）和「接管中」的会话是两件事，前者坐席要看见，后者才让智能体闭嘴。
+
+边界：本模块只认状态与队列，不判断「该不该转」（那是信号表与
+``app/agent/support_agent.py`` 的判定），也不产出回复文案。它不碰任务与退款：
+包里的 ``task_id`` 只是个指针，那个任务在不在、跑成什么样，由运行时说。
+调用方是 ``support_agent.py`` 与 ``app/api/v1/handoffs.py``。
 """
 
 from __future__ import annotations
 
 import uuid
+from dataclasses import replace
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -27,6 +32,7 @@ from sqlalchemy.orm import Session
 from app.agent.escalation import EscalationSignal
 from app.agent.handoff import (
     ActionRecord,
+    CandidateOrder,
     Citation,
     HandoffBundle,
     IntentRecord,
@@ -39,7 +45,9 @@ from app.core.time import utcnow
 from app.models.conversation import Conversation, ConversationMessage
 from app.models.enums import AbandonReason, Channel, HandoffStatus
 from app.models.handoff import AbandonEvent, HandoffEvent
+from app.observability.redaction import redact
 from app.repositories.audit import AuditRepository
+from app.services.memory import load_history_summary
 
 __all__ = [
     "AbandonService",
@@ -79,6 +87,11 @@ _TRANSITIONS: dict[HandoffStatus, dict[HandoffStatus, bool]] = {
     HandoffStatus.RELEASED: {},
     HandoffStatus.AGENT_ACTIVE: {},
 }
+
+# Where the summary in the package came from. Named, so a reader of the
+# package knows it is the customer's own words and not something the agent
+# concluded about them.
+_HISTORY_SUMMARY_SOURCE = "customer_profiles.history_summary"
 
 
 def _now_iso(value: datetime | None = None) -> str:
@@ -126,6 +139,7 @@ def build_bundle(
     sentiment: SentimentSnapshot,
     policy_refs: list[Citation],
     attempted_actions: list[ActionRecord],
+    attempted_candidates: list[CandidateOrder] | None = None,
     digest_max_chars: int,
     channel: Channel = Channel.WEB,
 ) -> HandoffBundle:
@@ -168,6 +182,7 @@ def build_bundle(
         intent_history=tuple(intent_history),
         slots=dict(slots),
         attempted_actions=tuple(attempted_actions),
+        attempted_candidates=tuple(attempted_candidates or ()),
         pending_task_id=pending_task_id,
         sentiment=sentiment,
         policy_refs=tuple(policy_refs),
@@ -197,12 +212,14 @@ class HandoffService:
         return rows[0] if rows else None
 
     def state(self, conversation_id: str) -> HandoffStatus:
+        """会话当前属于谁：没有接管事件就是 ``AGENT_ACTIVE``。"""
         event = self.active_event(conversation_id)
         return HandoffStatus(event.status) if event else HandoffStatus.AGENT_ACTIVE
 
     def require_event(
         self, identity: Identity, event_id: str
     ) -> HandoffEvent:
+        """按 id 取一个移交事件；跨租户与不存在都报同一种 not found。"""
         event = self.session.get(HandoffEvent, event_id)
         if event is None or event.tenant_id != identity.tenant_id:
             raise NotFoundError("Handoff not found.")
@@ -256,6 +273,7 @@ class HandoffService:
         limit: int = 50,
         offset: int = 0,
     ) -> list[HandoffEvent]:
+        """列本租户的坐席队列，最新的在前；状态与队列都只是过滤条件。"""
         statement = select(HandoffEvent).where(HandoffEvent.tenant_id == identity.tenant_id)
         if statuses:
             statement = statement.where(
@@ -277,6 +295,7 @@ class HandoffService:
         statuses: list[HandoffStatus] | None = None,
         queue: str | None = None,
     ) -> int:
+        """队列总数，过滤口径与 ``list_queue`` 完全一致，供分页用。"""
         statement = select(func.count()).select_from(HandoffEvent).where(
             HandoffEvent.tenant_id == identity.tenant_id
         )
@@ -307,6 +326,7 @@ class HandoffService:
             if signal.takeover
             else HandoffStatus.NOTED
         )
+        bundle = self._with_history_summary(identity, bundle)
         event = HandoffEvent(
             id=f"hnd_{uuid.uuid4().hex[:16]}",
             tenant_id=identity.tenant_id,
@@ -393,6 +413,31 @@ class HandoffService:
         return len(rows)
 
     # ------------------------------------------------------------- helpers
+    def _with_history_summary(
+        self, identity: Identity, bundle: HandoffBundle
+    ) -> HandoffBundle:
+        """Put the customer's own summary into the package, if there is one.
+
+        The identity here is the person the conversation belongs to, not the
+        seat reading the case. The value is masked before it is clipped, and
+        the clip is the same one — and the same limit — as the transcript
+        digest, so the package never carries more of the customer's words
+        than the case screen can show.
+        """
+        raw = load_history_summary(self.session, identity)
+        if raw is None:
+            return bundle
+        limit = self.policy.escalation.digest_max_chars
+        summary = _clip(redact(raw), limit)
+        if not summary:
+            return bundle
+        return replace(
+            bundle,
+            history_summary=summary,
+            history_summary_source=_HISTORY_SUMMARY_SOURCE,
+            history_summary_max_chars=limit,
+        )
+
     def _transition(self, event: HandoffEvent, target: HandoffStatus) -> None:
         current = HandoffStatus(event.status)
         allowed = _TRANSITIONS.get(current, {})
@@ -444,6 +489,7 @@ class AbandonService:
         detail: dict[str, Any] | None = None,
         channel: Channel = Channel.WEB,
     ) -> AbandonEvent:
+        """记一条弃单事实：客户既没拿到答案，也没等到人。"""
         event = AbandonEvent(
             id=f"abd_{uuid.uuid4().hex[:16]}",
             tenant_id=identity.tenant_id,
@@ -504,6 +550,7 @@ class AbandonService:
     def list_events(
         self, identity: Identity, *, limit: int = 100, offset: int = 0
     ) -> list[AbandonEvent]:
+        """本租户的弃单事件，最新的在前；只读，不分页之外不做加工。"""
         statement = (
             select(AbandonEvent)
             .where(AbandonEvent.tenant_id == identity.tenant_id)
@@ -514,6 +561,7 @@ class AbandonService:
         return list(self.session.scalars(statement))
 
     def count_events(self, identity: Identity) -> int:
+        """本租户弃单事件总数，供列表分页。"""
         statement = select(func.count()).select_from(AbandonEvent).where(
             AbandonEvent.tenant_id == identity.tenant_id
         )
@@ -536,6 +584,11 @@ class HandoffMetrics:
     def collect(
         self, identity: Identity, *, window_minutes: int | None = None
     ) -> dict[str, Any]:
+        """现算一组运营指标：会话量、转人工率、自动解决率、队列与小时分布。
+
+        ``window_minutes`` 是时间窗；不给就是全量。分母始终是窗口内的会话数，
+        不是历史累计——拿累计做分母，任何一次运营事故都会被时间稀释掉。
+        """
         since = (
             utcnow() - timedelta(minutes=window_minutes)
             if window_minutes is not None

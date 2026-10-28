@@ -30,20 +30,20 @@ facts:
       - file: README.md
         anchor: "完整契约见"
         pattern: '共\s*\d+\s*个操作（(\d+)\s*条路径'
-      - file: docs/PROJECT_SPEC.md
+      - file: docs/spec/项目规格.md
         anchor: "OpenAPI 里共"
         pattern: '\*\*\d+\s*个操作 / (\d+)\s*条路径\*\*'
         in_manual: true
-      - file: docs/PROJECT_SPEC.md
-        anchor: "按 `create_app().openapi()` 复核为"
+      - file: docs/spec/项目规格.md
+        anchor: "本轮收尾读数"
         pattern: '复核为 \*\*(\d+) 条路径'
         in_manual: true
-      - file: docs/AGENT_PLATFORM_PLAN.md
+      - file: docs/records/智能体平台设想.md
         anchor: "**规模事实**"
         pattern: '(\d+) 个 API 路径'
-      - file: docs/NEXT_STEPS.md
-        anchor: "`npm run build` ✓ · OpenAPI **"
-        pattern: 'OpenAPI \*\*(\d+) 个路径'
+      - file: docs/下一步规划.md
+        anchor: "当前规模事实"
+        pattern: 'OpenAPI (\d+) 个路径'
 
   openapi_operations:
     label: OpenAPI 操作数
@@ -51,19 +51,19 @@ facts:
       - file: README.md
         anchor: "完整契约见"
         pattern: '共\s*(\d+)\s*个操作'
-      - file: docs/PROJECT_SPEC.md
+      - file: docs/spec/项目规格.md
         anchor: "OpenAPI 里共"
         pattern: '\*\*(\d+)\s*个操作'
         in_manual: true
-      - file: docs/PROJECT_SPEC.md
-        anchor: "按 `create_app().openapi()` 复核为"
+      - file: docs/spec/项目规格.md
+        anchor: "本轮收尾读数"
         pattern: '复核为 \*\*\d+ 条路径 / (\d+) 个操作'
         in_manual: true
-      - file: docs/AGENT_PLATFORM_PLAN.md
+      - file: docs/records/智能体平台设想.md
         anchor: "**规模事实**"
         pattern: '/ (\d+) 个操作'
-      - file: docs/NEXT_STEPS.md
-        anchor: "`npm run build` ✓ · OpenAPI **"
+      - file: docs/下一步规划.md
+        anchor: "当前规模事实"
         pattern: '个路径 / (\d+) 个操作'
 
   alembic_revisions:
@@ -72,27 +72,23 @@ facts:
       - file: README.md
         anchor: "head 为"
         pattern: '(\d+)\s*条迁移，head 为'
-      - file: docs/PROJECT_SPEC.md
-        anchor: "全新 SQLite 从零"
-        pattern: '\*\*(\d+)\s*条迁移\*\*'
-        in_manual: true
-      - file: docs/PROJECT_SPEC.md
-        anchor: "在 PostgreSQL 全新库上走完"
-        pattern: '\*\*(\d+)\s*条迁移\*\*'
-        in_manual: true
-      - file: docs/PROJECT_SPEC.md
+      - file: docs/spec/项目规格.md
         anchor: "验证通过（"
-        pattern: '\*\*(\d+)\s*条迁移、(\d+)\s*张表\*\*'
+        pattern: '\*\*(\d+)\s*条迁移、\d+\s*张表\*\*'
         in_manual: true
-      - file: docs/SCOPE.md
+      - file: docs/spec/项目规格.md
+        anchor: "本轮收尾读数"
+        pattern: '(\d+)\*\* 条迁移'
+        in_manual: true
+      - file: docs/guide/范围与边界.md
         anchor: "无漂移（"
         pattern: '（(\d+)\s*条迁移、(\d+)\s*张表'
-      - file: docs/NEXT_STEPS.md
-        anchor: "迁移漂移"
-        pattern: '(\d+)\s*条迁移 → head'
+      - file: docs/下一步规划.md
+        anchor: "当前规模事实"
+        pattern: '(\d+)\s*条迁移'
       - file: CONTRIBUTING.md
-        anchor: "`alembic check` 无漂移"
-        pattern: '(\d+)\s*条迁移 \+ `alembic check` 无漂移'
+        anchor: "当前迁移链"
+        pattern: '当前迁移链 \*\*(\d+)\s*条\*\*'
 
   alembic_head:
     label: Alembic head 修订号
@@ -100,39 +96,39 @@ facts:
       - file: README.md
         anchor: "head 为"
         pattern: 'head 为 ([0-9a-f]+)'
-      - file: docs/PROJECT_SPEC.md
-        anchor: "在 PostgreSQL 全新库上走完"
+      - file: docs/spec/项目规格.md
+        anchor: "本轮收尾读数"
         pattern: 'head `([0-9a-f]+)`'
         in_manual: true
-      - file: docs/SCOPE.md
+      - file: docs/guide/范围与边界.md
         anchor: "无漂移（"
         pattern: 'head `([0-9a-f]+)`'
-      - file: docs/NEXT_STEPS.md
-        anchor: "迁移漂移"
+      - file: docs/下一步规划.md
+        anchor: "当前规模事实"
         pattern: 'head `([0-9a-f]+)`'
 
   sql_tables:
     label: SQLAlchemy 表数
     claims:
-      - file: docs/PROJECT_SPEC.md
+      - file: docs/spec/项目规格.md
         anchor: "验证通过（"
         pattern: '\*\*\d+\s*条迁移、(\d+)\s*张表\*\*'
         in_manual: true
-      - file: docs/PROJECT_SPEC.md
-        anchor: "全新 SQLite 从零"
-        pattern: '、\*\*(\d+)\s*张表\*\*'
+      - file: docs/spec/项目规格.md
+        anchor: "本轮收尾读数"
+        pattern: '(\d+)\*\* 张表'
         in_manual: true
-      - file: docs/SCOPE.md
+      - file: docs/guide/范围与边界.md
         anchor: "无漂移（"
         pattern: '、(\d+)\s*张表'
-      - file: docs/AGENT_PLATFORM_PLAN.md
+      - file: docs/records/智能体平台设想.md
         anchor: "**规模事实**"
         pattern: '(\d+) 张表'
 
   app_py_files:
     label: app/ 下的 Python 文件数
     claims:
-      - file: docs/AGENT_PLATFORM_PLAN.md
+      - file: docs/records/智能体平台设想.md
         anchor: "**规模事实**"
         pattern: 'app/` (\d+) 个文件'
       - file: CONTRIBUTING.md
@@ -142,9 +138,9 @@ facts:
   mypy_files:
     label: mypy strict 实际检查的 app/ 文件数
     claims:
-      - file: docs/PROJECT_SPEC.md
-        anchor: "按 `create_app().openapi()` 复核为"
-        pattern: '复核为.*?mypy strict \*\*(\d+)\*\* 个文件'
+      - file: docs/spec/项目规格.md
+        anchor: "本轮收尾读数"
+        pattern: 'mypy strict \*\*(\d+)\*\* 个文件'
         in_manual: true
       - file: CONTRIBUTING.md
         anchor: "strict 模式，零错误"
@@ -153,35 +149,35 @@ facts:
   test_py_files:
     label: tests/ 下的 Python 文件数
     claims:
-      - file: docs/AGENT_PLATFORM_PLAN.md
+      - file: docs/records/智能体平台设想.md
         anchor: "**规模事实**"
         pattern: '(\d+) 个测试文件'
-      - file: docs/PROJECT_SPEC.md
-        anchor: "按 `create_app().openapi()` 复核为"
-        pattern: '复核为.*?`tests/\*\.py` \*\*(\d+)\*\* 个文件'
+      - file: docs/spec/项目规格.md
+        anchor: "本轮收尾读数"
+        pattern: '`tests/\*\.py` \*\*(\d+)\*\* 个文件'
         in_manual: true
-      - file: docs/NEXT_STEPS.md
+      - file: docs/下一步规划.md
         anchor: "| 测试 |"
         pattern: '、(\d+) 个测试文件'
 
   test_collected:
     label: pytest 收集到的用例数
     claims:
-      - file: docs/AGENT_PLATFORM_PLAN.md
+      - file: docs/records/智能体平台设想.md
         anchor: "**规模事实**"
         pattern: '收集 (\d+) 条用例'
-      - file: docs/PROJECT_SPEC.md
-        anchor: "按 `create_app().openapi()` 复核为"
-        pattern: '复核为.*?收集 \*\*(\d+)\*\* 条'
+      - file: docs/spec/项目规格.md
+        anchor: "本轮收尾读数"
+        pattern: '收集 \*\*(\d+)\*\* 条'
         in_manual: true
-      - file: docs/NEXT_STEPS.md
+      - file: docs/下一步规划.md
         anchor: "| 测试 |"
         pattern: '（(\d+) collected'
 
   adr_count:
     label: ADR 篇数
     claims:
-      - file: docs/AGENT_PLATFORM_PLAN.md
+      - file: docs/records/智能体平台设想.md
         anchor: "**规模事实**"
         pattern: '(\d+) 篇 ADR'
       - file: CONTRIBUTING.md
@@ -194,7 +190,7 @@ facts:
       - file: CONTRIBUTING.md
         anchor: "任务路径 Golden Set"
         pattern: '(\d+)/\d+ 任务路径'
-      - file: docs/AGENT_PLATFORM_PLAN.md
+      - file: docs/records/智能体平台设想.md
         anchor: "**规模事实**"
         pattern: '离线用例 \d+ 条（(\d+) 任务'
 
@@ -204,26 +200,26 @@ facts:
       - file: CONTRIBUTING.md
         anchor: "只读路径（含多轮澄清）"
         pattern: '(\d+)/\d+ 只读路径'
-      - file: docs/AGENT_PLATFORM_PLAN.md
+      - file: docs/records/智能体平台设想.md
         anchor: "**规模事实**"
         pattern: '\+ (\d+) 只读'
 
   offline_cases:
     label: 离线用例总数
     claims:
-      - file: docs/AGENT_PLATFORM_PLAN.md
+      - file: docs/records/智能体平台设想.md
         anchor: "**规模事实**"
         pattern: '离线用例 (\d+) 条'
-      - file: docs/AGENT_PLATFORM_PLAN.md
+      - file: docs/records/智能体平台设想.md
         anchor: "离线用例（含轨迹断言）"
         pattern: '(\d+) 条离线用例'
 
   console_pages:
     label: 控制台页面数
     claims:
-      - file: docs/AGENT_PLATFORM_PLAN.md
+      - file: docs/records/智能体平台设想.md
         anchor: "**规模事实**"
         pattern: '(\d+) 个控制台页面'
-      - file: docs/AGENT_PLATFORM_PLAN.md
+      - file: docs/records/智能体平台设想.md
         anchor: "**新能力的控制台页面"
         pattern: '(\d+) 个业务页面'

@@ -426,13 +426,51 @@ def _fetch_trace(
     return response.json()
 
 
+def _fill_summary(
+    summary: dict[str, Any] | None,
+    passed: int,
+    total: int,
+    failures: list[tuple[str, list[str]]],
+) -> None:
+    """Hand the counts to the caller that asked for them; keep the exit code alone.
+
+    ``_run_dataset`` still returns an ``int`` because the existing callers and
+    tests read it as the exit code; the summary rides along in an out-parameter
+    so ``--json`` can print it without a second run.
+    """
+    if summary is None:
+        return
+    summary.update(
+        {
+            "passed": passed,
+            "total": total,
+            "failed": sorted(case_id for case_id, _ in failures),
+        }
+    )
+
+
+def _write_summary(path: str, summary: dict[str, Any]) -> None:
+    text = json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    if path == "-":
+        print(text, end="")
+        return
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(text, encoding="utf-8", newline="\n")
+    print(f"wrote {target}")
+
+
 def _run_dataset(
-    dataset: dict[str, Any], database_url: str, reset: bool = False
+    dataset: dict[str, Any],
+    database_url: str,
+    reset: bool = False,
+    summary: dict[str, Any] | None = None,
 ) -> int:
     dataset_failures = _validate_dataset(dataset)
     if dataset_failures:
         for item in dataset_failures:
             print(f"DATASET {item}")
+        _fill_summary(summary, 0, len(dataset.get("cases") or []), [])
         return 2
 
     settings = Settings(
@@ -454,6 +492,7 @@ def _run_dataset(
                 f"{ {k: v for k, v in leftover.items() if v} }。"
                 " 加 --reset 清空演示租户的事务数据，或换一个空库。",
             )
+            _fill_summary(summary, 0, len(dataset.get("cases") or []), [])
             return 2
     seed_all(app.state.session_factory)
     apply_fixtures(app.state.session_factory)
@@ -486,6 +525,7 @@ def _run_dataset(
     total = len(dataset["cases"])
     print(f"\n{passed}/{total} golden cases passed")
     app.state.engine.dispose()
+    _fill_summary(summary, passed, total, failures)
     return 0 if passed == total else 1
 
 
@@ -505,15 +545,26 @@ def main() -> int:
         action="store_true",
         help="Clear the dataset tenants' transactional rows before running.",
     )
+    parser.add_argument(
+        "--json",
+        nargs="?",
+        const="-",
+        metavar="PATH",
+        help="Write the pass/fail summary as JSON to PATH; with no PATH, print it to stdout.",
+    )
     args = parser.parse_args()
 
     dataset = json.loads(args.dataset.read_text(encoding="utf-8"))
+    summary: dict[str, Any] = {}
     if args.database_url:
-        return _run_dataset(dataset, args.database_url, reset=args.reset)
-
-    with tempfile.TemporaryDirectory() as directory:
-        url = f"sqlite+pysqlite:///{Path(directory) / 'evals.db'}"
-        return _run_dataset(dataset, url)
+        code = _run_dataset(dataset, args.database_url, reset=args.reset, summary=summary)
+    else:
+        with tempfile.TemporaryDirectory() as directory:
+            url = f"sqlite+pysqlite:///{Path(directory) / 'evals.db'}"
+            code = _run_dataset(dataset, url, summary=summary)
+    if args.json:
+        _write_summary(args.json, summary)
+    return code
 
 
 if __name__ == "__main__":

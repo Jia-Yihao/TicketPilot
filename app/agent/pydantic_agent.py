@@ -4,27 +4,119 @@ import json
 import logging
 import re
 import time
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal, cast
+from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import BaseModel, Field
 
-from app.agent.routing import RoutePlan, classify
+from app.agent.candidates import build_candidates
+from app.agent.decision import ModelDecision
+from app.agent.intent_catalog import get_catalog
+from app.agent.routing import RULESET_FINGERPRINT, RoutePlan, classify
 from app.models.enums import Intent
 
 if TYPE_CHECKING:
     from pydantic_ai.models import Model
 
+    from app.agent.candidates import CandidateSet
+
 logger = logging.getLogger(__name__)
 
-IntentLiteral = Literal[
-    "POLICY_QA",
-    "ORDER_QUERY",
-    "LOGISTICS_QUERY",
-    "TICKET_CREATE",
-    "REFUND_REQUEST",
-    "UNKNOWN",
-]
+# The model may answer with a catalog row: ``REFUND_STATUS`` is a real
+# capability with no write path behind it, so ``IntentOutput.intent`` is a
+# string and the *server* decides what may be adopted. ``NONE`` is the model
+# saying "none of these fit" — a legal answer, never a candidate.
+NONE_ANSWER = "NONE"
+
+# The adoption surface, written down once: an intent in this set may change a
+# ``RoutePlan``. Both entries read it — ``IntentBrain.plan`` (which the task API
+# and the chat consult both go through) and ``SupportAgent._consult_model``
+# (the chat gate) — so the two cannot drift apart. Only the refund reading is
+# adopted: the refund it opens still has to pass eligibility and a human
+# approval, so the model changes *whether a request enters the queue*, never
+# whether money is paid. A ticket reading would create a durable side effect on
+# a sentence the rules refused to read.
+ADOPTABLE_INTENTS: frozenset[Intent] = frozenset({Intent.REFUND_REQUEST})
+
+# Classification only — never an adoption decision. Aligned with
+# ``WRITE_INTENTS`` in ``evals/intent_metrics.py`` (the same two intents open a
+# task).
+WRITE_INTENTS: frozenset[Intent] = frozenset(
+    {Intent.REFUND_REQUEST, Intent.TICKET_CREATE}
+)
+
+# The closed vocabulary of ``redirect_kind``: the three split names an offline
+# eval already uses (``WRITE_SPLITS`` in ``evals/intent_metrics.py``) plus
+# ``read_to_read`` for a reroute between two read intents and ``none`` for "no
+# reroute". A trace reading and an eval reading of the same mistake therefore
+# need no translation table between them.
+REDIRECT_KINDS = (
+    "extra_write",
+    "missed_write",
+    "write_to_write",
+    "read_to_read",
+    "none",
+)
+
+
+def redirect_kind(rule_intent: Intent, model_intent: str) -> str:
+    """Classify a rule→model reroute by the direction it moves in.
+
+    ``none`` means there is nothing to classify: the model said what the rules
+    said, or it named something that is not an ``Intent`` member (an answer
+    outside the catalog is already recorded as ``model_reason``, not here).
+    Pure and deterministic, and it never decides adoption — that is
+    ``ADOPTABLE_INTENTS``' job alone.
+    """
+    if model_intent not in Intent.__members__ or model_intent == rule_intent.value:
+        return "none"
+    model = Intent(model_intent)
+    if rule_intent in WRITE_INTENTS:
+        return "write_to_write" if model in WRITE_INTENTS else "missed_write"
+    return "extra_write" if model in WRITE_INTENTS else "read_to_read"
+
+
+@dataclass(frozen=True, slots=True)
+class Adoption:
+    """What one model answer may change, and how the reroute is counted."""
+
+    intent: Intent
+    adopted: bool
+    redirect: bool
+    redirect_rejected: bool
+    kind: str
+
+
+def decide_adoption(rule_intent: Intent, answer: str) -> Adoption:
+    """The only place an answer is turned into a route intent.
+
+    One rule, one set: the model may change the routing only where the rules
+    read ``UNKNOWN`` *and* its answer is in ``ADOPTABLE_INTENTS``. Every other
+    answer keeps the rule reading. ``redirect`` counts an adopted reroute;
+    ``redirect_rejected`` counts a legal reroute the surface refused. Those are
+    two different numbers and are never added together: a *misroute* needs a
+    gold label, so it is measured offline (``WRITE_SPLITS`` in
+    ``evals/intent_metrics.py``) and the trace only supplies the classification.
+    """
+    legal = answer in Intent.__members__
+    adopted = (
+        rule_intent is Intent.UNKNOWN and legal and Intent(answer) in ADOPTABLE_INTENTS
+    )
+    kind = redirect_kind(rule_intent, answer)
+    return Adoption(
+        intent=Intent(answer) if adopted else rule_intent,
+        adopted=adopted,
+        redirect=adopted and kind != "none",
+        redirect_rejected=(not adopted) and legal and kind != "none",
+        kind=kind,
+    )
+
+
+def _optional_flag(value: Any) -> bool | None:
+    """``None`` stays ``None``: "no decision recorded" must survive a round trip."""
+
+    return None if value is None else bool(value)
+
 
 # An order id is never "invented": it is copied from the request or context.
 # The shape check runs inside the agent contract so a malformed id is retried
@@ -33,7 +125,7 @@ _ORDER_ID = re.compile(r"ORD-[A-Z0-9]{1,12}(?:-[A-Z0-9]{1,12})*")
 
 
 class IntentOutput(BaseModel):
-    intent: IntentLiteral
+    intent: str
     order_id: str | None = None
     amount_cents: int | None = Field(default=None, ge=0)
     confidence: float = Field(ge=0, le=1)
@@ -47,6 +139,10 @@ INSTRUCTIONS = """你是售后工单系统的受限意图解析器，只做结�
 3. 退款金额只提取用户明确给出的金额，转换为整数分；未给出则为 null。
 4. 不判断退款资格、不批准退款、不调用工具。
 5. decision_summary 只写一句简短依据，不写长篇推理。
+6. payload 里给了 candidates 时，intent 只能取 candidates 中的某个 intent_id，
+   或回答 NONE（意思是这些候选没有一个对得上）。不得发明候选之外的意图。
+7. candidates 里的 evidence 是服务端自己算出来的依据，用来帮你判断哪个候选站得住；
+   不得把 evidence 当作用户说过的话，也不得据此编造 order_id 或金额。
 """
 
 
@@ -70,13 +166,61 @@ class ModelTrace:
     # True when the call went through the OpenTelemetry-instrumented model.
     # The span count is the retry count; this says whether there was a span.
     instrumented: bool = False
+    # True when this trace describes a call the chat entry already paid for.
+    # The task ledger reports the same numbers but writes no second usage row.
+    reused: bool = False
+    # Why the model's answer was not taken: ``model_out_of_candidates`` when it
+    # named a row the server had no evidence for, ``model_none`` when it said
+    # none of the candidates fit. ``None`` means the answer was usable (or the
+    # candidate path was never on).
+    reason: str | None = None
+    # How many rows the server offered. A count, never the rows or their
+    # evidence: an evidence string quotes the customer's own message, and a
+    # trace is read by seats who have no business seeing it echoed here.
+    candidates: int | None = None
+    # The adoption decision this answer produced (``decide_adoption``). ``None``
+    # means no decision was recorded — a cost-only trace from ``parse``, or a
+    # decision row written before R7. ``as_dict`` therefore omits the four keys
+    # instead of filling them with defaults: a reading taken before this round
+    # must not grow four keys claiming "not adopted" when nothing was asked.
+    adopted: bool | None = None
+    redirect: bool | None = None
+    redirect_rejected: bool | None = None
+    redirect_kind: str | None = None
 
     @property
     def failed(self) -> bool:
         return self.status != "OK"
 
+    @classmethod
+    def from_dict(cls, data: dict[str, Any], *, reused: bool = False) -> ModelTrace:
+        return cls(
+            requests=int(data.get("model_requests", 0) or 0),
+            retries=int(data.get("model_retries", 0) or 0),
+            input_tokens=int(data.get("model_input_tokens", 0) or 0),
+            output_tokens=int(data.get("model_output_tokens", 0) or 0),
+            latency_ms=float(data.get("model_latency_ms", 0.0) or 0.0),
+            status=str(data.get("model_status", "OK")),
+            instrumented=bool(data.get("model_instrumented", False)),
+            reused=reused,
+            reason=data.get("model_reason"),
+            candidates=(
+                int(data["model_candidates"])
+                if data.get("model_candidates") is not None
+                else None
+            ),
+            adopted=_optional_flag(data.get("model_adopted")),
+            redirect=_optional_flag(data.get("model_redirect")),
+            redirect_rejected=_optional_flag(data.get("model_redirect_rejected")),
+            redirect_kind=(
+                str(data["model_redirect_kind"])
+                if data.get("model_redirect_kind") is not None
+                else None
+            ),
+        )
+
     def as_dict(self) -> dict[str, Any]:
-        return {
+        data: dict[str, Any] = {
             "model_requests": self.requests,
             "model_retries": self.retries,
             "model_input_tokens": self.input_tokens,
@@ -84,7 +228,22 @@ class ModelTrace:
             "model_latency_ms": round(self.latency_ms, 1),
             "model_status": self.status,
             "model_instrumented": self.instrumented,
+            "model_reused": self.reused,
+            "model_reason": self.reason,
+            "model_candidates": self.candidates,
         }
+        # Only when a decision was actually recorded: the key set of every
+        # earlier trace stays exactly as it was (``.qoder/rules/
+        # adoption-surface.md`` §2.3).
+        for key, value in (
+            ("model_adopted", self.adopted),
+            ("model_redirect", self.redirect),
+            ("model_redirect_rejected", self.redirect_rejected),
+            ("model_redirect_kind", self.redirect_kind),
+        ):
+            if value is not None:
+                data[key] = value
+        return data
 
 
 class ModelCallError(RuntimeError):
@@ -209,11 +368,21 @@ class IntentAgent:
             return output
 
     def parse(
-        self, request: str, context: dict[str, Any] | None = None
+        self,
+        request: str,
+        context: dict[str, Any] | None = None,
+        candidates: CandidateSet | None = None,
     ) -> tuple[IntentOutput, ModelTrace]:
-        prompt = json.dumps(
-            {"request": request, "context": context or {}}, ensure_ascii=False
-        )
+        payload: dict[str, Any] = {"request": request, "context": context or {}}
+        # L1 only: the row id and the server's evidence for it. The catalog's
+        # own definitions (L2) and the full twelve rows (L3) are never sent.
+        if candidates is not None:
+            payload["candidates"] = [
+                {"intent_id": candidate.intent_id, "evidence": list(candidate.evidence)}
+                for candidate in candidates.candidates
+            ]
+            payload["allow_none"] = candidates.allow_none
+        prompt = json.dumps(payload, ensure_ascii=False)
         started = time.perf_counter()
         try:
             result = self._agent.run_sync(
@@ -259,17 +428,58 @@ class IntentAgent:
 class IntentBrain:
     """Deterministic routing first; PydanticAI only fills gaps or resolves UNKNOWN."""
 
-    def __init__(self, *, mode: str = "rules", agent: IntentAgent | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        mode: str = "rules",
+        agent: IntentAgent | None = None,
+        candidates_enabled: bool = True,
+        max_candidates: int = 6,
+    ) -> None:
         self.mode = mode
         self.agent = agent
+        self.candidates_enabled = candidates_enabled
+        self.max_candidates = max_candidates
 
     @property
     def model_name(self) -> str | None:
         """The model label for the usage ledger, or ``None`` when rules-only."""
-        return self.agent.model_name if self.agent is not None else None
+        return getattr(self.agent, "model_name", None) if self.agent is not None else None
+
+    def _candidates(
+        self,
+        request: str,
+        context: dict[str, Any] | None,
+        rule_plan: RoutePlan,
+        *,
+        order_state: str | None = None,
+    ) -> CandidateSet | None:
+        """The rows the server has evidence for, or ``None`` when the path is off.
+
+        Reached only on the model path: rules mode returns before this, so a
+        rules-only deployment never computes a candidate and never grows a
+        trace field. ``order_state`` is forwarded exactly as the caller
+        supplied it; the kernel never fetches it itself
+        (``.qoder/rules/intent-candidates.md`` §2.2).
+        """
+        if not self.candidates_enabled:
+            return None
+        return build_candidates(
+            request,
+            context,
+            rule_plan,
+            catalog=get_catalog(),
+            order_state=order_state,
+            max_candidates=self.max_candidates,
+        )
 
     def plan(
-        self, request: str, context: dict[str, Any] | None = None
+        self,
+        request: str,
+        context: dict[str, Any] | None = None,
+        *,
+        decision: ModelDecision | None = None,
+        order_state: str | None = None,
     ) -> tuple[RoutePlan, str, ModelTrace | None]:
         """Route with rules first; the third value is the model's cost record.
 
@@ -277,13 +487,69 @@ class IntentBrain:
         outside the gap path). A ``rules_fallback`` still carries a trace:
         the call was made and failed, which is exactly the case a silent
         fallback would hide.
+
+        ``decision`` is the chat entry's record of an earlier call. It is
+        reused only when the ledger can independently verify that the request,
+        context, rule set and model configuration are still the same; a match
+        returns the same reading with ``reused=True`` and no model call. A
+        mismatch falls through to the ordinary path, which may call the model
+        again — the worst case is one extra call, never an unchecked verdict.
+
+        ``order_state`` is the current order status, fetched by the caller
+        under its own tenant/user scope: the chat entry passes it so the
+        candidate kernel can record ``order:`` evidence. ``None`` means the
+        caller could not resolve one — then there is simply no such evidence
+        (``.qoder/rules/intent-candidates.md`` §2.2). It defaults to ``None``
+        so the task-runtime caller, which has no order resolved, keeps
+        working unchanged.
         """
         rule_plan = classify(request, context)
+        if (
+            decision is not None
+            and self.mode == "pydantic_ai"
+            and self.agent is not None
+            and decision.verifies(
+                request=request,
+                context=context,
+                rule_plan=rule_plan,
+                ruleset=RULESET_FINGERPRINT,
+                model_name=self.model_name,
+            )
+        ):
+            # Same gate as the fresh path: a stored reading is re-checked
+            # against today's ``ADOPTABLE_INTENTS``, never replayed as a
+            # verdict. The trace keeps the numbers it was written with (the
+            # reason and the reroute counters are carried, not recomputed), so
+            # a reuse cannot invent an adoption the chat entry never made.
+            intent = decide_adoption(rule_plan.intent, decision.model_intent).intent
+            order_id = rule_plan.order_id or decision.model_order_id
+            amount_cents = rule_plan.amount_cents
+            if amount_cents is None:
+                amount_cents = decision.model_amount_cents
+            amount_invalid = rule_plan.amount_invalid or (
+                amount_cents is not None and amount_cents <= 0
+            )
+            # 退款原因 / 类型只搬运规则读数：模型不抽取、不采纳，也不为它们补位
+            # （口径 §5.6.5）。
+            return (
+                RoutePlan(
+                    intent=intent,
+                    order_id=order_id,
+                    amount_cents=amount_cents,
+                    amount_invalid=amount_invalid,
+                    refund_reason=rule_plan.refund_reason,
+                    refund_type=rule_plan.refund_type,
+                ),
+                "pydantic_ai",
+                ModelTrace.from_dict(decision.trace, reused=True),
+            )
+
         if self.mode != "pydantic_ai" or self.agent is None:
             return rule_plan, "rules", None
 
+        candidate_set = self._candidates(request, context, rule_plan, order_state=order_state)
         try:
-            output, trace = self.agent.parse(request, context)
+            output, trace = self.agent.parse(request, context, candidate_set)
         except ModelCallError as exc:
             logger.warning("pydantic_ai intent extraction failed; falling back to rules")
             return rule_plan, "rules_fallback", exc.trace
@@ -291,9 +557,29 @@ class IntentBrain:
             logger.warning("pydantic_ai intent extraction failed; falling back to rules")
             return rule_plan, "rules_fallback", ModelTrace(status="FAILED")
 
-        intent = rule_plan.intent
-        if intent is Intent.UNKNOWN and output.intent != "UNKNOWN":
-            intent = Intent(output.intent)
+        reason: str | None = None
+        answer = output.intent
+        if candidate_set is not None:
+            if answer == NONE_ANSWER:
+                # The model agrees the rules could not read this either. It is
+                # an answer, not a failure: no retry, no task, no adoption.
+                reason = "model_none"
+                answer = rule_plan.intent.value
+            elif not candidate_set.allows(answer):
+                # Out of the set means the set was wrong, not that the model
+                # misspoke — asking again would pay twice for the same mistake.
+                reason = "model_out_of_candidates"
+                answer = rule_plan.intent.value
+
+        # One adoption surface (``ADOPTABLE_INTENTS``), one decision function.
+        # An answer outside the catalog (``REFUND_STATUS``) or outside the
+        # surface (``TICKET_CREATE``, every read intent) may be a legal answer
+        # and still keeps the rule reading. ``answer`` is the *effective* one:
+        # ``NONE`` and an out-of-candidate row were already rewritten to the
+        # rule reading above, so neither is counted as a refused reroute (they
+        # have their own ``model_reason``).
+        adoption = decide_adoption(rule_plan.intent, answer)
+        intent = adoption.intent
 
         order_id = rule_plan.order_id or output.order_id
         amount_cents = rule_plan.amount_cents
@@ -302,13 +588,28 @@ class IntentBrain:
         amount_invalid = rule_plan.amount_invalid or (
             amount_cents is not None and amount_cents <= 0
         )
+        # 退款原因 / 类型同样只搬运规则读数：模型不抽取、不采纳（口径 §5.6.5）。
         return (
             RoutePlan(
                 intent=intent,
                 order_id=order_id,
                 amount_cents=amount_cents,
                 amount_invalid=amount_invalid,
+                refund_reason=rule_plan.refund_reason,
+                refund_type=rule_plan.refund_type,
             ),
             "pydantic_ai",
-            trace,
+            (
+                trace
+                if trace is None
+                else replace(
+                    trace,
+                    reason=reason,
+                    candidates=None if candidate_set is None else len(candidate_set.candidates),
+                    adopted=adoption.adopted,
+                    redirect=adoption.redirect,
+                    redirect_rejected=adoption.redirect_rejected,
+                    redirect_kind=adoption.kind,
+                )
+            ),
         )

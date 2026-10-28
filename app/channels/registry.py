@@ -7,7 +7,21 @@ from app.channels.web import WebChannelAdapter
 from app.core.config import Settings
 from app.models.enums import Channel
 
-__all__ = ["build_adapters"]
+__all__ = ["INBOUND_IMPLEMENTED", "WEBHOOK_INBOUND", "build_adapters"]
+
+# Which channels have an inbound path in *this codebase*. Nothing more: it says
+# nothing about configuration switches or about a provider's own protocol, and
+# it is the single source of truth for both the availability predicate
+# (``app/channels/availability.py``) and the signed webhook allowlist
+# (``app/channels/gateway.py``). Adding a channel here without building its
+# adapter in ``build_adapters`` below — or the other way round — is caught by
+# the guard in ``tests/test_channel_availability.py``.
+INBOUND_IMPLEMENTED: frozenset[Channel] = frozenset(
+    {Channel.WEB, Channel.EMAIL, Channel.WECHAT, Channel.WECOM}
+)
+# The inbound channels that arrive through a signed provider callback, i.e.
+# everything above except the console's own path.
+WEBHOOK_INBOUND: frozenset[Channel] = INBOUND_IMPLEMENTED - {Channel.WEB}
 
 
 def build_adapters(settings: Settings) -> dict[Channel, ChannelAdapter]:

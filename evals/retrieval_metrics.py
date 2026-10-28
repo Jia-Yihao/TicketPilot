@@ -33,6 +33,13 @@ Channels
     the one the deployment ships; the other channels are reported as
     comparison numbers. ``dense_trigger_rate`` says how often the gated channel
     actually called the embedder.
+
+Rewriting
+    ``--rewrite {on,off}`` (default ``on``) puts every channel — including the
+    dense-only view — behind the query rewriter, so one run reports the same
+    labels with and without the rewrite. ``off`` measures the pre-rewrite
+    ranking. ``--json`` carries a per-case row (recall, mrr, ndcg, retrieved
+    sections, dense decision) so a single labelled case can be compared.
 """
 
 from __future__ import annotations
@@ -67,6 +74,7 @@ from app.retrieval.dense import (
 )
 from app.retrieval.hybrid import DenseGate, HybridPolicySearch
 from app.retrieval.rerank import RerankClient
+from app.retrieval.rewrite import QueryRewriter, RewritingPolicySearch
 from app.retrieval.search import (
     PolicySearch,
     PolicySearchService,
@@ -85,7 +93,7 @@ CHANNELS = ("bm25", "dense", "hybrid", "gated", "rerank")
 class CaseResult:
     case_id: str
     query: str
-    intent_expected: str
+    intent_expected: str | None
     intent_actual: str
     intent_ok: bool
     recall: dict[int, float]
@@ -95,6 +103,7 @@ class CaseResult:
     stale_hits: int
     cross_tenant_hits: int
     dense_decision: str | None = None
+    layer: str = "legacy_gold"
 
 
 @dataclass(slots=True)
@@ -102,11 +111,16 @@ class Report:
     channel: str = "bm25"
     cases: list[CaseResult] = field(default_factory=list)
     metrics: dict[str, float] = field(default_factory=dict)
+    layers: dict[str, dict[str, float]] = field(default_factory=dict)
     failures: list[str] = field(default_factory=list)
 
     @property
     def routing_gaps(self) -> list[CaseResult]:
-        return [case for case in self.cases if not case.intent_ok]
+        return [
+            case
+            for case in self.cases
+            if case.intent_expected is not None and not case.intent_ok
+        ]
 
 
 def _identity(case: dict[str, Any]) -> Identity:
@@ -132,6 +146,57 @@ def _is_stale(document: Document, today: date) -> bool:
 
 def _dcg(gains: list[int]) -> float:
     return sum(gain / math.log2(index + 2) for index, gain in enumerate(gains))
+
+
+def _layer(case: dict[str, Any]) -> str:
+    """The reporting layer a labelled case belongs to.
+
+    Legacy cases in ``support_set.json`` carry no ``label_quality`` and stay in
+    their own layer, so the historical 17-case gate is never diluted by the
+    generated set.
+    """
+    quality = case.get("label_quality")
+    if quality in {"gold", "silver"}:
+        return f"{quality}_{case.get('split', 'test')}"
+    return "legacy_gold"
+
+
+def _summarise(cases: list[CaseResult], k_values: tuple[int, ...]) -> dict[str, float]:
+    retrieval_cases = [case for case in cases if case.recall]
+    dense_ran = [
+        case
+        for case in retrieval_cases
+        if case.dense_decision
+        and case.dense_decision not in {"sparse_confident", "no_embedder"}
+    ]
+    metrics: dict[str, float] = {}
+    for k in k_values:
+        values = [case.recall[k] for case in retrieval_cases]
+        metrics[f"recall@{k}"] = sum(values) / len(values) if values else 0.0
+    metrics["mrr"] = (
+        sum(case.mrr for case in retrieval_cases) / len(retrieval_cases)
+        if retrieval_cases
+        else 0.0
+    )
+    max_k = max(k_values)
+    metrics[f"ndcg@{max_k}"] = (
+        sum(case.ndcg for case in retrieval_cases) / len(retrieval_cases)
+        if retrieval_cases
+        else 0.0
+    )
+    with_intent = [case for case in cases if case.intent_expected is not None]
+    if with_intent:
+        metrics["intent_accuracy"] = (
+            sum(1 for case in with_intent if case.intent_ok) / len(with_intent)
+        )
+    metrics["stale_hits"] = float(sum(case.stale_hits for case in cases))
+    metrics["cross_tenant_hits"] = float(
+        sum(case.cross_tenant_hits for case in cases)
+    )
+    metrics["dense_trigger_rate"] = (
+        len(dense_ran) / len(retrieval_cases) if retrieval_cases else 0.0
+    )
+    return metrics
 
 
 def evaluate(
@@ -172,8 +237,10 @@ def evaluate(
                 has_catalog_match=catalog.resolve(case["query"]) is not None,
                 message_order_id=extract_order_id(case["query"]),
             )
-            intent_expected = case.get("intent", "")
+            intent_expected = case.get("intent")
             intent_actual = plan.intent.value
+            intent_ok = intent_expected is None or intent_expected == intent_actual
+            layer = _layer(case)
 
             policy_id = case.get("policy_id")
             sections = set(case.get("sections", []))
@@ -184,13 +251,14 @@ def evaluate(
                         query=case["query"],
                         intent_expected=intent_expected,
                         intent_actual=intent_actual,
-                        intent_ok=intent_expected == intent_actual,
+                        intent_ok=intent_ok,
                         recall={},
                         mrr=0.0,
                         ndcg=0.0,
                         retrieved=(),
                         stale_hits=0,
                         cross_tenant_hits=0,
+                        layer=layer,
                     )
                 )
                 continue
@@ -243,57 +311,57 @@ def evaluate(
                     stale_hits=stale_hits,
                     cross_tenant_hits=cross_tenant_hits,
                     dense_decision=dense_decision,
+                    layer=layer,
                 )
             )
 
-    retrieval_cases = [case for case in report.cases if case.recall]
-    dense_ran = [
-        case
-        for case in retrieval_cases
-        if case.dense_decision
-        and case.dense_decision not in {"sparse_confident", "no_embedder"}
-    ]
-    for k in k_values:
-        values = [case.recall[k] for case in retrieval_cases]
-        report.metrics[f"recall@{k}"] = sum(values) / len(values) if values else 0.0
-    report.metrics["mrr"] = (
-        sum(case.mrr for case in retrieval_cases) / len(retrieval_cases)
-        if retrieval_cases
-        else 0.0
-    )
-    report.metrics[f"ndcg@{max_k}"] = (
-        sum(case.ndcg for case in retrieval_cases) / len(retrieval_cases)
-        if retrieval_cases
-        else 0.0
-    )
-    report.metrics["intent_accuracy"] = (
-        sum(1 for case in report.cases if case.intent_ok) / len(report.cases)
-        if report.cases
-        else 0.0
-    )
-    report.metrics["stale_hits"] = float(sum(case.stale_hits for case in report.cases))
-    report.metrics["cross_tenant_hits"] = float(
-        sum(case.cross_tenant_hits for case in report.cases)
-    )
-    report.metrics["dense_trigger_rate"] = (
-        len(dense_ran) / len(retrieval_cases) if retrieval_cases else 0.0
-    )
+    report.metrics = _summarise(report.cases, k_values)
+    by_layer: dict[str, list[CaseResult]] = {}
+    for case in report.cases:
+        by_layer.setdefault(case.layer, []).append(case)
+    report.layers = {
+        layer: _summarise(cases, k_values)
+        for layer, cases in sorted(by_layer.items())
+    }
     return report
 
 
-def check_thresholds(report: Report, thresholds: dict[str, Any]) -> list[str]:
+def _check_metrics(
+    metrics: dict[str, float], thresholds: dict[str, Any], *, prefix: str = ""
+) -> list[str]:
     failures: list[str] = []
     for name, limit in thresholds.items():
-        actual = report.metrics.get(name)
+        actual = metrics.get(name)
+        label = f"{prefix}.{name}" if prefix else name
         if actual is None:
-            failures.append(f"{name}: metric missing")
+            failures.append(f"{label}: metric missing")
             continue
         if name in {"stale_hits", "cross_tenant_hits"}:
             if actual > limit:
-                failures.append(f"{name}: expected <= {limit}, got {actual:g}")
+                failures.append(f"{label}: expected <= {limit}, got {actual:g}")
             continue
         if actual < limit:
-            failures.append(f"{name}: expected >= {limit}, got {actual:.4f}")
+            failures.append(f"{label}: expected >= {limit}, got {actual:.4f}")
+    return failures
+
+
+def check_thresholds(report: Report, thresholds: dict[str, Any]) -> list[str]:
+    """Check a flat legacy gate, or a per-layer gate when values are mappings.
+
+    ``support_set.json`` keeps the historical flat shape. The layered set names
+    each layer, so a threshold written under ``gold_test`` is never applied to
+    silver cases.
+    """
+    failures: list[str] = []
+    for name, limit in thresholds.items():
+        if isinstance(limit, dict):
+            layer = report.layers.get(name)
+            if layer is None:
+                failures.append(f"{name}: layer missing")
+                continue
+            failures.extend(_check_metrics(layer, limit, prefix=name))
+            continue
+        failures.extend(_check_metrics(report.metrics, {name: limit}))
     return failures
 
 
@@ -305,30 +373,66 @@ def _dense_marker(decision: str | None) -> str:
     return "run"
 
 
+def _layer_counts(report: Report) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for case in report.cases:
+        counts[case.layer] = counts.get(case.layer, 0) + 1
+    return counts
+
+
+def format_layers(report: Report) -> list[str]:
+    if len(report.layers) <= 1 and "legacy_gold" in report.layers:
+        return []
+    counts = _layer_counts(report)
+    lines = [
+        "layer                 cases  recall@1  recall@3  recall@5   mrr  ndcg@5  stale  x-tenant"
+    ]
+    for layer, metrics in report.layers.items():
+        lines.append(
+            f"{layer:<21}"
+            f"{counts.get(layer, 0):<7}"
+            f"{metrics.get('recall@1', 0.0):<10.2f}"
+            f"{metrics.get('recall@3', 0.0):<10.2f}"
+            f"{metrics.get('recall@5', 0.0):<10.2f}"
+            f"{metrics.get('mrr', 0.0):<6.2f}"
+            f"{metrics.get('ndcg@5', 0.0):<8.2f}"
+            f"{metrics.get('stale_hits', 0.0):<7.0f}"
+            f"{metrics.get('cross_tenant_hits', 0.0):<9.0f}"
+        )
+    return lines
+
+
 def format_report(report: Report, thresholds: dict[str, Any]) -> str:
     lines: list[str] = []
     lines.append(f"channel: {report.channel}")
-    lines.append(
-        "case                          intent          dense  recall@1  recall@3  mrr    ndcg@5"
-    )
-    lines.append("-" * 86)
-    for case in report.cases:
-        if not case.recall:
+    if len(report.cases) <= 60:
+        lines.append(
+            "case                          intent          dense  recall@1  recall@3  mrr    ndcg@5"
+        )
+        lines.append("-" * 86)
+        for case in report.cases:
+            if not case.recall:
+                lines.append(
+                    f"{case.case_id:<29} {case.intent_actual:<15} "
+                    f"{'(intent only)':<39}"
+                )
+                continue
             lines.append(
                 f"{case.case_id:<29} {case.intent_actual:<15} "
-                f"{'(intent only)':<39}"
+                f"{_dense_marker(case.dense_decision):<6} "
+                f"{case.recall[1]:<10.2f} {case.recall[3]:<10.2f} "
+                f"{case.mrr:<6.2f} {case.ndcg:<6.2f}"
             )
-            continue
-        lines.append(
-            f"{case.case_id:<29} {case.intent_actual:<15} "
-            f"{_dense_marker(case.dense_decision):<6} "
-            f"{case.recall[1]:<10.2f} {case.recall[3]:<10.2f} "
-            f"{case.mrr:<6.2f} {case.ndcg:<6.2f}"
-        )
-    lines.append("")
+        lines.append("")
+    else:
+        lines.append(f"({len(report.cases)} cases; per-case rows are in --json)")
+    layer_table = format_layers(report)
+    if layer_table:
+        lines.extend(layer_table)
+        lines.append("")
     for name, value in report.metrics.items():
         limit = thresholds.get(name)
-        marker = "" if limit is None else f"  (gate {limit})"
+        marker = "" if limit is None or not isinstance(limit, (int, float)) else f"  (gate {limit})"
         lines.append(f"{name:<22} {value:.4f}{marker}")
     gaps = report.routing_gaps
     if gaps:
@@ -382,11 +486,20 @@ def _dense_provider(settings: Settings) -> tuple[EmbeddingProvider, str]:
     return HashingEmbedder(settings.embedding_dimensions), "hashing"
 
 
-def _sparse_factory(max_k: int) -> Callable[[Session], PolicySearch]:
+def _rewritten(search: PolicySearch, rewriter: QueryRewriter | None) -> PolicySearch:
+    """Wrap the finished retriever so every channel is measured on the same text."""
+    return search if rewriter is None else RewritingPolicySearch(search, rewriter)
+
+
+def _sparse_factory(
+    max_k: int, rewriter: QueryRewriter | None = None
+) -> Callable[[Session], PolicySearch]:
     """The shipped sparse channel."""
 
     def factory(session: Session) -> PolicySearch:
-        return PolicySearchService(session, max_results=max_k, min_score=0.01)
+        return _rewritten(
+            PolicySearchService(session, max_results=max_k, min_score=0.01), rewriter
+        )
 
     return factory
 
@@ -414,18 +527,22 @@ def _dense_only_factory(
     settings: Settings,
     provider: EmbeddingProvider | None,
     max_k: int,
+    rewriter: QueryRewriter | None = None,
 ) -> Callable[[Session], PolicySearch]:
     """The dense channel on its own, for a channel comparison."""
 
     def factory(session: Session) -> PolicySearch:
-        return HybridPolicySearch(
-            session,
-            sparse=_SilencedSparse(session, max_results=max_k, min_score=0.01),
-            embedder=provider,
-            rrf_k=settings.retrieval_rrf_k,
-            max_results=max_k,
-            candidate_pool=settings.retrieval_candidate_pool,
-            dense_min_score=settings.retrieval_dense_min_score,
+        return _rewritten(
+            HybridPolicySearch(
+                session,
+                sparse=_SilencedSparse(session, max_results=max_k, min_score=0.01),
+                embedder=provider,
+                rrf_k=settings.retrieval_rrf_k,
+                max_results=max_k,
+                candidate_pool=settings.retrieval_candidate_pool,
+                dense_min_score=settings.retrieval_dense_min_score,
+            ),
+            rewriter,
         )
 
     return factory
@@ -437,6 +554,7 @@ def _hybrid_factory(
     max_k: int,
     reranker: RerankClient | None = None,
     dense_gate: DenseGate | None = None,
+    rewriter: QueryRewriter | None = None,
 ) -> Callable[[Session], PolicySearch]:
     """Sparse plus dense, optionally gated and optionally reranked.
 
@@ -445,30 +563,36 @@ def _hybrid_factory(
     """
 
     def factory(session: Session) -> PolicySearch:
-        return HybridPolicySearch(
-            session,
-            sparse=PolicySearchService(session, max_results=max_k, min_score=0.01),
-            embedder=provider,
-            reranker=reranker,
-            rrf_k=settings.retrieval_rrf_k,
-            max_results=max_k,
-            candidate_pool=settings.retrieval_candidate_pool,
-            dense_min_score=settings.retrieval_dense_min_score,
-            dense_gate=dense_gate,
+        return _rewritten(
+            HybridPolicySearch(
+                session,
+                sparse=PolicySearchService(session, max_results=max_k, min_score=0.01),
+                embedder=provider,
+                reranker=reranker,
+                rrf_k=settings.retrieval_rrf_k,
+                max_results=max_k,
+                candidate_pool=settings.retrieval_candidate_pool,
+                dense_min_score=settings.retrieval_dense_min_score,
+                dense_gate=dense_gate,
+            ),
+            rewriter,
         )
 
     return factory
 
 
 def _gated_factory(
-    settings: Settings, provider: EmbeddingProvider | None, max_k: int
+    settings: Settings,
+    provider: EmbeddingProvider | None,
+    max_k: int,
+    rewriter: QueryRewriter | None = None,
 ) -> Callable[[Session], PolicySearch]:
     """The shipped dense deployment: dense only where the gate opens."""
     gate = DenseGate(
         min_top1_score=settings.retrieval_dense_gate_min_top1_score,
         min_coverage=settings.retrieval_dense_gate_min_coverage,
     )
-    return _hybrid_factory(settings, provider, max_k, dense_gate=gate)
+    return _hybrid_factory(settings, provider, max_k, dense_gate=gate, rewriter=rewriter)
 
 
 def _run(
@@ -477,12 +601,16 @@ def _run(
     *,
     k_values: tuple[int, ...] = DEFAULT_K,
     channels: tuple[str, ...] = ("bm25",),
+    rewrite: bool = True,
 ) -> tuple[list[Report], list[str]]:
     settings = Settings(
         environment="test",
         database_url=database_url,
         auto_create_tables=True,
     )
+    # The evaluation uses the shipped rewriter defaults, so a local .env cannot
+    # move the benchmark the comparison is made against.
+    rewriter: QueryRewriter | None = QueryRewriter() if rewrite else None
     engine = build_engine(settings.database_url)
     create_all(engine)
     session_factory = build_session_factory(engine)
@@ -508,23 +636,29 @@ def _run(
 
         for channel in channels:
             if channel == "bm25":
-                search_factory = _sparse_factory(max_k)
+                search_factory = _sparse_factory(max_k, rewriter)
                 label = "bm25"
             elif channel == "dense":
-                search_factory = _dense_only_factory(settings, provider, max_k)
+                search_factory = _dense_only_factory(
+                    settings, provider, max_k, rewriter
+                )
                 label = f"dense({provider_label})"
             elif channel == "hybrid":
-                search_factory = _hybrid_factory(settings, provider, max_k)
+                search_factory = _hybrid_factory(
+                    settings, provider, max_k, rewriter=rewriter
+                )
                 label = f"hybrid({provider_label})"
             elif channel == "gated":
-                search_factory = _gated_factory(settings, provider, max_k)
+                search_factory = _gated_factory(settings, provider, max_k, rewriter)
                 label = f"gated({provider_label})"
             elif channel == "rerank":
                 reranker = build_reranker(settings)
                 if reranker is None:
                     skipped.append("rerank: no RERANK_URL configured")
                     continue
-                search_factory = _hybrid_factory(settings, provider, max_k, reranker)
+                search_factory = _hybrid_factory(
+                    settings, provider, max_k, reranker, rewriter=rewriter
+                )
                 label = f"rerank({provider_label})"
             else:
                 skipped.append(f"{channel}: unknown channel")
@@ -572,6 +706,12 @@ def main() -> int:
         action="store_true",
         help="Print the report as JSON instead of a table.",
     )
+    parser.add_argument(
+        "--rewrite",
+        choices=("on", "off"),
+        default="on",
+        help="Run every channel through the query rewriter (default: on).",
+    )
     args = parser.parse_args()
 
     dataset = json.loads(args.dataset.read_text(encoding="utf-8"))
@@ -586,12 +726,22 @@ def main() -> int:
 
     if args.database_url:
         reports, skipped = _run(
-            dataset, args.database_url, k_values=k_values, channels=channels
+            dataset,
+            args.database_url,
+            k_values=k_values,
+            channels=channels,
+            rewrite=args.rewrite == "on",
         )
     else:
         with tempfile.TemporaryDirectory() as directory:
             url = f"sqlite+pysqlite:///{Path(directory) / 'retrieval.db'}"
-            reports, skipped = _run(dataset, url, k_values=k_values, channels=channels)
+            reports, skipped = _run(
+                dataset,
+                url,
+                k_values=k_values,
+                channels=channels,
+                rewrite=args.rewrite == "on",
+            )
 
     if not reports:
         print("no channel produced a report")
@@ -606,6 +756,7 @@ def main() -> int:
                         {
                             "channel": report.channel,
                             "metrics": report.metrics,
+                            "layers": report.layers,
                             "dense_decisions": _decision_counts(report),
                             "failures": check_thresholds(report, thresholds),
                             "routing_gaps": [
@@ -616,6 +767,20 @@ def main() -> int:
                                     "actual": case.intent_actual,
                                 }
                                 for case in report.routing_gaps
+                            ],
+                            "cases": [
+                                {
+                                    "id": case.case_id,
+                                    "layer": case.layer,
+                                    "recall": {
+                                        str(k): value for k, value in case.recall.items()
+                                    },
+                                    "mrr": case.mrr,
+                                    "ndcg": case.ndcg,
+                                    "retrieved": list(case.retrieved),
+                                    "dense_decision": case.dense_decision,
+                                }
+                                for case in report.cases
                             ],
                         }
                         for report in reports

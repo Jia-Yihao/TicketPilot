@@ -4,6 +4,7 @@ import pytest
 
 from app.agent.routing import (
     Intent,
+    _match_write_intent,
     blocks_write_action,
     classify,
     is_generic_statement,
@@ -40,6 +41,12 @@ def _support(text: str) -> SupportIntent:
 def test_policy_questions_never_trigger_write_actions(text: str) -> None:
     assert classify(text, {}).intent is Intent.POLICY_QA
     assert _support(text) is SupportIntent.POLICY_QA
+    # F-9 阶段 B（dispatch C3 / plan T1）：写意图的词表迁进 YAML 后，问句门槛必须
+    # 还在。这句的 cue 命中的是写行 TICKET_CREATE，被门槛挡住才没建成单——
+    # 第三行钉「cue 确实命中」，否则门槛消失也会一路绿。
+    assert classify("什么时候可以转人工", {}).intent is Intent.POLICY_QA
+    assert _support("什么时候可以转人工") is SupportIntent.POLICY_QA
+    assert _match_write_intent("什么时候可以转人工") is not None
 
 
 @pytest.mark.parametrize(
@@ -52,6 +59,12 @@ def test_policy_questions_never_trigger_write_actions(text: str) -> None:
 )
 def test_explicit_requests_still_create_write_actions(text: str) -> None:
     assert not blocks_write_action(text.lower())
+    # F-9 阶段 B 复审：写分支从 HEAD 的 `if _REFUND ... elif _TICKET` 改成按目录
+    # priority 遍历，退款行 10 早于工单行 11 是保住那条先后次序的唯一依据。这里把
+    # 「退款 + 投诉」同句钉在既有用例体内（参数化表不改）。工单行调到 <=10 即红；
+    # 退款行调到 12（工单仍 11）同样红。两行都调到 11 时按 intent_id 定序，仍得退款。
+    assert classify("我要申请退款，顺便投诉一下").intent is Intent.REFUND_REQUEST
+    assert _support("我要申请退款，顺便投诉一下") is SupportIntent.REFUND_REQUEST
 
 
 @pytest.mark.parametrize(
@@ -85,6 +98,17 @@ def test_request_frames_outrank_policy_terms(text: str, intent: Intent) -> None:
 )
 def test_support_intents_keep_their_precedence(text: str, intent: SupportIntent) -> None:
     assert _support(text) is intent
+    # F-9 阶段 B 步骤 1：写意图的 cues 迁进 `intents.yaml`（并带 `match_request_only`）。
+    # 内核证据形状变了（见 tests/test_intent_candidates.py），生产路径必须逐条钉住不变：
+    # 命中 cue 的陈述句照旧进写意图，含同一批词的问句照旧不进写路径。
+    assert _support("那我只能投诉") is SupportIntent.TICKET_CREATE
+    assert (
+        _support("顺便帮我投诉一下这个快递员态度非常恶劣谢谢了")
+        is SupportIntent.TICKET_CREATE
+    )
+    assert _support("帮我退款 ORD-DEMO-1001 129 元") is SupportIntent.REFUND_REQUEST
+    assert _support("退款申请需要谁审批") is SupportIntent.POLICY_QA
+    assert _support("什么时候可以转人工") is SupportIntent.POLICY_QA
 
 
 @pytest.mark.parametrize(

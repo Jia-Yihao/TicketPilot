@@ -85,6 +85,34 @@ class RefundStatus(StrEnum):
     UNKNOWN = "UNKNOWN"
 
 
+class RefundReason(StrEnum):
+    """Why a refund was asked for.
+
+    ``OTHER`` is an explicit customer choice, never a fallback: a collection
+    miss must leave the slot empty instead of silently filling ``OTHER``.
+    """
+
+    QUALITY = "QUALITY"
+    DAMAGED = "DAMAGED"
+    WRONG_ITEM = "WRONG_ITEM"
+    NOT_AS_DESCRIBED = "NOT_AS_DESCRIBED"
+    NO_LONGER_NEEDED = "NO_LONGER_NEEDED"
+    OTHER = "OTHER"
+
+
+class RefundType(StrEnum):
+    """What kind of refund this is.
+
+    ``SHIPPING`` / ``PRICE_PROTECTION`` are labels only; the refunded amount
+    always follows the order's refundable balance.
+    """
+
+    FULL = "FULL"
+    PARTIAL = "PARTIAL"
+    SHIPPING = "SHIPPING"
+    PRICE_PROTECTION = "PRICE_PROTECTION"
+
+
 class RiskLevel(StrEnum):
     R0 = "R0"
     R1 = "R1"

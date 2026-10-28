@@ -1,12 +1,26 @@
 import { useEffect, useMemo, useState } from 'react'
-import { errorText, listProactiveRules, updateProactiveRule } from '../api'
+import {
+  approveProactiveRuleChange,
+  errorText,
+  listProactiveRuleChanges,
+  listProactiveRules,
+  listProactiveRuleVersions,
+  rejectProactiveRuleChange,
+  rollbackProactiveRule,
+  updateProactiveRule,
+} from '../api'
 import { ErrorPanel } from '../components/ErrorPanel'
 import { Icon } from '../components/Icon'
 import { PageHeader } from '../components/PageHeader'
 import { formatDateTime } from '../format'
 import { usePageTitle } from '../hooks'
 import { useIdentity } from '../identity'
-import type { ProactiveRule, ProactiveRuleUpdatePayload } from '../types'
+import type {
+  ProactiveRule,
+  ProactiveRuleChange,
+  ProactiveRuleUpdatePayload,
+  ProactiveRuleVersion,
+} from '../types'
 
 const EVENT_LABELS: Record<string, string> = {
   DELIVERY_EXCEPTION: '物流异常提醒',
@@ -83,14 +97,17 @@ function buildPayload(
 
 export function ProactiveRules() {
   usePageTitle('通知规则')
-  const { identity, canOperate } = useIdentity()
+  const { identity, canOperate, isApprover } = useIdentity()
   const [rules, setRules] = useState<ProactiveRule[]>([])
+  const [changes, setChanges] = useState<ProactiveRuleChange[]>([])
+  const [versions, setVersions] = useState<Record<string, ProactiveRuleVersion[]>>({})
   const [drafts, setDrafts] = useState<Record<string, Draft>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<unknown>(null)
   const [formError, setFormError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [busyType, setBusyType] = useState<string | null>(null)
+  const [decisionBusy, setDecisionBusy] = useState<string | null>(null)
   const [reloadTick, setReloadTick] = useState(0)
 
   useEffect(() => {
@@ -101,13 +118,30 @@ export function ProactiveRules() {
     let cancelled = false
     setLoading(true)
     setError(null)
-    listProactiveRules(identity)
-      .then((data) => {
+    Promise.all([
+      listProactiveRules(identity),
+      listProactiveRuleChanges(identity),
+      Promise.all(
+        EVENT_ORDER.map((eventType) =>
+          listProactiveRuleVersions(identity, eventType),
+        ),
+      ),
+    ])
+      .then(([ruleData, changeData, versionLists]) => {
         if (cancelled) return
-        setRules(data.rules)
+        setRules(ruleData.rules)
+        setChanges(changeData.changes)
+        setVersions(
+          Object.fromEntries(
+            EVENT_ORDER.map((eventType, index) => [
+              eventType,
+              versionLists[index].versions,
+            ]),
+          ),
+        )
         setDrafts(
           Object.fromEntries(
-            data.rules.map((rule) => [rule.event_type, draftOf(rule)]),
+            ruleData.rules.map((rule) => [rule.event_type, draftOf(rule)]),
           ),
         )
         setNotice(null)
@@ -155,16 +189,65 @@ export function ProactiveRules() {
     setBusyType(eventType)
     setFormError(null)
     try {
-      const updated = await updateProactiveRule(identity, eventType, changes)
-      const others = rules.filter((item) => item.event_type !== updated.event_type)
-      setRules([...others, updated].sort((a, b) => a.event_type.localeCompare(b.event_type)))
+      const submitted = await updateProactiveRule(identity, eventType, changes)
+      setChanges((current) => [submitted, ...current])
       setDrafts((current) => ({
         ...current,
-        [updated.event_type]: draftOf(updated),
+        [eventType]: draftOf(byType[eventType]),
       }))
       setNotice(
-        `「${EVENT_LABELS[updated.event_type] ?? updated.event_type}」已保存：` +
-          '从下一条通知起生效，已经生成的通知不受影响。',
+        `「${EVENT_LABELS[submitted.event_type] ?? submitted.event_type}」改动已提交，` +
+          '等另一位审批人批准后才生效；现行文案与已生成的通知都不变。',
+      )
+    } catch (errorValue: unknown) {
+      setFormError(errorText(errorValue))
+    } finally {
+      setBusyType(null)
+    }
+  }
+
+  async function decide(change: ProactiveRuleChange, approve: boolean) {
+    if (decisionBusy) return
+    setDecisionBusy(change.change_id)
+    setFormError(null)
+    try {
+      const payload = approve ? {} : { note: '控制台拒绝' }
+      const resolved = approve
+        ? await approveProactiveRuleChange(identity, change.change_id, payload)
+        : await rejectProactiveRuleChange(identity, change.change_id, payload)
+      setChanges((current) =>
+        current.map((item) =>
+          item.change_id === resolved.change_id ? resolved : item,
+        ),
+      )
+      setNotice(
+        `「${EVENT_LABELS[resolved.event_type] ?? resolved.event_type}」` +
+          (approve
+            ? `已批准，从版本 v${resolved.applied_version ?? '?'} 起生效。`
+            : '已拒绝，现行规则没有变化。'),
+      )
+      setReloadTick((value) => value + 1)
+    } catch (errorValue: unknown) {
+      setFormError(errorText(errorValue))
+    } finally {
+      setDecisionBusy(null)
+    }
+  }
+
+  async function rollback(eventType: string) {
+    const rule = byType[eventType]
+    if (!rule || rule.version <= 1 || busyType) return
+    setBusyType(eventType)
+    setFormError(null)
+    try {
+      const submitted = await rollbackProactiveRule(identity, eventType, {
+        version: rule.version - 1,
+        reason: `回滚到版本 ${rule.version - 1}`,
+      })
+      setChanges((current) => [submitted, ...current])
+      setNotice(
+        `已提交回滚到 v${rule.version - 1}，仍要另一位审批人批准；` +
+          '历史版本不会被删除。',
       )
     } catch (errorValue: unknown) {
       setFormError(errorText(errorValue))
@@ -197,6 +280,7 @@ export function ProactiveRules() {
   }
 
   const liveCount = rules.filter((rule) => rule.enabled).length
+  const pendingChanges = changes.filter((item) => item.status === 'PENDING')
 
   return (
     <div className="page page--memory">
@@ -228,11 +312,93 @@ export function ProactiveRules() {
       <div className="role-note">
         <Icon name="shield" size={16} />
         <p>
-          可改的只有文案、冷却时长与启停。事件类型不能在这里新增，「要不要客户先确认」
-          也不是开关。改动只对下一条通知生效，已经生成的通知不会被回溯改写；
-          这一页没有双人复核，写错了要靠审计里的模板摘要对回原文，手打回去。
+          可改的只有文案、冷却时长与启停。提交后先进入待批队列，由另一位具备 approver
+          角色的同事批准才生效；提交者不能自批，未批准的改动对客户不可见。
+          改动只对下一条通知生效，已经生成的通知不会被回溯改写；每次生效都会留下
+          一个不可变版本，可按版本回滚。
         </p>
       </div>
+
+      {pendingChanges.length > 0 ? (
+        <section className="panel">
+          <div className="panel__head">
+            <div>
+              <span className="panel__tag">PENDING / 待批改动</span>
+              <h2>等待另一位审批人</h2>
+            </div>
+            <span className="chip">{pendingChanges.length} 条待批</span>
+          </div>
+          <div className="panel__body">
+            {pendingChanges.map((change) => {
+              const canDecide =
+                isApprover && change.submitted_by !== identity.user
+              // "Current" must come from the rule row, not the proposal's
+              // snapshot: if the rule moved on, the snapshot is history.
+              const currentTemplate = byType[change.event_type]?.template
+              return (
+                <div key={change.change_id} className="memory-muted">
+                  <p>
+                    <strong>
+                      {EVENT_LABELS[change.event_type] ?? change.event_type}
+                    </strong>
+                    {' · '}
+                    {change.kind === 'ROLLBACK'
+                      ? `回滚到 v${change.target_version}`
+                      : '改文案 / 阈值'}
+                    {' · '}
+                    基于 v{change.base_version} · 提交人 {change.submitted_by}
+                  </p>
+                  {currentTemplate !== undefined &&
+                  currentTemplate !== change.template ? (
+                    <p className="mono">
+                      现行：{currentTemplate}
+                      <br />
+                      待批：{change.template}
+                    </p>
+                  ) : (
+                    <p className="mono">待批：{change.template}</p>
+                  )}
+                  {change.reason ? <p>理由：{change.reason}</p> : null}
+                  <p className="mono">
+                    审批人：{change.decided_by ?? '尚未审批'}
+                    {' · '}
+                    提交时间：{formatDateTime(change.submitted_at) || '未知'}
+                  </p>
+                  <div className="memory-actions">
+                    {canDecide ? (
+                      <>
+                        <button
+                          type="button"
+                          className="button button--primary button--sm"
+                          onClick={() => decide(change, true)}
+                          disabled={decisionBusy !== null}
+                        >
+                          <Icon name="check" size={15} />
+                          {decisionBusy === change.change_id ? '处理中' : '批准'}
+                        </button>
+                        <button
+                          type="button"
+                          className="button button--ghost button--sm"
+                          onClick={() => decide(change, false)}
+                          disabled={decisionBusy !== null}
+                        >
+                          拒绝
+                        </button>
+                      </>
+                    ) : (
+                      <span className="chip">
+                        {change.submitted_by === identity.user
+                          ? '提交人不能自批，请切换另一位审批人'
+                          : '需要 approver 角色才能批准'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      ) : null}
 
       {loading && rules.length === 0 ? (
         <div className="memory-grid" aria-hidden="true">
@@ -283,6 +449,10 @@ export function ProactiveRules() {
             const unknown = used.filter((item) => !CONTEXT_KEYS.includes(item))
             const dirty = rule ? Object.keys(payloadOf(eventType)).length : 0
             const isNew = !rule
+            const history = versions[eventType] ?? []
+            const thisEventPending = pendingChanges.some(
+              (item) => item.event_type === eventType,
+            )
 
             return (
               <section className="panel" key={eventType}>
@@ -297,10 +467,10 @@ export function ProactiveRules() {
                     {isNew
                       ? '本租户还没有这条规则'
                       : dirty > 0
-                        ? `${dirty} 项待保存`
+                        ? `${dirty} 项待提交`
                         : rule.enabled
-                          ? '生效中'
-                          : '已停用'}
+                          ? `v${rule.version} 生效中`
+                          : `v${rule.version} 已停用`}
                   </span>
                 </div>
                 <div className="panel__body">
@@ -411,16 +581,26 @@ export function ProactiveRules() {
 
                   {rule ? (
                     <p className="memory-muted mono">
-                      {rule.rule_id} · 需要字段 {rule.required_context.join('、') || '无'}
+                      {rule.rule_id} · 版本 v{rule.version} · 需要字段{' '}
+                      {rule.required_context.join('、') || '无'}
                       {' · 上次修改 '}
                       {formatDateTime(rule.updated_at) || '未知'}
                     </p>
                   ) : (
                     <p className="memory-muted">
                       新建的规则固定为「启用 + 需要客户确认 + 冷却 60 分钟」，
-                      保存后本租户的这个事件才会开始生成通知。
+                      提交并经另一位审批人批准后，本租户的这个事件才会开始生成通知。
                     </p>
                   )}
+
+                  {rule && history.length > 1 ? (
+                    <p className="memory-muted">
+                      历史版本：
+                      {history
+                        .map((item) => `v${item.version}（${item.approved_by}）`)
+                        .join('、')}
+                    </p>
+                  ) : null}
 
                   <div className="memory-actions">
                     <button
@@ -434,10 +614,10 @@ export function ProactiveRules() {
                     >
                       <Icon name="check" size={15} />
                       {busyType === eventType
-                        ? '保存中'
+                        ? '提交中'
                         : isNew
-                          ? '新建这条规则'
-                          : '保存改动'}
+                          ? '提交新建申请'
+                          : '提交改动'}
                     </button>
                     {rule ? (
                       <button
@@ -449,6 +629,16 @@ export function ProactiveRules() {
                         放弃改动
                       </button>
                     ) : null}
+                    {rule && rule.version > 1 ? (
+                      <button
+                        type="button"
+                        className="button button--ghost button--sm"
+                        onClick={() => rollback(eventType)}
+                        disabled={busyType !== null || thisEventPending}
+                      >
+                        回滚到上一版（v{rule.version - 1}）
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               </section>
@@ -456,8 +646,8 @@ export function ProactiveRules() {
           })}
 
           <p className="matrix-note mono">
-            规则改动会写入审计（proactive.rule.update）：只记事件类型、改动的字段名、
-            启停、冷却时长与模板的 SHA-256，不记文案本身。
+            规则治理审计：proactive.rule.submit / approve / reject 记录前后版本、
+            提交人、批准人与模板 SHA-256，不记文案本身；版本快照另存，可按版本回滚。
           </p>
         </>
       )}

@@ -30,6 +30,25 @@ class CommerceRepository:
         )
         return self.session.scalars(stmt).first()
 
+    def list_recent_orders(
+        self, tenant_id: str, user_id: str, limit: int = 3
+    ) -> list[Order]:
+        """The caller's own newest orders — the only source a candidate list may use.
+
+        Both columns are in the predicate and neither is relaxed: a support seat
+        asking on someone else's behalf must not get that person's order numbers
+        back as chips, because the list is rendered to whoever is typing.
+        ``id`` breaks ties so two orders paid in the same second still come back
+        in one fixed order.
+        """
+        stmt = (
+            select(Order)
+            .where(Order.tenant_id == tenant_id, Order.user_id == user_id)
+            .order_by(Order.paid_at.desc(), Order.id.desc())
+            .limit(limit)
+        )
+        return list(self.session.scalars(stmt))
+
     def apply_refund_balance(self, order_id: str, amount_cents: int) -> bool:
         stmt = (
             update(Order)

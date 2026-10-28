@@ -69,6 +69,8 @@ def build_brain(settings: Settings) -> IntentBrain:
                 timeout_seconds=settings.agent_timeout_seconds,
                 instrument=settings.agent_otel_instrument,
             ),
+            candidates_enabled=settings.intent_candidates_enabled,
+            max_candidates=settings.intent_candidates_max,
         )
     return IntentBrain(mode="rules")
 
@@ -106,7 +108,12 @@ def create_app(
     )
     runtime = TaskRuntime(session_factory, settings, brain=brain or build_brain(settings))
     policy = PolicyEngine.from_settings(settings)
-    sql_analytics = SqlAnalyticsService(max_limit=settings.analytics_max_limit)
+    sql_analytics = SqlAnalyticsService(
+        max_limit=settings.analytics_max_limit,
+        prefetch_enabled=settings.analytics_prefetch_enabled,
+        prefetch_max_rows=settings.analytics_prefetch_max_rows,
+        snapshot_ttl_seconds=settings.analytics_snapshot_ttl_seconds,
+    )
     app.state.settings = settings
     app.state.engine = engine
     app.state.session_factory = session_factory

@@ -15,7 +15,13 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-__all__ = ["UNGROUNDED_MARKER", "OutputGuardResult", "guard_output", "has_assertion"]
+__all__ = [
+    "UNGROUNDED_MARKER",
+    "OutputGuardResult",
+    "assertion_spans",
+    "guard_output",
+    "has_assertion",
+]
 
 UNGROUNDED_MARKER = "需确认"
 
@@ -70,31 +76,66 @@ def has_assertion(reply: str) -> bool:
     return any(pattern.search(reply) for _, pattern in _PATTERNS)
 
 
+def _assertion_matches(reply: str) -> list[tuple[str, int, int]]:
+    """Every pattern hit as ``(kind, start, end)``, in pattern order.
+
+    This is the one place that decides what counts as an unsupported
+    assertion: the guard replaces these spans, and the answer-layer number
+    traceability check reads the same spans. Two copies of the regular
+    expressions would eventually disagree.
+    """
+    found: list[tuple[str, int, int]] = []
+    for kind, pattern in _PATTERNS:
+        for match in pattern.finditer(reply):
+            found.append((kind, match.start(), match.end()))
+    return found
+
+
+def _merged(
+    matches: list[tuple[str, int, int]],
+) -> list[tuple[str, int, int]]:
+    """Sort by position and merge overlapping spots into one span.
+
+    The span keeps the kind of the earliest match; merging never grows the
+    text it covers beyond the union of its parts.
+    """
+    ordered = sorted(matches, key=lambda item: (item[1], item[2]))
+    merged: list[tuple[str, int, int]] = []
+    for kind, start, end in ordered:
+        if merged and start <= merged[-1][2]:
+            first_kind, first_start, first_end = merged[-1]
+            merged[-1] = (first_kind, first_start, max(first_end, end))
+        else:
+            merged.append((kind, start, end))
+    return merged
+
+
+def assertion_spans(reply: str) -> tuple[tuple[str, int, int], ...]:
+    """(kind, start, end) for every unsupported-assertion span, in text order.
+
+    ``kind`` is one of ``money`` / ``timeline`` / ``percentage`` /
+    ``commitment`` / ``immediate``. Spans are sorted by ``start`` and never
+    overlap, so ``reply[start:end]`` slices out the exact matched text.
+    """
+    return tuple(_merged(_assertion_matches(reply)))
+
+
 def guard_output(reply: str, *, grounded: bool) -> OutputGuardResult:
     """Replace unsupported assertions when the turn has no source."""
     if not reply or grounded:
         return OutputGuardResult(reply=reply, replaced=0, kinds=())
 
-    spans: list[tuple[int, int]] = []
-    kinds: set[str] = set()
-    for kind, pattern in _PATTERNS:
-        for match in pattern.finditer(reply):
-            spans.append((match.start(), match.end()))
-            kinds.add(kind)
+    spans = assertion_spans(reply)
     if not spans:
         return OutputGuardResult(reply=reply, replaced=0, kinds=())
-
-    spans.sort()
-    merged: list[tuple[int, int]] = []
-    for start, end in spans:
-        if merged and start <= merged[-1][1]:
-            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
-        else:
-            merged.append((start, end))
+    # `kinds` reports every pattern that hit, including one whose span was
+    # merged into a neighbouring span; that is why it is read from the raw
+    # matches rather than from the merged spans.
+    kinds = {kind for kind, _, _ in _assertion_matches(reply)}
 
     pieces: list[str] = []
     cursor = 0
-    for start, end in merged:
+    for _, start, end in spans:
         pieces.append(reply[cursor:start])
         pieces.append(UNGROUNDED_MARKER)
         cursor = end
@@ -108,5 +149,5 @@ def guard_output(reply: str, *, grounded: bool) -> OutputGuardResult:
         guarded = f"{guarded}。"
     guarded = f"{guarded} {_CAVEAT}"
     return OutputGuardResult(
-        reply=guarded, replaced=len(merged), kinds=tuple(sorted(kinds))
+        reply=guarded, replaced=len(spans), kinds=tuple(sorted(kinds))
     )

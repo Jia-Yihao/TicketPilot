@@ -39,6 +39,7 @@ from app.main import create_app
 from app.models.enums import Intent
 from app.models.llm_usage import LlmUsageRecord
 from app.models.task import Task, TaskEvent
+from app.models.ticket import Ticket
 from app.seed import seed_all
 from scripts.llm_gap_probe import CANDIDATES
 from tests.conftest import ALICE
@@ -61,7 +62,10 @@ class StubAgent:
         self.calls = 0
 
     def parse(
-        self, request: str, context: dict[str, Any] | None = None
+        self,
+        request: str,
+        context: dict[str, Any] | None = None,
+        candidates: object = None,
     ) -> tuple[IntentOutput, ModelTrace]:
         self.calls += 1
         return self.output, ModelTrace(requests=1)
@@ -70,7 +74,12 @@ class StubAgent:
 class ExplodingAgent:
     """Fails the test if the rules-mode path ever reaches a model."""
 
-    def parse(self, request: str, context: dict[str, Any] | None = None) -> IntentOutput:
+    def parse(
+        self,
+        request: str,
+        context: dict[str, Any] | None = None,
+        candidates: object = None,
+    ) -> IntentOutput:
         raise AssertionError(f"rules mode asked the model about {request!r}")
 
 
@@ -90,7 +99,12 @@ class FixedBrain:
         self.requests: list[str] = []
 
     def plan(
-        self, request: str, context: dict[str, Any] | None = None
+        self,
+        request: str,
+        context: dict[str, Any] | None = None,
+        *,
+        decision: Any = None,
+        order_state: str | None = None,
     ) -> tuple[RoutePlan, str, ModelTrace | None]:
         self.requests.append(request)
         rules = classify(request, context)
@@ -107,6 +121,9 @@ class FixedBrain:
                     if rules.amount_cents is not None
                     else self.model_amount_cents
                 ),
+                # 与真实 IntentBrain 的采纳路径同形（pydantic_agent.py:428/487）：
+                # 退款原因只搬运服务端读数，模型不抽取、不采纳（B-1 口径 §5.6.5）。
+                refund_reason=rules.refund_reason,
             ),
             "pydantic_ai",
             ModelTrace(requests=1),
@@ -141,6 +158,20 @@ def _routed(task_id: str, app: FastAPI) -> dict[str, Any]:
         ).first()
     assert row is not None, f"no task.routed event for {task_id}"
     return dict(row[0])
+
+
+def _route_attributes(client: TestClient, trace_id: str) -> dict[str, Any]:
+    """The task-side routing span: ``task.route`` flattens ``ModelTrace`` onto itself."""
+    response = client.get(f"/api/v1/traces/{trace_id}", headers=ALICE)
+    assert response.status_code == 200, response.text
+    spans = [span for span in response.json()["spans"] if span["name"] == "task.route"]
+    assert len(spans) == 1, spans
+    return dict(spans[0]["attributes"])
+
+
+def _tickets(app: FastAPI) -> int:
+    with app.state.session_factory() as session:
+        return int(session.scalar(select(func.count()).select_from(Ticket)) or 0)
 
 
 def test_rules_read_these_refund_phrasings_as_unknown() -> None:
@@ -328,11 +359,15 @@ def test_chat_adopts_a_refund_reading_and_the_task_still_waits_for_approval(
     app = _app(tmp_path, brain)
     client = TestClient(app)
     conversation = "refund-gap"
+    # The gap phrasing plus the refund reason B-1 requires: still unreadable
+    # by the rule table ("质量" is not an intent cue), but the runtime no
+    # longer stops at MISSING_REFUND_REASON once the amount arrives.
+    text = REFUND_GAPS[0] + "，质量有问题"
 
     first = client.post(
         "/api/v1/support/messages",
         headers=ALICE,
-        json={"message": REFUND_GAPS[0], "conversation_id": conversation},
+        json={"message": text, "conversation_id": conversation},
     )
     assert first.status_code == 200, first.text
     body = first.json()
@@ -358,7 +393,7 @@ def test_chat_adopts_a_refund_reading_and_the_task_still_waits_for_approval(
     # The ledger's verdict is the runtime's own plan (it asked the model again
     # about the merged request); the chat gate cannot pass a verdict down.
     assert routed["planning_source"] == "pydantic_ai"
-    assert brain.requests == [REFUND_GAPS[0], REFUND_GAPS[0]]
+    assert brain.requests == [text, text]
     assert _tasks(app) == 1
 
 
@@ -375,3 +410,46 @@ def test_the_task_api_does_ask_the_model_about_the_same_text(tmp_path: Path) -> 
     assert body["status"] == "SUCCEEDED"
     assert body["result"]["outcome"] == "NEEDS_HUMAN_REVIEW"
     assert "无法判断" in str(body["result"]["summary"])
+
+
+def test_the_task_api_cannot_reroute_a_read_request_into_a_write(tmp_path: Path) -> None:
+    """R7 收口：任务 API 与对话入口共用同一个采纳面，模型改不出建单。
+
+    直接调 ``POST /tasks`` 时没有对话入口那道闸，改道只能由 ``IntentBrain.plan``
+    自己的采纳面挡住。这句话规则读成 ``UNKNOWN``，模型答 ``TICKET_CREATE``
+    （合法读数、也在候选集里）：收口之前六个意图都在采纳面内，于是模型能把一条
+    只读请求变成建单，而 README 的「0/16」测的是对话入口、不覆盖这条路径。
+    现在路由留在规则读数上，工单表一行都不多，轨迹按 ``extra_write`` 记一次
+    「被拒改道」，与「被采纳的改道」分列。
+    """
+    model_says = IntentOutput(
+        intent="TICKET_CREATE",
+        order_id=None,
+        amount_cents=None,
+        confidence=0.9,
+        decision_summary="用户想建单。",
+    )
+    agent = StubAgent(model_says)
+    brain = IntentBrain(mode="pydantic_ai", agent=cast("IntentAgent", agent))
+    app = _app(tmp_path, brain)
+    client = TestClient(app)
+
+    response = client.post("/api/v1/tasks", headers=ALICE, json={"request": REFUND_GAPS[1]})
+
+    assert response.status_code == 201, response.text
+    assert agent.calls == 1
+    body = response.json()
+    # 没有建单：任务落在「无法判断」的追问型终态，工单表仍是空的。
+    assert body["status"] == "SUCCEEDED"
+    assert body["result"]["outcome"] == "NEEDS_HUMAN_REVIEW"
+    assert "无法判断" in str(body["result"]["summary"])
+    assert _tasks(app) == 1
+    assert _tickets(app) == 0
+
+    attributes = _route_attributes(client, body["trace_id"])
+    # 台账记的是路由结果（规则读数），模型那句写意图由改道计数承接。
+    assert attributes["intent"] == "UNKNOWN"
+    assert attributes["planning_source"] == "pydantic_ai"
+    assert attributes["model_redirect_rejected"] is True
+    assert attributes["model_redirect"] is False
+    assert attributes["model_redirect_kind"] == "extra_write"

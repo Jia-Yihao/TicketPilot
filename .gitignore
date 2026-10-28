@@ -5,6 +5,7 @@ __pycache__/
 *.db
 *.sqlite3
 .pytest_cache/
+.pytest_tmp/
 .ruff_cache/
 .mypy_cache/
 .coverage

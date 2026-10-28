@@ -31,7 +31,10 @@ class StubAgent:
         self.requests: list[str] = []
 
     def parse(
-        self, request: str, context: dict[str, Any] | None = None
+        self,
+        request: str,
+        context: dict[str, Any] | None = None,
+        candidates: object = None,
     ) -> tuple[IntentOutput, ModelTrace]:
         self.requests.append(request)
         return (

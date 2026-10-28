@@ -130,7 +130,12 @@ export interface TaskEvent {
   created_at: string
 }
 
-export type ContextCardKind = 'product' | 'policy' | 'order' | 'analytics'
+export type ContextCardKind =
+  | 'product'
+  | 'policy'
+  | 'order'
+  | 'order_candidate'
+  | 'analytics'
 
 export interface ContextSectionSummary {
   id: string
@@ -255,6 +260,13 @@ export interface HandoffQueueResponse {
   offset: number
 }
 
+export interface HandoffCandidateRecord {
+  order_id: string
+  product_name: string
+  status: string
+  delivered_at: string | null
+}
+
 export interface HandoffBundle {
   conversation_id: string
   tenant_id: string
@@ -269,11 +281,18 @@ export interface HandoffBundle {
   intent_history: HandoffIntentRecord[]
   slots: Record<string, unknown>
   attempted_actions: HandoffActionRecord[]
+  attempted_candidates: HandoffCandidateRecord[]
   pending_task_id: string | null
   sentiment: SentimentSnapshot
   policy_refs: HandoffCitation[]
   suggested_next_step: string
   created_at: string
+  // What the customer wrote about themselves before this conversation, in
+  // their own words. The three keys are absent when there is nothing to
+  // carry: no placeholder, no empty string, no zero.
+  history_summary?: string
+  history_summary_source?: string
+  history_summary_max_chars?: number
 }
 
 export interface HandoffDetail extends HandoffSummary {
@@ -406,9 +425,20 @@ export interface AnalyticsQuerySummary {
   created_at: string
 }
 
+/**
+ * Why a channel can or cannot take inbound traffic, as decided by the
+ * backend. Closed set — the backend never sends anything else.
+ */
+export type ChannelAvailability =
+  | 'available'
+  | 'webhook_secret_missing'
+  | 'not_enabled'
+  | 'not_implemented'
+
 export interface ChannelCapability {
   channel: string
   enabled: boolean
+  availability: ChannelAvailability
   supports_stream: boolean
   supports_rich_card: boolean
   supports_voice: boolean
@@ -457,6 +487,7 @@ export interface NotificationView {
   status: string
   title: string
   body: string
+  rule_version: number
   created_at: string | null
   confirmed_at: string | null
   cancelled_at: string | null
@@ -474,6 +505,7 @@ export interface ProactiveRule {
   cooldown_minutes: number
   template: string
   required_context: string[]
+  version: number
   updated_at: string | null
 }
 
@@ -485,4 +517,60 @@ export interface ProactiveRuleUpdatePayload {
   template?: string
   enabled?: boolean
   cooldown_minutes?: number
+  reason?: string
+}
+
+export interface ProactiveRuleChange {
+  change_id: string
+  event_type: string
+  kind: 'UPDATE' | 'ROLLBACK'
+  status: 'PENDING' | 'APPROVED' | 'REJECTED'
+  base_version: number
+  target_version: number | null
+  template: string
+  enabled: boolean
+  requires_confirmation: boolean
+  cooldown_minutes: number
+  required_context: string[]
+  old_template: string | null
+  old_enabled: boolean | null
+  old_cooldown_minutes: number | null
+  reason: string
+  submitted_by: string
+  submitted_at: string | null
+  decided_by: string | null
+  decided_at: string | null
+  decision_note: string
+  applied_version: number | null
+}
+
+export interface ProactiveRuleChangeListResponse {
+  changes: ProactiveRuleChange[]
+}
+
+export interface ProactiveRuleVersion {
+  event_type: string
+  version: number
+  template: string
+  enabled: boolean
+  requires_confirmation: boolean
+  cooldown_minutes: number
+  change_id: string
+  submitted_by: string
+  approved_by: string
+  reason: string
+  created_at: string | null
+}
+
+export interface ProactiveRuleVersionListResponse {
+  versions: ProactiveRuleVersion[]
+}
+
+export interface ProactiveRuleDecisionPayload {
+  note?: string
+}
+
+export interface ProactiveRuleRollbackPayload {
+  version: number
+  reason?: string
 }

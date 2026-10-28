@@ -69,7 +69,7 @@ def test_missing_order_id_is_asked_once_and_then_resumed(client: TestClient) -> 
 def test_refund_request_asks_for_the_order_before_creating_a_task(
     client: TestClient,
 ) -> None:
-    first = _message(client, ALICE, "我要申请退款")
+    first = _message(client, ALICE, "我要申请退款，质量有问题")
 
     assert first["intent"] == "REFUND_REQUEST"
     assert first["task"] is None
@@ -92,7 +92,7 @@ def test_refund_request_asks_for_the_order_before_creating_a_task(
 def test_refund_request_without_an_amount_asks_before_creating_a_task(
     client: TestClient,
 ) -> None:
-    first = _message(client, ALICE, "我要申请退款，订单 ORD-DEMO-1001")
+    first = _message(client, ALICE, "我要申请退款，订单 ORD-DEMO-1001，质量有问题")
 
     assert first["intent"] == "REFUND_REQUEST"
     assert first["task"] is None
@@ -114,7 +114,7 @@ def test_refund_request_without_an_amount_asks_before_creating_a_task(
 def test_amount_slot_is_carried_into_the_resumed_refund_request(
     client: TestClient,
 ) -> None:
-    first = _message(client, ALICE, "我要申请退款 129 元")
+    first = _message(client, ALICE, "我要申请退款 129 元，质量有问题")
 
     assert first["slots"]["amount_cents"] == 12900
     assert first["clarification"]["reason"] == "MISSING_ORDER_ID"
@@ -125,6 +125,29 @@ def test_amount_slot_is_carried_into_the_resumed_refund_request(
 
     assert second["slots"]["amount_cents"] == 12900
     assert second["task"]["pending_approval"]["amount_cents"] == 12900
+
+
+def test_refund_reason_is_carried_into_the_resumed_refund_request(
+    client: TestClient,
+) -> None:
+    # The customer answered the reason on the first turn; when the second
+    # turn only supplies the amount, the carried reason must not be asked
+    # for again (MISSING_REFUND_REASON would be a product defect here).
+    first = _message(client, ALICE, "我要申请退款，订单 ORD-DEMO-1001，商品有质量问题")
+
+    assert first["intent"] == "REFUND_REQUEST"
+    assert first["task"] is None
+    assert first["clarification"] is not None
+    assert first["clarification"]["reason"] == "MISSING_AMOUNT"
+    assert first["clarification"]["expected_slot"] == "amount_cents"
+
+    second = _message(
+        client, ALICE, "129 元", conversation_id=first["conversation_id"]
+    )
+
+    assert second["clarification"] is None
+    assert second["task"] is not None
+    assert second["task"]["pending_approval"]
 
 
 def test_refund_eligibility_gives_a_personal_verdict(client: TestClient) -> None:

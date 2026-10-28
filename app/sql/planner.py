@@ -21,6 +21,7 @@ from typing import Protocol
 
 __all__ = [
     "HeuristicSqlPlanner",
+    "PlanRefusal",
     "SqlPlan",
     "SqlPlanner",
     "TimeRange",
@@ -34,6 +35,14 @@ class TimeRange:
     start: datetime
     end: datetime
     label: str
+
+
+@dataclass(frozen=True, slots=True)
+class PlanRefusal:
+    """Why a question produced no plan, in a code the ledger can count."""
+
+    reason: str
+    detail: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,6 +86,41 @@ _GROUP_CUES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("month", ("按月", "每月", "月度")),
     ("day", ("按天", "每天", "日度")),
 )
+
+# Dimensions a seat might ask for that the readable schema cannot group by.
+# "分布" alone still means status (that is a supported dimension); these
+# nouns say the question is about something else, and answering it with the
+# status buckets would be a true statement about the wrong question.
+_UNSUPPORTED_DIMENSIONS = (
+    "商品",
+    "品类",
+    "类目",
+    "类别",
+    "sku",
+    "渠道",
+    "来源",
+    "品牌",
+    "型号",
+    "地区",
+    "城市",
+    "仓库",
+    "支付方式",
+)
+_GROUP_MARKERS = ("按", "各", "每个", "分")
+_DIMENSION_TAILS = ("分布", "统计", "分别")
+
+
+def unsupported_dimension(text: str) -> str | None:
+    """The grouping dimension the question asks for, if it is not supported."""
+    lowered = text.lower()
+    for dimension in _UNSUPPORTED_DIMENSIONS:
+        if dimension not in lowered:
+            continue
+        if any(
+            f"{marker}{dimension}" in lowered for marker in _GROUP_MARKERS
+        ) or any(f"{dimension}{tail}" in lowered for tail in _DIMENSION_TAILS):
+            return dimension
+    return None
 
 # The nouns a record set is called by, and the measure words that may sit
 # between the count word and the noun.
@@ -128,6 +172,11 @@ def asks_for_aggregate(text: str) -> bool:
     if any(cue in lowered for cue in _SUM_CUES):
         return True
     if _counts_a_record_set(lowered):
+        return True
+    # A grouping request is an aggregate even when its dimension turns out
+    # to be unsupported: the route must reach the planner, which then refuses
+    # it with a reason, instead of falling through to some other answer.
+    if unsupported_dimension(lowered) is not None:
         return True
     return any(cue in lowered for _name, cues in _GROUP_CUES for cue in cues)
 
@@ -196,25 +245,51 @@ class HeuristicSqlPlanner:
     """Reads a question and writes down the query it describes."""
 
     def plan(self, question: str, *, now: datetime) -> SqlPlan | None:
+        return self.decide(question, now=now)[0]
+
+    def decide(
+        self, question: str, *, now: datetime
+    ) -> tuple[SqlPlan | None, PlanRefusal | None]:
+        """The plan, or the reason none was written.
+
+        The reason is part of the contract, not a log line: ``NO_PLAN`` says
+        the question named no record set, while ``UNSUPPORTED_DIMENSION`` says
+        it named one but asked for a grouping the schema cannot answer. The
+        two must stay countable apart — otherwise "we fixed the guess" cannot
+        be measured.
+        """
         text = question.strip().lower()
         if not text:
-            return None
+            return None, PlanRefusal("NO_PLAN", "the question is empty")
+        dimension = unsupported_dimension(text)
+        if dimension is not None:
+            return None, PlanRefusal(
+                "UNSUPPORTED_DIMENSION",
+                f"grouping by {dimension} is not supported",
+            )
         dataset = self._dataset(text)
         if dataset is None:
-            return None
+            return None, PlanRefusal(
+                "NO_PLAN", "the question does not name a record set"
+            )
         status, mismatched = _detect_status(text, dataset)
         if mismatched:
-            return None
+            return None, PlanRefusal(
+                "NO_PLAN", "the status belongs to another record set"
+            )
         metric = self._metric(text)
         group_by = self._group_by(text)
         time_range = self._time_range(text, now)
-        return SqlPlan(
-            dataset=dataset,
-            metric=metric,
-            group_by=group_by,
-            time_range=time_range,
-            question=question.strip(),
-            status=status,
+        return (
+            SqlPlan(
+                dataset=dataset,
+                metric=metric,
+                group_by=group_by,
+                time_range=time_range,
+                question=question.strip(),
+                status=status,
+            ),
+            None,
         )
 
     # ------------------------------------------------------------ internals

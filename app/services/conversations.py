@@ -20,6 +20,10 @@ class ConversationSlots:
     order_id: str | None = None
     product_id: str | None = None
     amount_cents: int | None = None
+    # The refund reason the customer already answered (a RefundReason enum
+    # value string, e.g. "QUALITY"). Carried across turns: once confirmed it
+    # is reused, never asked for again, never re-matched from new text.
+    refund_reason: str | None = None
     pending_intent: str | None = None
     pending_request: str | None = None
     # Escalation counters. The trigger table reads them; they are how a
@@ -28,6 +32,9 @@ class ConversationSlots:
     clarification_count: int = 0
     negative_rounds: int = 0
     last_intent: str | None = None
+    # The statistics answer whose L3 rows are still open in this conversation.
+    # A detail follow-up reads it; a new statistic replaces it.
+    last_analytics_query_id: str | None = None
     resolved: bool = False
     last_message_at: str | None = None
 
@@ -36,12 +43,14 @@ class ConversationSlots:
             "order_id": self.order_id,
             "product_id": self.product_id,
             "amount_cents": self.amount_cents,
+            "refund_reason": self.refund_reason,
             "pending_intent": self.pending_intent,
             "pending_request": self.pending_request,
             "failed_intents": dict(self.failed_intents),
             "clarification_count": self.clarification_count,
             "negative_rounds": self.negative_rounds,
             "last_intent": self.last_intent,
+            "last_analytics_query_id": self.last_analytics_query_id,
             "resolved": self.resolved,
             "last_message_at": self.last_message_at,
         }
@@ -55,6 +64,7 @@ class ConversationSlots:
             order_id=_as_str(data.get("order_id")),
             product_id=_as_str(data.get("product_id")),
             amount_cents=amount if isinstance(amount, int) else None,
+            refund_reason=_as_str(data.get("refund_reason")),
             pending_intent=_as_str(data.get("pending_intent")),
             pending_request=_as_str(data.get("pending_request")),
             failed_intents={
@@ -65,6 +75,7 @@ class ConversationSlots:
             clarification_count=int(data.get("clarification_count") or 0),
             negative_rounds=int(data.get("negative_rounds") or 0),
             last_intent=_as_str(data.get("last_intent")),
+            last_analytics_query_id=_as_str(data.get("last_analytics_query_id")),
             resolved=bool(data.get("resolved", False)),
             last_message_at=_as_str(data.get("last_message_at")),
         )

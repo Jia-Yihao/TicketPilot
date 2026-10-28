@@ -14,6 +14,7 @@ class VerificationResult:
 
     @property
     def passed(self) -> bool:
+        """是否全部校验通过——唯一判据就是这个状态，别拿单项 checks 自己算。"""
         return self.status is VerificationStatus.VERIFIED_SUCCESS
 
 
@@ -21,6 +22,11 @@ class VerificationService:
     def verify_refund(
         self, *, refund: Refund | None, order: Order, expected_amount_cents: int
     ) -> VerificationResult:
+        """对着订单与退款记录做五项校验：记录存在、归属、金额、状态、可退余额非负。
+
+        只有「退款记录成功且五项全过」才是 ``VERIFIED_SUCCESS``；记录成功但有项
+        没过转人工复核，记录仍在途则是 ``PENDING_CONFIRMATION``——三者不能混。
+        """
         checks: list[dict[str, Any]] = []
 
         checks.append(

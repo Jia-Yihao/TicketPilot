@@ -168,7 +168,9 @@ def test_high_risk_refund_is_flagged_but_the_conversation_stays(
     client: TestClient,
 ) -> None:
     body = _message(
-        client, ALICE, "我要申请退款，订单 ORD-DEMO-1001，金额 129 元"
+        client,
+        ALICE,
+        "我要申请退款，订单 ORD-DEMO-1001，金额 129 元，商品有质量问题",
     )
 
     assert body["handoff"]["signal_id"] == "risk"
@@ -185,16 +187,76 @@ def test_high_risk_refund_is_flagged_but_the_conversation_stays(
 
 # --------------------------------------------------------------------- 信号 7
 def test_repeated_clarification_hands_over(client: TestClient) -> None:
+    """追问一次 → 带候选再追问一次 → 第三次仍未补上才移交。"""
     first = _message(client, ALICE, "物流到哪了")
     assert first["clarification"] is not None
     assert first["handoff"] is None
 
     second = _message(
-        client, ALICE, "物流到哪了", conversation_id=first["conversation_id"]
+        client, ALICE, "我忘了单号", conversation_id=first["conversation_id"]
     )
 
-    assert second["handoff"]["signal_id"] == "repeated_clarification"
-    assert second["handoff"]["takeover"] is True
+    assert second["clarification"] is not None
+    assert second["handoff"] is None
+    assert [card["kind"] for card in second["context_cards"]] == [
+        "order_candidate",
+        "order_candidate",
+    ]
+    assert second["slots"]["clarification_count"] == 2
+
+    third = _message(
+        client, ALICE, "还是想不起来", conversation_id=first["conversation_id"]
+    )
+
+    assert third["handoff"]["signal_id"] == "repeated_clarification"
+    assert third["handoff"]["takeover"] is True
+    assert third["slots"]["clarification_count"] == 3
+    assert "已转人工同事接手" in third["reply"]
+
+    fourth = _message(
+        client, ALICE, "还在吗", conversation_id=first["conversation_id"]
+    )
+
+    assert fourth["agent_silent"] is True
+    assert fourth["slots"]["clarification_count"] == 3
+
+
+def test_the_clarification_handoff_carries_the_candidates_shown(
+    client: TestClient,
+) -> None:
+    first = _message(client, ALICE, "物流到哪了")
+    _message(client, ALICE, "我忘了单号", conversation_id=first["conversation_id"])
+
+    third = _message(
+        client, ALICE, "还是想不起来", conversation_id=first["conversation_id"]
+    )
+
+    case = _seat_case(client, third["handoff"]["event_id"])
+    candidates = case["bundle"]["attempted_candidates"]
+    assert [item["order_id"] for item in candidates] == [
+        card["card_id"] for card in third["context_cards"]
+    ]
+    assert {item["status"] for item in candidates} == {"SHIPPED", "DELIVERED"}
+    assert all(item["product_name"] for item in candidates)
+
+
+def test_a_handoff_without_candidates_still_lists_the_field(
+    app_factory: Callable[..., FastAPI],
+) -> None:
+    """没有历史订单的客户被转人工时，字段仍然存在，只是空列表。"""
+    app = app_factory()
+    client = TestClient(app)
+    headers = {"X-Tenant-Id": "demo", "X-User-Id": "nobody"}
+
+    first = _message(client, headers, "物流到哪了")
+    _message(client, headers, "我忘了单号", conversation_id=first["conversation_id"])
+    third = _message(
+        client, headers, "还是想不起来", conversation_id=first["conversation_id"]
+    )
+
+    assert third["context_cards"] == []
+    case = _seat_case(client, third["handoff"]["event_id"])
+    assert case["bundle"]["attempted_candidates"] == []
 
 
 # --------------------------------------------------------------------- 信号 8
@@ -415,6 +477,38 @@ def test_every_signal_declares_a_phase_and_a_counter() -> None:
             assert signal.threshold
         if signal.trigger == "cue":
             assert signal.cues
+
+
+def test_every_named_threshold_resolves_in_the_policy_engine() -> None:
+    """触发表引用的阈值名必须真能在政策引擎里取到数。"""
+    from app.agent.escalation import get_escalation_catalog
+    from app.core.config import Settings
+    from app.core.policy import PolicyEngine
+
+    engine = PolicyEngine.from_settings(Settings(environment="test"))
+
+    for signal in get_escalation_catalog().signals:
+        if signal.threshold is not None:
+            assert engine.escalation.threshold(signal.threshold) >= 0, signal.signal_id
+
+
+def test_repeated_clarification_has_its_own_budget() -> None:
+    """澄清预算不复用挫败度阈值：第二次追问要留在客户手里。"""
+    from app.agent.escalation import get_escalation_catalog
+    from app.core.config import Settings
+    from app.core.policy import PolicyEngine
+
+    engine = PolicyEngine.from_settings(Settings(environment="test"))
+    signal = next(
+        item
+        for item in get_escalation_catalog().signals
+        if item.signal_id == "repeated_clarification"
+    )
+
+    assert signal.counter == "clarification_count"
+    assert signal.threshold == "clarification_rounds"
+    assert engine.escalation.threshold("clarification_rounds") == 3
+    assert engine.escalation.threshold("frustration_rounds") == 2
 
 
 @pytest.mark.parametrize(

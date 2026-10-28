@@ -1,0 +1,26 @@
+# 退款原因关键词规则表
+#
+# 客户话术到退款原因枚举的映射。表序即优先级：自上而下，首条命中即停。
+# 命中即填槽，未命中不填——不得兜底 OTHER。
+#
+# other_cues 是「显式其他」的独立识别表，优先于 rules：客户自己说的「其他 /
+# 说不清」是最强的分类信号，不该被顺带命中的关键词改写成系统的猜测。
+# OTHER 只来自 other_cues 与调用方显式提交，不是 rules 的一行。
+#
+# 口径来源：.qoder/rules/refund-reason-taxonomy.md §5.6.1-§5.6.1.1、§5.6.2
+
+version: "2026-10-26"
+slot: refund_reason
+enum: RefundReason
+other_cues: ["其他", "别的", "说不清", "不想分类", "其他原因"]
+rules:
+  - refund_reason: DAMAGED
+    cues: ["摔坏", "破损", "碎了", "压坏", "裂", "坏了"]
+  - refund_reason: QUALITY
+    cues: ["质量", "故障", "用不了", "开不了机", "不好用", "失灵"]
+  - refund_reason: WRONG_ITEM
+    cues: ["发错", "错货", "不是我要的", "发来的不对"]
+  - refund_reason: NOT_AS_DESCRIBED
+    cues: ["和描述不符", "与描述不符", "图片不一样", "和图片不符"]
+  - refund_reason: NO_LONGER_NEEDED
+    cues: ["不想要了", "不需要了", "买多了", "多拍", "不想要"]

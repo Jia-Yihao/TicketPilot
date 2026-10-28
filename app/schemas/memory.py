@@ -40,6 +40,7 @@ class NotificationView(BaseModel):
     status: str
     title: str
     body: str
+    rule_version: int = 1
     created_at: str | None = None
     confirmed_at: str | None = None
     cancelled_at: str | None = None
@@ -72,6 +73,7 @@ class ProactiveRuleView(BaseModel):
     cooldown_minutes: int
     template: str
     required_context: list[str] = Field(default_factory=list)
+    version: int = 1
     updated_at: str | None = None
 
 
@@ -89,7 +91,67 @@ class ProactiveRuleUpdateRequest(BaseModel):
     template: str | None = None
     enabled: bool | None = None
     cooldown_minutes: int | None = Field(default=None, ge=0, le=1440)
+    reason: str | None = Field(default=None, max_length=200)
 
 
 class ProactiveRuleListResponse(BaseModel):
     rules: list[ProactiveRuleView] = Field(default_factory=list)
+
+
+class ProactiveRuleChangeView(BaseModel):
+    change_id: str
+    event_type: str
+    kind: str
+    status: str
+    base_version: int
+    target_version: int | None = None
+    template: str
+    enabled: bool
+    requires_confirmation: bool
+    cooldown_minutes: int
+    required_context: list[str] = Field(default_factory=list)
+    old_template: str | None = None
+    old_enabled: bool | None = None
+    old_cooldown_minutes: int | None = None
+    reason: str = ""
+    submitted_by: str
+    submitted_at: str | None = None
+    decided_by: str | None = None
+    decided_at: str | None = None
+    decision_note: str = ""
+    applied_version: int | None = None
+
+
+class ProactiveRuleChangeListResponse(BaseModel):
+    changes: list[ProactiveRuleChangeView] = Field(default_factory=list)
+
+
+class ProactiveRuleVersionView(BaseModel):
+    event_type: str
+    version: int
+    template: str
+    enabled: bool
+    requires_confirmation: bool
+    cooldown_minutes: int
+    change_id: str
+    submitted_by: str
+    approved_by: str
+    reason: str = ""
+    created_at: str | None = None
+
+
+class ProactiveRuleVersionListResponse(BaseModel):
+    versions: list[ProactiveRuleVersionView] = Field(default_factory=list)
+
+
+class ProactiveRuleDecisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    note: str | None = Field(default=None, max_length=200)
+
+
+class ProactiveRuleRollbackRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version: int = Field(ge=1)
+    reason: str | None = Field(default=None, max_length=200)

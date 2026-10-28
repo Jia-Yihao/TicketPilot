@@ -140,7 +140,7 @@ def test_cross_tenant_policy_card_is_not_disclosed(client: TestClient) -> None:
 
 def test_refund_request_still_creates_approval_task(client: TestClient) -> None:
     body = _message(
-        client, ALICE, "我要申请退款，订单 ORD-DEMO-1001，金额 129 元"
+        client, ALICE, "我要申请退款，订单 ORD-DEMO-1001，金额 129 元，商品有质量问题"
     )
 
     assert body["intent"] == "REFUND_REQUEST"

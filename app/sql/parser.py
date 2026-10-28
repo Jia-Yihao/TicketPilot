@@ -1,15 +1,22 @@
-"""A parser for the one SQL shape this project is willing to run.
+"""只解析本项目愿意执行的那一种 SQL 形状。
 
-The guard in :mod:`app.sql.guard` decides what is allowed; this module only
-turns text into a tree. The grammar is deliberately tiny:
+本模块只做一件事：把文本变成一棵很小的树，再把这棵树渲染成 SQL 与参数。
+「允不允许」是 ``app/sql/guard.py`` 的判断，不在这里——两边故意分开，解析器
+才不必为了安全去猜语义，守卫面对的也永远是一棵已经成形、没有歧义的树。
+
+文法小得刻意：
 
     SELECT <items> FROM <table> [WHERE <expr>]
            [GROUP BY <cols>] [ORDER BY <cols>] [LIMIT <n>]
 
-Anything else — a second statement, a join, a subquery, a set operation, a
-comment — is refused while parsing, so the guard never has to guess what a
-statement meant. Literals are kept apart from inline text so the renderer can
-bind every value as a parameter instead of pasting it into the SQL.
+此外的一切——第二条语句、join、子查询、集合运算、注释——在解析阶段就以
+``SqlRejected`` 收场，不留到守卫去事后补救。
+
+一条取舍：字面量与内联文本分开存（``Literal`` 与 ``InlineLiteral``）。前者
+渲染成绑定参数，后者只能来自白名单常量；混为一谈的话，「每个值都当参数绑」
+这条不变量会在渲染器里悄悄破掉。树上另有 ``walk_columns`` /
+``walk_functions`` / ``walk_params`` 三个遍历器，守卫与审计靠它们看清一棵树
+到底碰了哪些列、调了哪些函数、带出哪些参数。
 """
 
 from __future__ import annotations

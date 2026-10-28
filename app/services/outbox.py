@@ -22,12 +22,10 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
 
-from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.security import Identity
 from app.core.time import utcnow
-from app.models.enums import OutboxStatus
 from app.models.outbox import OutboxMessage
 from app.repositories.outbox import OutboxRepository
 
@@ -100,13 +98,6 @@ class OutboxService:
             available_at=available_at,
         )
         return row
-
-    def pending_count(self) -> int:
-        """How many messages are still waiting."""
-        query = select(func.count(OutboxMessage.id)).where(
-            OutboxMessage.status == OutboxStatus.PENDING.value
-        )
-        return int(self.session.execute(query).scalar_one())
 
     def deliver(self, sink: OutboxSink, *, limit: int = 50) -> DeliveryReport:
         """Push the due messages and record what happened to each one.

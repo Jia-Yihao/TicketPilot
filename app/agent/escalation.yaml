@@ -36,7 +36,7 @@
 # one listed wins, so a complaint is routed to the complaint queue even when
 # the same message also carries a frustration cue.
 
-version: "2026-10-24"
+version: "2026-10-26"
 
 signals:
   - signal_id: user_request
@@ -163,13 +163,18 @@ signals:
     reply: "这类高风险操作会进入人工审批环节，审批结果以人工确认为准。"
     next_step: "复核会话：金额超过审批阈值，确认审批链是否完整。"
 
+  # The clarification budget is deliberately its own threshold, not
+  # frustration_rounds: the turn before this one is the candidate round, where
+  # the customer is handed their own recent orders and can still self-serve.
+  # Sharing the frustration number would replace that turn with a handover and
+  # the candidate list would never be seen.
   - signal_id: repeated_clarification
     priority: P1
     reason: NO_UNDERSTANDING
     phase: post
     trigger: threshold
     counter: clarification_count
-    threshold: frustration_rounds
+    threshold: clarification_rounds
     intents:
       - ORDER_QUERY
       - LOGISTICS_QUERY

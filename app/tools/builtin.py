@@ -3,11 +3,15 @@ from __future__ import annotations
 from typing import Any
 
 from app.core.errors import ValidationAppError
-from app.models.enums import RiskLevel
+from app.models.enums import RefundReason, RefundType, RiskLevel, VerificationStatus
 from app.retrieval.search import PolicySearch
 from app.services.orders import OrderService
 from app.services.refund_policy import RefundPolicy
-from app.services.refunds import RefundExecutionService
+from app.services.refunds import (
+    RefundExecutionService,
+    refund_reason_label,
+    refund_type_label,
+)
 from app.services.tickets import TicketService
 from app.tools.base import (
     DegradationStep,
@@ -25,6 +29,19 @@ _ORDER_ID = {
     "maxLength": 40,
     "hint": "订单号应为 ORD-… 形式，例如 ORD-DEMO-1001",
 }
+# 退款原因 / 类型：入参键名一律带上下文（口径 §5.6.4），值是枚举的值字符串。
+# 两个键都是可选的：类型缺值时由服务端派生，不由调用方追问（口径 §5.6.6）。
+_REFUND_REASON = {
+    "type": "string",
+    "enum": [member.value for member in RefundReason],
+    "hint": "退款原因：QUALITY 质量问题 / DAMAGED 破损 / WRONG_ITEM 发错商品 / "
+    "NOT_AS_DESCRIBED 与描述不符 / NO_LONGER_NEEDED 不再需要 / OTHER 其他",
+}
+_REFUND_TYPE = {
+    "type": "string",
+    "enum": [member.value for member in RefundType],
+    "hint": "退款类型：FULL 全额 / PARTIAL 部分 / SHIPPING 运费 / PRICE_PROTECTION 价保",
+}
 
 
 def build_registry(
@@ -35,8 +52,15 @@ def build_registry(
     refunds: RefundExecutionService,
     policy: RefundPolicy,
 ) -> ToolRegistry:
+    """装配内建工具：处理器 + 清单，一次装成一个注册表。
+
+    ``orders`` / ``policies`` / ``tickets`` / ``refunds`` 由调用方按当前会话
+    现造，因此注册表天然带着这次调用者的可见范围与事务边界；本函数不碰
+    数据库，也不缓存任何东西——每次进任务都重新装配一遍。
+    """
     registry = ToolRegistry()
 
+    # --- 只读处理器：订单 / 物流 / 政策检索，全部走调用者自己的可见范围 ---
     def get_order(ctx: ToolContext, args: dict[str, Any]) -> ToolResult:
         order = orders.require_order(ctx.identity, _str_arg(args, "order_id"))
         return ToolResult(
@@ -68,6 +92,7 @@ def build_registry(
             message=f"检索到 {len(results)} 个相关政策片段。",
         )
 
+    # --- 写处理器：建单（幂等键由上下文给）与退款（唯一动钱的一个）---
     def create_ticket(ctx: ToolContext, args: dict[str, Any]) -> ToolResult:
         key = ctx.idempotency_key or _str_arg(args, "idempotency_key")
         creation = tickets.create(
@@ -97,14 +122,30 @@ def build_registry(
         if amount is not None and not isinstance(amount, int):
             raise ValidationAppError("amount_cents must be an integer.")
         result = policy.check(ctx.identity, _str_arg(args, "order_id"), amount)
-        return ToolResult(ok=True, data=result.to_dict())
+        data = result.to_dict()
+        # 只读回执的尾句必须阈值感知（B-3 口径 §4.3 / §3.1）：数据源只有
+        # 资格结果里已有的 requires_approval（PolicyEngine 阈值判定），
+        # 不新增阈值判定、档位表不参与「要不要人批」。为真时的输出与
+        # 改动前逐字一致（§8.1 / §4.2.1 不变量 5）；为假时不得断言
+        # 「实际退款需要人工审批」，也不得出现档位内部口径或阈值金额
+        # （§4.3 客户可见文本禁令）。
+        data["approval_requirement"] = (
+            "实际退款需要人工审批。"
+            if data["requires_approval"]
+            else "实际退款是否进入人工审批，取决于退款金额与当前审批阈值。"
+        )
+        return ToolResult(ok=True, data=data)
 
     def request_refund(ctx: ToolContext, args: dict[str, Any]) -> ToolResult:
         if not ctx.approval_id:
             raise ValidationAppError("approval_id is required for request_refund.")
         outcome = refunds.execute(ctx.task_id, ctx.approval_id)
+        # 结果未知不是回执：钱可能已经出去了，也可能没有，只有对账能回答。
+        # 用「结果未知」这个失败码表达，执行器就不会重放（`_may_retry` 对
+        # unknown 一律拒绝），网关的审计也会记 ERROR 而不是 SUCCESS。
+        unconfirmed = outcome.status is VerificationStatus.PENDING_CONFIRMATION
         return ToolResult(
-            ok=outcome.status.value != "FAILED",
+            ok=not unconfirmed and outcome.status is not VerificationStatus.FAILED,
             data={
                 "verification_status": outcome.status.value,
                 "summary": outcome.summary,
@@ -114,11 +155,17 @@ def build_registry(
                 "currency": outcome.currency,
                 "checks": list(outcome.checks),
                 "reason_code": outcome.reason_code,
+                # 退款原因 / 退款类型给中文唯一名；缺值是「未提供」（口径 §2、§5.5）。
+                # 补充说明（reason_note）不进公开回执（口径 §5.5）。
+                "refund_reason_label": refund_reason_label(outcome.refund_reason),
+                "refund_type_label": refund_type_label(outcome.refund_type),
             },
             message=outcome.summary,
-            error_code=outcome.reason_code,
+            error_code="OUTCOME_UNKNOWN" if unconfirmed else outcome.reason_code,
+            retryable=unconfirmed,
         )
 
+    # --- 清单：两个 R1 只读工具，超时与重试预算写在清单里，不在处理器里 ---
     registry.register(
         ToolManifest(
             name="get_order",
@@ -212,6 +259,7 @@ def build_registry(
         ),
         get_logistics,
     )
+    # --- 清单：政策检索 R0（无副作用，不需要幂等键）---
     registry.register(
         ToolManifest(
             name="search_policy",
@@ -253,6 +301,7 @@ def build_registry(
         ),
         search_policy,
     )
+    # --- 清单：建单 R2（有副作用，幂等键必需，失败先重试再转人工）---
     registry.register(
         ToolManifest(
             name="create_ticket",
@@ -311,6 +360,7 @@ def build_registry(
         ),
         create_ticket,
     )
+    # --- 清单：退款资格 R1（只读判定，缺金额不补默认值）---
     registry.register(
         ToolManifest(
             name="check_refund_eligibility",
@@ -326,6 +376,8 @@ def build_registry(
                         "maximum": 100000000,
                         "hint": "退款金额需为大于 0 的分（1 分 = 0.01 元）",
                     },
+                    "refund_reason": _REFUND_REASON,
+                    "refund_type": _REFUND_TYPE,
                 },
                 "required": ["order_id"],
                 "additionalProperties": False,
@@ -352,17 +404,19 @@ def build_registry(
                     "max_refundable_cents": {"type": "integer"},
                     "currency": {"type": "string"},
                     "requires_approval": {"type": "boolean"},
+                    "approval_requirement": {"type": "string"},
                 },
                 "required": ["eligible", "reasons"],
             },
             receipt=(
                 "按当前政策，该订单最多可退 {max_refundable_cents:yuan} {currency}，"
-                "实际退款需要人工审批。"
+                "{approval_requirement}"
             ),
             scopes=(),
         ),
         check_refund_eligibility,
     )
+    # --- 清单：退款执行 R3（有副作用、必须审批；不重试，结果未知就停下等人核）---
     registry.register(
         ToolManifest(
             name="request_refund",
@@ -401,17 +455,21 @@ def build_registry(
                     "currency": {"type": "string"},
                     "checks": {"type": "array"},
                     "reason_code": {"type": "string"},
+                    "refund_reason_label": {"type": "string"},
+                    "refund_type_label": {"type": "string"},
                 },
                 "required": ["verification_status"],
             },
             receipt=(
                 "已退款 {amount_cents:yuan} {currency}，"
+                "退款原因：{refund_reason_label}，退款类型：{refund_type_label}，"
                 "退款单号 {refund_id}，已由权威退款记录确认。"
             ),
             scopes=(),
         ),
         request_refund,
     )
+    # --- 装配完毕：注册表交给网关与执行器，运行时不必知道工具从哪来 ---
     return registry
 
 

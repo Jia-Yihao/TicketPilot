@@ -1,0 +1,70 @@
+{
+  "version": "2026-10-26",
+  "cycle": "2026-10-26",
+  "queue": {
+    "total": 3,
+    "OPEN": 2,
+    "CLOSED": 1,
+    "IGNORED": 0
+  },
+  "new_cases": 1,
+  "closed_this_cycle": 1,
+  "ignored_this_cycle": 0,
+  "open_gaps": [
+    {
+      "id": "gap-805434f799c9",
+      "text": "能早点发吗我这离预产期没几天了发晚了就用不上了",
+      "observations": 1,
+      "first_cycle": "2026-10-26",
+      "last_cycle": "2026-10-26",
+      "proposals": 1
+    },
+    {
+      "id": "gap-c4b9c908f33d",
+      "text": "退回去的邮费也是你们承担吗有问题的也一起退回啊",
+      "observations": 1,
+      "first_cycle": "2026-10-26",
+      "last_cycle": "2026-10-26",
+      "proposals": 0
+    }
+  ],
+  "layers": {
+    "external": {
+      "before": {
+        "cases": 201,
+        "coverage": 0.5473,
+        "false_unknown": 73
+      },
+      "after": {
+        "cases": 201,
+        "coverage": 0.5473,
+        "false_unknown": 73
+      },
+      "delta": {
+        "cases": 0,
+        "coverage": 0.0,
+        "false_unknown": 0
+      }
+    },
+    "authored_gap": {
+      "before": {
+        "cases": 144,
+        "coverage": 0.5,
+        "false_unknown": 60
+      },
+      "after": {
+        "cases": 145,
+        "coverage": 0.4966,
+        "false_unknown": 61
+      },
+      "delta": {
+        "cases": 1,
+        "coverage": -0.0034,
+        "false_unknown": 1
+      }
+    }
+  },
+  "gate_regression": false,
+  "gate_failures": [],
+  "note": "Layers are reported separately; no single accuracy is computed. A closed gap is coverage evidence, not a real-world frequency."
+}

@@ -18,6 +18,7 @@ def channel_matrix(
     identity: Identity = Depends(get_identity),
     gateway: ChannelGateway = Depends(get_channel_gateway),
 ) -> dict[str, Any]:
+    """列出各渠道的可用状态；只读，与租户无关。"""
     del identity
     return {"channels": gateway.matrix()}
 

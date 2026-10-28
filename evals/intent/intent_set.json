@@ -1,0 +1,4271 @@
+{
+  "version": "2026-10-26",
+  "description": "Held-out intent corpus in two layers: real external phrasings and an authored gap layer. Report the layers separately; do not add them into one accuracy.",
+  "labels": [
+    "HUMAN_HANDOFF",
+    "REFUND_REQUEST",
+    "TICKET_CREATE",
+    "REFUND_STATUS",
+    "REFUND_ELIGIBILITY",
+    "POLICY_QA",
+    "DELIVERY_ISSUE",
+    "LOGISTICS_QUERY",
+    "SELF_ANALYTICS",
+    "PRODUCT_QUERY",
+    "ORDER_QUERY",
+    "UNKNOWN"
+  ],
+  "layers": {
+    "external": {
+      "cases": 201,
+      "label_source": "human",
+      "note": "Real user phrasings from the public corpus named in external_manifest.json, labelled by hand. The corpus carries no usable intent labels; every gold value here was written against app/agent/intents.yaml."
+    },
+    "authored_gap": {
+      "cases": 145,
+      "label_source": "human",
+      "note": "Phrasings written for the intents the external layer does not contain or contains too few of, plus gaps closed by a human through the intent gap queue. Reported separately: it is coverage evidence, not a real-world frequency estimate."
+    }
+  },
+  "intent_notes": {
+    "SELF_ANALYTICS": "Absent from the external layer: the corpus is a product Q&A stream whose users ask about one order at a time, and it contains no aggregate question about the caller's own records. All evidence for this intent is authored.",
+    "HUMAN_HANDOFF": "The external layer has 10 cases, but they say '店长/负责人/管事的/客服电话' rather than the catalog's '转人工' wording; that is why the intent is kept in the table with a real denominator instead of being dropped."
+  },
+  "label_rule": "Gold is the capability that should serve the request, read against app/agent/intents.yaml, not against the classifier's cue table. A request to move money is REFUND_REQUEST even when it names an order; a request to register a case is TICKET_CREATE even when the cause is a delivery problem; a question about a rule is POLICY_QA even when no policy document covers the topic, because the no-evidence path is the expected behaviour. When a sentence could be about order fields or transport position, ORDER_QUERY covers fields (payment, address, amount) and LOGISTICS_QUERY covers where the parcel is. REFUND_ELIGIBILITY asks whether this order or return qualifies and usually names the user's own item or action; POLICY_QA asks what the rule says in general. UNKNOWN means no catalog capability should serve it, not 'the classifier is unsure'.",
+  "min_per_intent": 10,
+  "per_intent": {
+    "DELIVERY_ISSUE": 39,
+    "HUMAN_HANDOFF": 22,
+    "LOGISTICS_QUERY": 36,
+    "ORDER_QUERY": 29,
+    "POLICY_QA": 30,
+    "PRODUCT_QUERY": 40,
+    "REFUND_ELIGIBILITY": 27,
+    "REFUND_REQUEST": 32,
+    "REFUND_STATUS": 27,
+    "SELF_ANALYTICS": 12,
+    "TICKET_CREATE": 22,
+    "UNKNOWN": 30
+  },
+  "sources": {
+    "external_selection": "external_selection.jsonl",
+    "external_manifest": "external_manifest.json",
+    "external_manifest_sha256": "8107406e40004b29cf7516215bb9be26d79f54ff0481f50a84e3d1d43b46d371",
+    "authored": "authored_gap.jsonl",
+    "authored_sha256": "e209a05e91526979d1d34b91cd80617206f608ddf2a96eb19c07f39982613fce",
+    "gap_closures": "gap_closures.jsonl",
+    "gap_closures_sha256": "4b4fc311f038ec47346bcaf4d77b207805bd0ce622ade8865ba2411c55fe7d5d"
+  },
+  "cases": [
+    {
+      "gold": "DELIVERY_ISSUE",
+      "id": "ext-delivery-01",
+      "label_source": "human",
+      "layer": "external",
+      "note": "五天还没到",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 437
+      },
+      "text": "超慢的5天了还没到"
+    },
+    {
+      "gold": "DELIVERY_ISSUE",
+      "id": "ext-delivery-02",
+      "label_source": "human",
+      "layer": "external",
+      "note": "内部漏液是否算破损",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 866
+      },
+      "text": "对了那个外包装没有坏里面漏了瓶子也没有坏算破损吗"
+    },
+    {
+      "gold": "DELIVERY_ISSUE",
+      "id": "ext-delivery-03",
+      "label_source": "human",
+      "layer": "external",
+      "note": "没收到且缺少赠品",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 906
+      },
+      "text": "这个没收到然后不是说说口水巾吗怎么都没有"
+    },
+    {
+      "gold": "DELIVERY_ISSUE",
+      "id": "ext-delivery-04",
+      "label_source": "human",
+      "layer": "external",
+      "note": "盒子破损问怎么处理",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1025
+      },
+      "text": "还有那个盒子非常破损没有开很破反正要怎么处理呢亲"
+    },
+    {
+      "gold": "DELIVERY_ISSUE",
+      "id": "ext-delivery-05",
+      "label_source": "human",
+      "layer": "external",
+      "note": "还有一件没到",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1347
+      },
+      "text": "还有一个没到"
+    },
+    {
+      "gold": "DELIVERY_ISSUE",
+      "id": "ext-delivery-06",
+      "label_source": "human",
+      "layer": "external",
+      "note": "说明确实没收到",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 2683
+      },
+      "text": "其实我也不会那么无聊为了贪两包湿纸巾故意说没收到的诚信比较重要"
+    },
+    {
+      "gold": "DELIVERY_ISSUE",
+      "id": "ext-delivery-07",
+      "label_source": "human",
+      "layer": "external",
+      "note": "确认还没到",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 3329
+      },
+      "text": "哦知道了那就是还没到啊"
+    },
+    {
+      "gold": "DELIVERY_ISSUE",
+      "id": "ext-delivery-08",
+      "label_source": "human",
+      "layer": "external",
+      "note": "72 小时还没到",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 3720
+      },
+      "text": "江浙沪皖为什么72小时还没到去了两次都没拿到"
+    },
+    {
+      "gold": "DELIVERY_ISSUE",
+      "id": "ext-delivery-09",
+      "label_source": "human",
+      "layer": "external",
+      "note": "显示签收但没收到",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 4152
+      },
+      "text": "我还没收到宝贝怎么写我的宝贝已收到周二01:39:51到达上海"
+    },
+    {
+      "gold": "DELIVERY_ISSUE",
+      "id": "ext-delivery-10",
+      "label_source": "human",
+      "layer": "external",
+      "note": "还没到",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 4180
+      },
+      "text": "七天无理由的吧还没到呢"
+    },
+    {
+      "gold": "DELIVERY_ISSUE",
+      "id": "ext-delivery-11",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问今天是否补发",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 4211
+      },
+      "text": "今天补发吗"
+    },
+    {
+      "gold": "DELIVERY_ISSUE",
+      "id": "ext-delivery-12",
+      "label_source": "human",
+      "layer": "external",
+      "note": "没收到",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 4408
+      },
+      "text": "我没收到"
+    },
+    {
+      "gold": "DELIVERY_ISSUE",
+      "id": "ext-delivery-13",
+      "label_source": "human",
+      "layer": "external",
+      "note": "强调货没收到",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 4409
+      },
+      "text": "不是货没收到"
+    },
+    {
+      "gold": "DELIVERY_ISSUE",
+      "id": "ext-delivery-14",
+      "label_source": "human",
+      "layer": "external",
+      "note": "假签收",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 4465
+      },
+      "text": "剛查到是假簽收淘寶海外倉查不到說他們未收到"
+    },
+    {
+      "gold": "DELIVERY_ISSUE",
+      "id": "ext-delivery-15",
+      "label_source": "human",
+      "layer": "external",
+      "note": "要求不要漏发",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 4833
+      },
+      "text": "嗯不要漏发"
+    },
+    {
+      "gold": "DELIVERY_ISSUE",
+      "id": "ext-delivery-16",
+      "label_source": "human",
+      "layer": "external",
+      "note": "冰袋坏了",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 4873
+      },
+      "text": "冰袋坏了"
+    },
+    {
+      "gold": "DELIVERY_ISSUE",
+      "id": "ext-delivery-17",
+      "label_source": "human",
+      "layer": "external",
+      "note": "湿巾坏了",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 5071
+      },
+      "text": "一包湿巾坏了"
+    },
+    {
+      "gold": "DELIVERY_ISSUE",
+      "id": "ext-delivery-18",
+      "label_source": "human",
+      "layer": "external",
+      "note": "少发一份",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 5369
+      },
+      "text": "我买了两份青团不是再送一份的吗怎么只有两份少了一份青团"
+    },
+    {
+      "gold": "DELIVERY_ISSUE",
+      "id": "ext-delivery-19",
+      "label_source": "human",
+      "layer": "external",
+      "note": "年前买的没收到",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 5388
+      },
+      "text": "我年前买的核桃为啥没收到"
+    },
+    {
+      "gold": "DELIVERY_ISSUE",
+      "id": "ext-delivery-20",
+      "label_source": "human",
+      "layer": "external",
+      "note": "快递未联系就放自提",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 185
+      },
+      "text": "凭什么不送我买的时候没人说自提快递一个电话也没通知凭什么自提"
+    },
+    {
+      "gold": "DELIVERY_ISSUE",
+      "id": "ext-delivery-21",
+      "label_source": "human",
+      "layer": "external",
+      "note": "物流显示派送但未到货",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 208
+      },
+      "text": "你好我的宝贝怎么这么长时间还没到货但是物流信息却显示早就派送了"
+    },
+    {
+      "gold": "DELIVERY_ISSUE",
+      "id": "ext-delivery-22",
+      "label_source": "human",
+      "layer": "external",
+      "note": "几天前显示派送仍未到",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 209
+      },
+      "text": "好几天前就显示派送了"
+    },
+    {
+      "gold": "DELIVERY_ISSUE",
+      "id": "ext-delivery-23",
+      "label_source": "human",
+      "layer": "external",
+      "note": "发货太迟",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1692
+      },
+      "text": "为什么这么迟才发啊不是接到订单就可以发了吗"
+    },
+    {
+      "gold": "DELIVERY_ISSUE",
+      "id": "ext-delivery-24",
+      "label_source": "human",
+      "layer": "external",
+      "note": "仍未发货",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 4492
+      },
+      "text": "但是我跟您说过我急着回购有部分发掉了为什么我的还是没有发我特地找客服备注敢情是白说的要么一开始就不要说11号我可以收到"
+    },
+    {
+      "gold": "DELIVERY_ISSUE",
+      "id": "ext-delivery-25",
+      "label_source": "human",
+      "layer": "external",
+      "note": "快递未联系就称地址不对",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1875
+      },
+      "text": "这个快递太不负责任了电话都没联系就说不在指定地址"
+    },
+    {
+      "gold": "DELIVERY_ISSUE",
+      "id": "ext-delivery-26",
+      "label_source": "human",
+      "layer": "external",
+      "note": "未接到电话就被退回",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 2177
+      },
+      "text": "我在你店里买的茶刀就因为没有接到电话晚上就说被他们退回去了"
+    },
+    {
+      "gold": "DELIVERY_ISSUE",
+      "id": "ext-delivery-27",
+      "label_source": "human",
+      "layer": "external",
+      "note": "开袋后发现异常",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 39
+      },
+      "text": "怎么有一袋里面打开都是这样的"
+    },
+    {
+      "gold": "REFUND_ELIGIBILITY",
+      "id": "ext-eligibility-01",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问自己的这件商品还能不能退，不是复述规则",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 2451
+      },
+      "text": "那不要了可以退货吗"
+    },
+    {
+      "gold": "REFUND_ELIGIBILITY",
+      "id": "ext-eligibility-02",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问时间长了能不能退货",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1333
+      },
+      "text": "时间太长了能退货吗"
+    },
+    {
+      "gold": "REFUND_ELIGIBILITY",
+      "id": "ext-eligibility-03",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问坏得多能不能退",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 2665
+      },
+      "text": "坏的多可以退吗"
+    },
+    {
+      "gold": "REFUND_ELIGIBILITY",
+      "id": "ext-eligibility-04",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问拆开一包能不能退",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 3866
+      },
+      "text": "拆开了一包可以退吗"
+    },
+    {
+      "gold": "REFUND_ELIGIBILITY",
+      "id": "ext-eligibility-05",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问拆包试用后能不能退",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 6288
+      },
+      "text": "这个棉柔巾我收到了拆开一包试了试湿水效果不好可以退吗"
+    },
+    {
+      "gold": "REFUND_ELIGIBILITY",
+      "id": "ext-eligibility-06",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问拆开后还能不能退",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 7563
+      },
+      "text": "那咋办能退吗地址给我但是我打开了一包"
+    },
+    {
+      "gold": "REFUND_ELIGIBILITY",
+      "id": "ext-eligibility-07",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问点错了能不能退",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 8335
+      },
+      "text": "我点错了能退吗"
+    },
+    {
+      "gold": "REFUND_ELIGIBILITY",
+      "id": "ext-eligibility-08",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问买多了没用过能不能退",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 13454
+      },
+      "text": "东西买多了可以退吗没有用过"
+    },
+    {
+      "gold": "REFUND_ELIGIBILITY",
+      "id": "ext-eligibility-09",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问用过敏能不能退",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 14113
+      },
+      "text": "我小孩用了还过敏能退吗"
+    },
+    {
+      "gold": "REFUND_ELIGIBILITY",
+      "id": "ext-eligibility-10",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问其它商品能不能退",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 630
+      },
+      "text": "其它的可以退货吗"
+    },
+    {
+      "gold": "REFUND_ELIGIBILITY",
+      "id": "ext-eligibility-11",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问坏得多能不能退货",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1127
+      },
+      "text": "如果坏的多可以退货不"
+    },
+    {
+      "gold": "REFUND_ELIGIBILITY",
+      "id": "ext-eligibility-12",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问手捏不破能不能退货",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1242
+      },
+      "text": "如果手捏不破可以退货吗一包5斤吗"
+    },
+    {
+      "gold": "REFUND_ELIGIBILITY",
+      "id": "ext-eligibility-13",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问不习惯能不能退货",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1700
+      },
+      "text": "反正吃了一两个不习惯可以退货吗"
+    },
+    {
+      "gold": "REFUND_ELIGIBILITY",
+      "id": "ext-eligibility-14",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问能不能退货再拍",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1885
+      },
+      "text": "那我可以退货再拍吗"
+    },
+    {
+      "gold": "REFUND_ELIGIBILITY",
+      "id": "ext-eligibility-15",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问买回来不好能不能退、谁负责",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 4615
+      },
+      "text": "买回来不好可以退货么你们负责么"
+    },
+    {
+      "gold": "HUMAN_HANDOFF",
+      "id": "ext-handoff-01",
+      "label_source": "human",
+      "layer": "external",
+      "note": "点名要店长，属于找活人接管",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 2361
+      },
+      "text": "我要找你们店长"
+    },
+    {
+      "gold": "HUMAN_HANDOFF",
+      "id": "ext-handoff-02",
+      "label_source": "human",
+      "layer": "external",
+      "note": "追问店长在哪，属于找人接管",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 5087
+      },
+      "text": "你们店长呢"
+    },
+    {
+      "gold": "HUMAN_HANDOFF",
+      "id": "ext-handoff-03",
+      "label_source": "human",
+      "layer": "external",
+      "note": "要求转运营负责人",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 9374
+      },
+      "text": "您好能转下运营负责人吗"
+    },
+    {
+      "gold": "HUMAN_HANDOFF",
+      "id": "ext-handoff-04",
+      "label_source": "human",
+      "layer": "external",
+      "note": "要求转负责人",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 9376
+      },
+      "text": "给转下负责人吗"
+    },
+    {
+      "gold": "HUMAN_HANDOFF",
+      "id": "ext-handoff-05",
+      "label_source": "human",
+      "layer": "external",
+      "note": "叫管事的来，是转人工的另一种说法",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 7829
+      },
+      "text": "在你们家呆了7天告诉我邮不了电话给我不给我投诉我不想骂你跟你没关系叫你们管事的来"
+    },
+    {
+      "gold": "HUMAN_HANDOFF",
+      "id": "ext-handoff-06",
+      "label_source": "human",
+      "layer": "external",
+      "note": "要客服电话，想换成电话里的人工",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 16013
+      },
+      "text": "你们有客服电话么我打了好久字了好累说不清楚"
+    },
+    {
+      "gold": "HUMAN_HANDOFF",
+      "id": "ext-handoff-07",
+      "label_source": "human",
+      "layer": "external",
+      "note": "要求接客服",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 16012
+      },
+      "text": "好接客服吧"
+    },
+    {
+      "gold": "HUMAN_HANDOFF",
+      "id": "ext-handoff-08",
+      "label_source": "human",
+      "layer": "external",
+      "note": "要求让客服处理",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 5822
+      },
+      "text": "我问小蜜了那让客服处理吧"
+    },
+    {
+      "gold": "HUMAN_HANDOFF",
+      "id": "ext-handoff-09",
+      "label_source": "human",
+      "layer": "external",
+      "note": "要求让平台客服处理",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 5823
+      },
+      "text": "让淘宝专业的电商客服去处理吧"
+    },
+    {
+      "gold": "HUMAN_HANDOFF",
+      "id": "ext-handoff-10",
+      "label_source": "human",
+      "layer": "external",
+      "note": "抱怨没有客服回应，实质要求人工介入",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1529
+      },
+      "text": "你们到底有没有客服回"
+    },
+    {
+      "gold": "LOGISTICS_QUERY",
+      "id": "ext-logistics-01",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问什么时候发货",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 6
+      },
+      "text": "什么时候发货啊"
+    },
+    {
+      "gold": "LOGISTICS_QUERY",
+      "id": "ext-logistics-02",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问发哪家快递",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 13
+      },
+      "text": "快递发那家公"
+    },
+    {
+      "gold": "LOGISTICS_QUERY",
+      "id": "ext-logistics-03",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问今天能否发货",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 32
+      },
+      "text": "今天还能发货吗"
+    },
+    {
+      "gold": "LOGISTICS_QUERY",
+      "id": "ext-logistics-04",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问发什么快递",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 72
+      },
+      "text": "发什么快递呢"
+    },
+    {
+      "gold": "LOGISTICS_QUERY",
+      "id": "ext-logistics-05",
+      "label_source": "human",
+      "layer": "external",
+      "note": "要求发天天快递",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 73
+      },
+      "text": "哦哦好的谢谢帮我发天天快递吧"
+    },
+    {
+      "gold": "LOGISTICS_QUERY",
+      "id": "ext-logistics-06",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问什么时候到",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 75
+      },
+      "text": "大概什么时候到呢"
+    },
+    {
+      "gold": "LOGISTICS_QUERY",
+      "id": "ext-logistics-07",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问几天到货",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 92
+      },
+      "text": "几天到货啊"
+    },
+    {
+      "gold": "LOGISTICS_QUERY",
+      "id": "ext-logistics-08",
+      "label_source": "human",
+      "layer": "external",
+      "note": "选择普通快递",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 99
+      },
+      "text": "噢算了还是普通快递吧"
+    },
+    {
+      "gold": "LOGISTICS_QUERY",
+      "id": "ext-logistics-09",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问年前是否还发货",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 113
+      },
+      "text": "现在快递还发货么我要现在下单下午可以发货么在不在"
+    },
+    {
+      "gold": "LOGISTICS_QUERY",
+      "id": "ext-logistics-10",
+      "label_source": "human",
+      "layer": "external",
+      "note": "确认发货与快递",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 114
+      },
+      "text": "现在下单下午能发货是吧是发邮政"
+    },
+    {
+      "gold": "LOGISTICS_QUERY",
+      "id": "ext-logistics-11",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问为何从浙江发货",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 154
+      },
+      "text": "你们为什么浙江发货"
+    },
+    {
+      "gold": "LOGISTICS_QUERY",
+      "id": "ext-logistics-12",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问寄什么快递",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 175
+      },
+      "text": "是寄什么快递"
+    },
+    {
+      "gold": "LOGISTICS_QUERY",
+      "id": "ext-logistics-13",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问能否换快递",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 177
+      },
+      "text": "可不可以发其他的快递啊"
+    },
+    {
+      "gold": "LOGISTICS_QUERY",
+      "id": "ext-logistics-14",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问今天能否发货",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 205
+      },
+      "text": "粽子今天也能发货吗记得看下生产日期如果质量味道都好的话以后就一直在你家买"
+    },
+    {
+      "gold": "LOGISTICS_QUERY",
+      "id": "ext-logistics-15",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问能否走中通",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 235
+      },
+      "text": "能走中通快递吗"
+    },
+    {
+      "gold": "LOGISTICS_QUERY",
+      "id": "ext-logistics-16",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问除 EMS 外有无其它快递",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 242
+      },
+      "text": "除了EMS没别的快递吗"
+    },
+    {
+      "gold": "LOGISTICS_QUERY",
+      "id": "ext-logistics-17",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问明天是否发货",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 313
+      },
+      "text": "今天没发货明天会发货吗"
+    },
+    {
+      "gold": "LOGISTICS_QUERY",
+      "id": "ext-logistics-18",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问今天能否发货",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 327
+      },
+      "text": "今天可以发货了吗"
+    },
+    {
+      "gold": "LOGISTICS_QUERY",
+      "id": "ext-logistics-19",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问付款后何时发货",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 328
+      },
+      "text": "今天付款什么时候能发货"
+    },
+    {
+      "gold": "LOGISTICS_QUERY",
+      "id": "ext-logistics-20",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问是否不是中通",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 6875
+      },
+      "text": "客服在吗我想问不是中通那"
+    },
+    {
+      "gold": "LOGISTICS_QUERY",
+      "id": "ext-logistics-21",
+      "label_source": "human",
+      "layer": "external",
+      "note": "要另一个快递单号",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 6295
+      },
+      "text": "我说单号呢之前客服说分两次发还有一个单号给我下"
+    },
+    {
+      "gold": "LOGISTICS_QUERY",
+      "id": "ext-logistics-22",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问什么时候送货",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 184
+      },
+      "text": "什么时候送货别跟我说这些我就问什么时候送货人呢"
+    },
+    {
+      "gold": "LOGISTICS_QUERY",
+      "id": "ext-logistics-23",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问什么时候送",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 186
+      },
+      "text": "别跟我说这个我只想问什么时候送"
+    },
+    {
+      "gold": "LOGISTICS_QUERY",
+      "id": "ext-logistics-24",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问订单年前能否到",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 4887
+      },
+      "text": "你看我的这个订单年前还会到吗"
+    },
+    {
+      "gold": "ORDER_QUERY",
+      "id": "ext-order-01",
+      "label_source": "human",
+      "layer": "external",
+      "note": "说忘了改地址，属于订单信息变更",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 22
+      },
+      "text": "忘改地址了"
+    },
+    {
+      "gold": "ORDER_QUERY",
+      "id": "ext-order-02",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问能否备注改地址",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 23
+      },
+      "text": "你那边不能帮我备注改地址"
+    },
+    {
+      "gold": "ORDER_QUERY",
+      "id": "ext-order-03",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问能否改订单邮费",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1098
+      },
+      "text": "刚刚提交了一个订单可以改一下邮费ma"
+    },
+    {
+      "gold": "ORDER_QUERY",
+      "id": "ext-order-04",
+      "label_source": "human",
+      "layer": "external",
+      "note": "要求按订单发指定款式",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1496
+      },
+      "text": "看一下我的订单麻烦按我拍的发我要的带盖子的湿巾"
+    },
+    {
+      "gold": "ORDER_QUERY",
+      "id": "ext-order-05",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问订单是否有赠品",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1610
+      },
+      "text": "我拍的订单是不是有赠品送啊"
+    },
+    {
+      "gold": "ORDER_QUERY",
+      "id": "ext-order-06",
+      "label_source": "human",
+      "layer": "external",
+      "note": "要求改订单地址",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1648
+      },
+      "text": "我要改地址改地址地址寫錯啦"
+    },
+    {
+      "gold": "ORDER_QUERY",
+      "id": "ext-order-07",
+      "label_source": "human",
+      "layer": "external",
+      "note": "要求改订单地址",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1673
+      },
+      "text": "我的订单要改一下地址忘了改了"
+    },
+    {
+      "gold": "ORDER_QUERY",
+      "id": "ext-order-08",
+      "label_source": "human",
+      "layer": "external",
+      "note": "表示提交订单后由商家修改",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 2221
+      },
+      "text": "我就提交订单然后你改呗"
+    },
+    {
+      "gold": "ORDER_QUERY",
+      "id": "ext-order-09",
+      "label_source": "human",
+      "layer": "external",
+      "note": "要求修改订单",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 2319
+      },
+      "text": "改一下订单还拍了五盒"
+    },
+    {
+      "gold": "ORDER_QUERY",
+      "id": "ext-order-10",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问能否改地址",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 2727
+      },
+      "text": "可以改地址吧"
+    },
+    {
+      "gold": "ORDER_QUERY",
+      "id": "ext-order-11",
+      "label_source": "human",
+      "layer": "external",
+      "note": "要求改地址",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 3053
+      },
+      "text": "我想改地址"
+    },
+    {
+      "gold": "ORDER_QUERY",
+      "id": "ext-order-12",
+      "label_source": "human",
+      "layer": "external",
+      "note": "要求改地址",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 3947
+      },
+      "text": "我要改地址"
+    },
+    {
+      "gold": "ORDER_QUERY",
+      "id": "ext-order-13",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问是否看到订单",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 4786
+      },
+      "text": "看见订单了么"
+    },
+    {
+      "gold": "ORDER_QUERY",
+      "id": "ext-order-14",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问地址写错能否重写",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 5045
+      },
+      "text": "我的地址写错可以重新写吗"
+    },
+    {
+      "gold": "ORDER_QUERY",
+      "id": "ext-order-15",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问能否改地址",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 6516
+      },
+      "text": "今天估计到不了了我差不多两点就要走了可以改地址吗"
+    },
+    {
+      "gold": "ORDER_QUERY",
+      "id": "ext-order-16",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问能否改地址",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 6724
+      },
+      "text": "可以改地址么亲"
+    },
+    {
+      "gold": "POLICY_QA",
+      "id": "ext-policy-01",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问过了退货时间还能不能申请售后",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 53
+      },
+      "text": "但是现在过了退货时间了我申请售后连售后都过时间了"
+    },
+    {
+      "gold": "POLICY_QA",
+      "id": "ext-policy-02",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问运费由谁出",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 171
+      },
+      "text": "运费谁出"
+    },
+    {
+      "gold": "POLICY_QA",
+      "id": "ext-policy-03",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问购买是否包邮",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 181
+      },
+      "text": "请问购买可包邮吗"
+    },
+    {
+      "gold": "POLICY_QA",
+      "id": "ext-policy-04",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问是否达到包邮条件",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 182
+      },
+      "text": "这个金额是否达到包邮条件"
+    },
+    {
+      "gold": "POLICY_QA",
+      "id": "ext-policy-05",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问合并购买为何还要运费",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 240
+      },
+      "text": "跟别的东西一起买怎么也要运费"
+    },
+    {
+      "gold": "POLICY_QA",
+      "id": "ext-policy-06",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问包邮是否覆盖同单其它商品",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 265
+      },
+      "text": "这个链接包邮其他东西一起包邮吗"
+    },
+    {
+      "gold": "POLICY_QA",
+      "id": "ext-policy-07",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问包邮规则为何还要邮费",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 291
+      },
+      "text": "亲包邮吗为什么还要邮费啊"
+    },
+    {
+      "gold": "POLICY_QA",
+      "id": "ext-policy-08",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问退款是否收手续费",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 599
+      },
+      "text": "退款需要手续费吗"
+    },
+    {
+      "gold": "POLICY_QA",
+      "id": "ext-policy-09",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问发货后什么时候申请退款",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 136
+      },
+      "text": "什么时候申请退款发出以后"
+    },
+    {
+      "gold": "POLICY_QA",
+      "id": "ext-policy-10",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问到货后会不会过期",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1739
+      },
+      "text": "等到了会不会过期呀"
+    },
+    {
+      "gold": "POLICY_QA",
+      "id": "ext-policy-11",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问退货地址与流程",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1809
+      },
+      "text": "退货的地址"
+    },
+    {
+      "gold": "POLICY_QA",
+      "id": "ext-policy-12",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问退货流程是否是退回再退款",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 9384
+      },
+      "text": "你们客服都不知道退货流程的嘛不知道货退回再退款吗"
+    },
+    {
+      "gold": "POLICY_QA",
+      "id": "ext-policy-13",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问两件是否包邮",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 432
+      },
+      "text": "两件包邮嘛"
+    },
+    {
+      "gold": "POLICY_QA",
+      "id": "ext-policy-14",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问提交订单为何还有运费",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 6746
+      },
+      "text": "我提交订单还是要运费啊"
+    },
+    {
+      "gold": "POLICY_QA",
+      "id": "ext-policy-15",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问满额优惠为何没减",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 4029
+      },
+      "text": "102元了提交订单没有优惠30啊"
+    },
+    {
+      "gold": "POLICY_QA",
+      "id": "ext-policy-16",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问订单为何没有优惠",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 4968
+      },
+      "text": "我刚准备提交订单咋看我的没有减啊"
+    },
+    {
+      "gold": "POLICY_QA",
+      "id": "ext-policy-17",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问活动价格与第二件优惠规则",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 299
+      },
+      "text": "问题是9点之前是399第二份359也就是减5块现在是499你让我怎么拍"
+    },
+    {
+      "gold": "POLICY_QA",
+      "id": "ext-policy-18",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问活动价是否与年货价一致",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 4767
+      },
+      "text": "昨天客服回复太慢我睡着了16号多少钱跟年货价一样吗"
+    },
+    {
+      "gold": "PRODUCT_QUERY",
+      "id": "ext-product-01",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问质量",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 9
+      },
+      "text": "这个质量怎么样这么便宜"
+    },
+    {
+      "gold": "PRODUCT_QUERY",
+      "id": "ext-product-02",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问两个价位质量是否一样",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 226
+      },
+      "text": "我看还有一个是59的质量都一样吗"
+    },
+    {
+      "gold": "PRODUCT_QUERY",
+      "id": "ext-product-03",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问尺寸",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 227
+      },
+      "text": "多大尺寸"
+    },
+    {
+      "gold": "PRODUCT_QUERY",
+      "id": "ext-product-04",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问好不好用",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 262
+      },
+      "text": "这个好用吗"
+    },
+    {
+      "gold": "PRODUCT_QUERY",
+      "id": "ext-product-05",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问怎么用",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 271
+      },
+      "text": "因为在家喂奶不太穿怎么用"
+    },
+    {
+      "gold": "PRODUCT_QUERY",
+      "id": "ext-product-06",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问哪个好",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 887
+      },
+      "text": "哪个好点"
+    },
+    {
+      "gold": "PRODUCT_QUERY",
+      "id": "ext-product-07",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问质量如何",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 987
+      },
+      "text": "质量如何"
+    },
+    {
+      "gold": "PRODUCT_QUERY",
+      "id": "ext-product-08",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问单张尺寸",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1034
+      },
+      "text": "单张尺寸是多大"
+    },
+    {
+      "gold": "PRODUCT_QUERY",
+      "id": "ext-product-09",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问包装尺寸",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1035
+      },
+      "text": "12包装的尺寸是不是更大"
+    },
+    {
+      "gold": "PRODUCT_QUERY",
+      "id": "ext-product-10",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问材质是否不同",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1037
+      },
+      "text": "材质不一样吗"
+    },
+    {
+      "gold": "PRODUCT_QUERY",
+      "id": "ext-product-11",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问质量保证",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1135
+      },
+      "text": "质量保证吧没有坏的吧"
+    },
+    {
+      "gold": "PRODUCT_QUERY",
+      "id": "ext-product-12",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问哪种好用",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1196
+      },
+      "text": "哪种好用"
+    },
+    {
+      "gold": "PRODUCT_QUERY",
+      "id": "ext-product-13",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问哪款尺寸大",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1206
+      },
+      "text": "哪款尺寸大些"
+    },
+    {
+      "gold": "PRODUCT_QUERY",
+      "id": "ext-product-14",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问尺寸是否一样",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1381
+      },
+      "text": "跟这个尺寸一样吗"
+    },
+    {
+      "gold": "PRODUCT_QUERY",
+      "id": "ext-product-15",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问两款适用场景哪个好",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1428
+      },
+      "text": "这两款哪个好洗脸和私处"
+    },
+    {
+      "gold": "PRODUCT_QUERY",
+      "id": "ext-product-16",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问大号小号哪个好用",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1430
+      },
+      "text": "小号好用还是大号"
+    },
+    {
+      "gold": "PRODUCT_QUERY",
+      "id": "ext-product-17",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问怎么用",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1434
+      },
+      "text": "这个怎么用"
+    },
+    {
+      "gold": "PRODUCT_QUERY",
+      "id": "ext-product-18",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问无纺布是什么材质",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1553
+      },
+      "text": "无纺布是什么材质为啥叫无纺布"
+    },
+    {
+      "gold": "PRODUCT_QUERY",
+      "id": "ext-product-19",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问纯棉材质",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1783
+      },
+      "text": "那纯棉是什么材质的呀直接棉花做的布"
+    },
+    {
+      "gold": "PRODUCT_QUERY",
+      "id": "ext-product-20",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问尺寸",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1784
+      },
+      "text": "这个尺寸是多大的"
+    },
+    {
+      "gold": "PRODUCT_QUERY",
+      "id": "ext-product-21",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问质量是否有保证",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1798
+      },
+      "text": "我买这么多不知道质量"
+    },
+    {
+      "gold": "PRODUCT_QUERY",
+      "id": "ext-product-22",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问两款区别",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 316
+      },
+      "text": "这个和399有什么区别"
+    },
+    {
+      "gold": "PRODUCT_QUERY",
+      "id": "ext-product-23",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问两款区别",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 325
+      },
+      "text": "两种有什么区别"
+    },
+    {
+      "gold": "PRODUCT_QUERY",
+      "id": "ext-product-24",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问两款区别",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 341
+      },
+      "text": "你好这一款和79那个有什么区别"
+    },
+    {
+      "gold": "PRODUCT_QUERY",
+      "id": "ext-product-25",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问是否有某规格",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 251
+      },
+      "text": "嗯有2020的纯棉的棉柔巾么"
+    },
+    {
+      "gold": "PRODUCT_QUERY",
+      "id": "ext-product-26",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问三袋总重量",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 7999
+      },
+      "text": "客服236元三袋总重量是多少"
+    },
+    {
+      "gold": "PRODUCT_QUERY",
+      "id": "ext-product-27",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问生产日期",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 214
+      },
+      "text": "生产日期什么时候的"
+    },
+    {
+      "gold": "PRODUCT_QUERY",
+      "id": "ext-product-28",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问何时有货",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 149
+      },
+      "text": "什么时候有货"
+    },
+    {
+      "gold": "REFUND_REQUEST",
+      "id": "ext-refundreq-01",
+      "label_source": "human",
+      "layer": "external",
+      "note": "要求取消订单并退款",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 435
+      },
+      "text": "还有两个订单帮我取消退款"
+    },
+    {
+      "gold": "REFUND_REQUEST",
+      "id": "ext-refundreq-02",
+      "label_source": "human",
+      "layer": "external",
+      "note": "表示申请仅退款",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 644
+      },
+      "text": "拦住的话我申请仅退款就行了"
+    },
+    {
+      "gold": "REFUND_REQUEST",
+      "id": "ext-refundreq-03",
+      "label_source": "human",
+      "layer": "external",
+      "note": "请求同意退款",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 747
+      },
+      "text": "算了麻烦你同意一下退款吧"
+    },
+    {
+      "gold": "REFUND_REQUEST",
+      "id": "ext-refundreq-04",
+      "label_source": "human",
+      "layer": "external",
+      "note": "明确要退款",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 770
+      },
+      "text": "没有我退款"
+    },
+    {
+      "gold": "REFUND_REQUEST",
+      "id": "ext-refundreq-05",
+      "label_source": "human",
+      "layer": "external",
+      "note": "要求退款",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1208
+      },
+      "text": "拦不下你给我退款"
+    },
+    {
+      "gold": "REFUND_REQUEST",
+      "id": "ext-refundreq-06",
+      "label_source": "human",
+      "layer": "external",
+      "note": "询问申请退款是否可以",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1268
+      },
+      "text": "就申请退款行吗"
+    },
+    {
+      "gold": "REFUND_REQUEST",
+      "id": "ext-refundreq-07",
+      "label_source": "human",
+      "layer": "external",
+      "note": "明确要求退款",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1418
+      },
+      "text": "我要求退款"
+    },
+    {
+      "gold": "REFUND_REQUEST",
+      "id": "ext-refundreq-08",
+      "label_source": "human",
+      "layer": "external",
+      "note": "要求退款",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1420
+      },
+      "text": "我去别家拍你看一下记录我几号拍的都10天了退款"
+    },
+    {
+      "gold": "REFUND_REQUEST",
+      "id": "ext-refundreq-09",
+      "label_source": "human",
+      "layer": "external",
+      "note": "要求同意退款申请",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1481
+      },
+      "text": "好了您同意退款申请吧"
+    },
+    {
+      "gold": "REFUND_REQUEST",
+      "id": "ext-refundreq-10",
+      "label_source": "human",
+      "layer": "external",
+      "note": "表示退款重拍",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1720
+      },
+      "text": "那我退款重新拍下"
+    },
+    {
+      "gold": "REFUND_REQUEST",
+      "id": "ext-refundreq-11",
+      "label_source": "human",
+      "layer": "external",
+      "note": "要求同意退款",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1815
+      },
+      "text": "退款的请同意一下"
+    },
+    {
+      "gold": "REFUND_REQUEST",
+      "id": "ext-refundreq-12",
+      "label_source": "human",
+      "layer": "external",
+      "note": "表示退款重买",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1891
+      },
+      "text": "要不我退款从新买吧"
+    },
+    {
+      "gold": "REFUND_REQUEST",
+      "id": "ext-refundreq-13",
+      "label_source": "human",
+      "layer": "external",
+      "note": "决定先退款",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 2729
+      },
+      "text": "那就先退款吧然后再下单"
+    },
+    {
+      "gold": "REFUND_REQUEST",
+      "id": "ext-refundreq-14",
+      "label_source": "human",
+      "layer": "external",
+      "note": "明确要退款重下单",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 2853
+      },
+      "text": "我要退款丛新下单还要加一袋在吗亲"
+    },
+    {
+      "gold": "REFUND_REQUEST",
+      "id": "ext-refundreq-15",
+      "label_source": "human",
+      "layer": "external",
+      "note": "请求处理退款",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 2856
+      },
+      "text": "麻烦沐浴露退款又写错地址"
+    },
+    {
+      "gold": "REFUND_REQUEST",
+      "id": "ext-refundreq-16",
+      "label_source": "human",
+      "layer": "external",
+      "note": "因未发货决定退货退款",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 3930
+      },
+      "text": "还没发是不是那我退货了"
+    },
+    {
+      "gold": "REFUND_REQUEST",
+      "id": "ext-refundreq-17",
+      "label_source": "human",
+      "layer": "external",
+      "note": "因久未发货决定退货",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 3931
+      },
+      "text": "这么久还没发退货"
+    },
+    {
+      "gold": "REFUND_REQUEST",
+      "id": "ext-refundreq-18",
+      "label_source": "human",
+      "layer": "external",
+      "note": "表示要退货，属于退款诉求",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1088
+      },
+      "text": "好不足我要退货的"
+    },
+    {
+      "gold": "REFUND_REQUEST",
+      "id": "ext-refundreq-19",
+      "label_source": "human",
+      "layer": "external",
+      "note": "催促退款",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 276
+      },
+      "text": "别弄花样赶紧退款给我都没有发出来有什么的物流没有发货有毛物流没有发货有毛物流退款退款赶紧"
+    },
+    {
+      "gold": "REFUND_REQUEST",
+      "id": "ext-refundreq-20",
+      "label_source": "human",
+      "layer": "external",
+      "note": "请求同意退款",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 745
+      },
+      "text": "昨天下的订单你现在都不发货什么我没有付款你们同意一下退款吧谢谢"
+    },
+    {
+      "gold": "REFUND_STATUS",
+      "id": "ext-refundstatus-01",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问已重拍后退款何时返还",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1084
+      },
+      "text": "退款金额的数字改不过来我重新拍那这个退的钱什么时候返还过来"
+    },
+    {
+      "gold": "REFUND_STATUS",
+      "id": "ext-refundstatus-02",
+      "label_source": "human",
+      "layer": "external",
+      "note": "说明早已申请退款退货",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1361
+      },
+      "text": "早已申请退款退货"
+    },
+    {
+      "gold": "REFUND_STATUS",
+      "id": "ext-refundstatus-03",
+      "label_source": "human",
+      "layer": "external",
+      "note": "说明已申请四盒退款",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1808
+      },
+      "text": "运费没问题我是申请了四盒退款哦"
+    },
+    {
+      "gold": "REFUND_STATUS",
+      "id": "ext-refundstatus-04",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问退款时间",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1830
+      },
+      "text": "那你什么时候退款"
+    },
+    {
+      "gold": "REFUND_STATUS",
+      "id": "ext-refundstatus-05",
+      "label_source": "human",
+      "layer": "external",
+      "note": "说明已申请退款",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 2226
+      },
+      "text": "看到量大的包装也不贵所以申请了退款"
+    },
+    {
+      "gold": "REFUND_STATUS",
+      "id": "ext-refundstatus-06",
+      "label_source": "human",
+      "layer": "external",
+      "note": "说明已办理退款，等系统退款",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 2924
+      },
+      "text": "而且我当初办理退款的时候还没有物流显示呢就停在正在包裹正在等待揽收我一退款就有到嘉兴了我都没说什么了那我现在就等系统退款"
+    },
+    {
+      "gold": "REFUND_STATUS",
+      "id": "ext-refundstatus-07",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问申请退款几天到账",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 4626
+      },
+      "text": "申请退款几天退款啊"
+    },
+    {
+      "gold": "REFUND_STATUS",
+      "id": "ext-refundstatus-08",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问退款何时处理",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 5390
+      },
+      "text": "我的退款什么时候才能给我处理了"
+    },
+    {
+      "gold": "REFUND_STATUS",
+      "id": "ext-refundstatus-09",
+      "label_source": "human",
+      "layer": "external",
+      "note": "说还没收到退款",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 5505
+      },
+      "text": "我这边还没收到钱呀"
+    },
+    {
+      "gold": "REFUND_STATUS",
+      "id": "ext-refundstatus-10",
+      "label_source": "human",
+      "layer": "external",
+      "note": "说另一笔还没退",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 7122
+      },
+      "text": "我另外个还没退呢现在去寄了"
+    },
+    {
+      "gold": "REFUND_STATUS",
+      "id": "ext-refundstatus-11",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问是否还没退",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 12235
+      },
+      "text": "还没退吗"
+    },
+    {
+      "gold": "REFUND_STATUS",
+      "id": "ext-refundstatus-12",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问钱何时到账",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 12915
+      },
+      "text": "什么时候钱到账不好意思哈"
+    },
+    {
+      "gold": "REFUND_STATUS",
+      "id": "ext-refundstatus-13",
+      "label_source": "human",
+      "layer": "external",
+      "note": "说货发了款还没退",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 15895
+      },
+      "text": "亲货发了款还没退呢"
+    },
+    {
+      "gold": "REFUND_STATUS",
+      "id": "ext-refundstatus-14",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问退回的货收到没有并要求退款",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1847
+      },
+      "text": "退回来的快递收到没有啦把钱退给我啊"
+    },
+    {
+      "gold": "REFUND_STATUS",
+      "id": "ext-refundstatus-15",
+      "label_source": "human",
+      "layer": "external",
+      "note": "问退回的货收到没有",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 1359
+      },
+      "text": "亲请问你家还没收货退回的货吗"
+    },
+    {
+      "gold": "TICKET_CREATE",
+      "id": "ext-ticket-01",
+      "label_source": "human",
+      "layer": "external",
+      "note": "明确要投诉门店",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 4257
+      },
+      "text": "你们店对于消费者就这么个态度我非投诉你们不可"
+    },
+    {
+      "gold": "TICKET_CREATE",
+      "id": "ext-ticket-02",
+      "label_source": "human",
+      "layer": "external",
+      "note": "明确只能投诉",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 5702
+      },
+      "text": "那我只能投诉"
+    },
+    {
+      "gold": "TICKET_CREATE",
+      "id": "ext-ticket-03",
+      "label_source": "human",
+      "layer": "external",
+      "note": "明确要投诉",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 5713
+      },
+      "text": "我前天打了20分钟电话难道还要打吗妳们到底想干嘛不行我不要了我要投诉妳们"
+    },
+    {
+      "gold": "TICKET_CREATE",
+      "id": "ext-ticket-04",
+      "label_source": "human",
+      "layer": "external",
+      "note": "明确要去平台投诉",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 5717
+      },
+      "text": "我刚和他掛完电话在上海已经转了3天了你们到底想干嘛今天收不到我不要了我要去淘宝投诉你们"
+    },
+    {
+      "gold": "TICKET_CREATE",
+      "id": "ext-ticket-05",
+      "label_source": "human",
+      "layer": "external",
+      "note": "已向快递总部投诉，要求处理投诉",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 5790
+      },
+      "text": "我已经投诉到顺丰总部了他们每次都私下多要我们的钱这次这么小的东西都多要三块钱太气人了必须投诉他们"
+    },
+    {
+      "gold": "TICKET_CREATE",
+      "id": "ext-ticket-06",
+      "label_source": "human",
+      "layer": "external",
+      "note": "明确要投诉",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 5819
+      },
+      "text": "等着收差评我要投诉你"
+    },
+    {
+      "gold": "TICKET_CREATE",
+      "id": "ext-ticket-07",
+      "label_source": "human",
+      "layer": "external",
+      "note": "要求按程序投诉快递与商家",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 6212
+      },
+      "text": "要补就发顺丰不行就按照程序来快递和你们一起投诉就1这样"
+    },
+    {
+      "gold": "TICKET_CREATE",
+      "id": "ext-ticket-08",
+      "label_source": "human",
+      "layer": "external",
+      "note": "明确请求代投诉快递员",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 7523
+      },
+      "text": "顺便帮我投诉一下这个快递员态度非常恶劣谢谢了"
+    },
+    {
+      "gold": "TICKET_CREATE",
+      "id": "ext-ticket-09",
+      "label_source": "human",
+      "layer": "external",
+      "note": "准备投诉门店",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 8186
+      },
+      "text": "我准备投诉贵店"
+    },
+    {
+      "gold": "TICKET_CREATE",
+      "id": "ext-ticket-10",
+      "label_source": "human",
+      "layer": "external",
+      "note": "以投诉为诉求要求处理",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 7644
+      },
+      "text": "想投诉明说明天现在不退款就投诉看我怎么给你们写"
+    },
+    {
+      "gold": "UNKNOWN",
+      "id": "ext-unknown-01",
+      "label_source": "human",
+      "layer": "external",
+      "note": "道谢，无业务诉求",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 2
+      },
+      "text": "好的谢谢哦"
+    },
+    {
+      "gold": "UNKNOWN",
+      "id": "ext-unknown-02",
+      "label_source": "human",
+      "layer": "external",
+      "note": "确认，无业务诉求",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 76
+      },
+      "text": "OK好的"
+    },
+    {
+      "gold": "UNKNOWN",
+      "id": "ext-unknown-03",
+      "label_source": "human",
+      "layer": "external",
+      "note": "道谢，无业务诉求",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 117
+      },
+      "text": "好的谢谢"
+    },
+    {
+      "gold": "UNKNOWN",
+      "id": "ext-unknown-04",
+      "label_source": "human",
+      "layer": "external",
+      "note": "告知已关注，无业务诉求",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 229
+      },
+      "text": "你好已经关注了"
+    },
+    {
+      "gold": "UNKNOWN",
+      "id": "ext-unknown-05",
+      "label_source": "human",
+      "layer": "external",
+      "note": "道谢，无业务诉求",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 290
+      },
+      "text": "哦哦明白了谢谢老板"
+    },
+    {
+      "gold": "UNKNOWN",
+      "id": "ext-unknown-06",
+      "label_source": "human",
+      "layer": "external",
+      "note": "回应金额，无业务诉求",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 292
+      },
+      "text": "嗯嗯我都170啦"
+    },
+    {
+      "gold": "UNKNOWN",
+      "id": "ext-unknown-07",
+      "label_source": "human",
+      "layer": "external",
+      "note": "索要试吃赠品，目录无对应能力",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 5
+      },
+      "text": "哦亲:我买那么多请多送点试吃零食吧"
+    },
+    {
+      "gold": "UNKNOWN",
+      "id": "ext-unknown-08",
+      "label_source": "human",
+      "layer": "external",
+      "note": "讲自己的购买计划，无业务诉求",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 80
+      },
+      "text": "我先买40个好的话再买40个我就领了2张5块的"
+    },
+    {
+      "gold": "UNKNOWN",
+      "id": "ext-unknown-09",
+      "label_source": "human",
+      "layer": "external",
+      "note": "脱离上下文的追问，无法判定",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 49
+      },
+      "text": "那怎么搞"
+    },
+    {
+      "gold": "UNKNOWN",
+      "id": "ext-unknown-10",
+      "label_source": "human",
+      "layer": "external",
+      "note": "确认客服身份，无业务诉求",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 9501
+      },
+      "text": "你好昨天晚上联系我的是你吗还是其他客服呢"
+    },
+    {
+      "gold": "UNKNOWN",
+      "id": "ext-unknown-11",
+      "label_source": "human",
+      "layer": "external",
+      "note": "评价客服态度，无业务诉求",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 3959
+      },
+      "text": "你们客服服务态度都是那么好吗"
+    },
+    {
+      "gold": "UNKNOWN",
+      "id": "ext-unknown-12",
+      "label_source": "human",
+      "layer": "external",
+      "note": "泛泛建议，无业务诉求",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 4154
+      },
+      "text": "我是想你更好的给顾客服务"
+    },
+    {
+      "gold": "UNKNOWN",
+      "id": "ext-unknown-13",
+      "label_source": "human",
+      "layer": "external",
+      "note": "招呼，无业务诉求",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 2210
+      },
+      "text": "客服在不"
+    },
+    {
+      "gold": "UNKNOWN",
+      "id": "ext-unknown-14",
+      "label_source": "human",
+      "layer": "external",
+      "note": "招呼，无业务诉求",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 3955
+      },
+      "text": "客服在吗"
+    },
+    {
+      "gold": "UNKNOWN",
+      "id": "ext-unknown-15",
+      "label_source": "human",
+      "layer": "external",
+      "note": "询问是否换客服，无业务诉求",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 7384
+      },
+      "text": "2个茶针你们换客服了"
+    },
+    {
+      "gold": "UNKNOWN",
+      "id": "ext-unknown-16",
+      "label_source": "human",
+      "layer": "external",
+      "note": "索要赠品，目录无对应能力",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 14608
+      },
+      "text": "经常在你这买了还有别的送吗都老客服了"
+    },
+    {
+      "gold": "UNKNOWN",
+      "id": "ext-unknown-17",
+      "label_source": "human",
+      "layer": "external",
+      "note": "吐槽客服，无业务诉求",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 9892
+      },
+      "text": "客服给了我一个搞笑的答案说她认错人了"
+    },
+    {
+      "gold": "UNKNOWN",
+      "id": "ext-unknown-18",
+      "label_source": "human",
+      "layer": "external",
+      "note": "主播合作推销，非客户诉求",
+      "provenance": {
+        "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+        "file": "dev_clean_v2.jsonl",
+        "line": 3678
+      },
+      "text": "您好我是淘宝主播大轩轩big专业的电商客服需要淘宝主播合作吗主播专业做儿童类目的主播的每天开播目前粉丝1万3"
+    },
+    {
+      "id": "gap-analytics-01",
+      "text": "我上个月一共退了几笔",
+      "gold": "SELF_ANALYTICS",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "只读聚合，记录集=退款，聚合=笔数",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-analytics-02",
+      "text": "我今年在你们店花了多少钱",
+      "gold": "SELF_ANALYTICS",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "只读聚合，记录集=订单，聚合=金额",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-analytics-03",
+      "text": "我的订单一共有几个",
+      "gold": "SELF_ANALYTICS",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "只读聚合，记录集=订单，聚合=个数",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-analytics-04",
+      "text": "最近三个月我提交过几次售后单",
+      "gold": "SELF_ANALYTICS",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "只读聚合，记录集=售后单，聚合=次数",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-analytics-05",
+      "text": "我一共买过多少件",
+      "gold": "SELF_ANALYTICS",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "只读聚合，记录集=购买记录，聚合=件数",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-analytics-06",
+      "text": "帮我统计一下我的退款金额合计",
+      "gold": "SELF_ANALYTICS",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "只读聚合，记录集=退款，聚合=金额合计",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-analytics-07",
+      "text": "我名下有几笔待处理的退款",
+      "gold": "SELF_ANALYTICS",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "只读聚合，记录集=退款，带状态过滤",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-analytics-08",
+      "text": "这个账号累计消费了多少元",
+      "gold": "SELF_ANALYTICS",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "只读聚合，记录集=消费，聚合=金额",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-analytics-09",
+      "text": "我最近一周下了几个订单",
+      "gold": "SELF_ANALYTICS",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "只读聚合，记录集=订单，聚合=个数",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-analytics-10",
+      "text": "我所有订单加起来多少钱",
+      "gold": "SELF_ANALYTICS",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "只读聚合，记录集=订单，聚合=金额",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-analytics-11",
+      "text": "我买过几次",
+      "gold": "SELF_ANALYTICS",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "只读聚合，记录集=购买记录，聚合=次数",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-analytics-12",
+      "text": "我这几年的订单总额是多少",
+      "gold": "SELF_ANALYTICS",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "只读聚合，记录集=订单，聚合=总额",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-delivery-01",
+      "text": "说好两天到，现在第五天了还没影",
+      "gold": "DELIVERY_ISSUE",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "严重延迟",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-delivery-02",
+      "text": "包裹在途中停了四天不动",
+      "gold": "DELIVERY_ISSUE",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "物流停滞",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-delivery-03",
+      "text": "收到时盒子压扁了，里面也碎了",
+      "gold": "DELIVERY_ISSUE",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "运输破损",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-delivery-04",
+      "text": "只收到两件，清单上是四件",
+      "gold": "DELIVERY_ISSUE",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "少发",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-delivery-05",
+      "text": "快递显示签收，但我没拿到",
+      "gold": "DELIVERY_ISSUE",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "虚假签收",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-delivery-06",
+      "text": "发错货了，我要的东西没来",
+      "gold": "DELIVERY_ISSUE",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "错发",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-delivery-07",
+      "text": "漏发了一瓶",
+      "gold": "DELIVERY_ISSUE",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "漏发",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-delivery-08",
+      "text": "同一个地址，别的快递都到了，这单一直没来",
+      "gold": "DELIVERY_ISSUE",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "未送达",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-delivery-09",
+      "text": "物流三天没更新",
+      "gold": "DELIVERY_ISSUE",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "物流停滞",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-delivery-10",
+      "text": "外包装完好，里面少了一件",
+      "gold": "DELIVERY_ISSUE",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "短少",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-delivery-11",
+      "text": "送来的不是我要的型号",
+      "gold": "DELIVERY_ISSUE",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "错发",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-delivery-12",
+      "text": "说今天送，一直没人来",
+      "gold": "DELIVERY_ISSUE",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "未按约送达",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-eligibility-01",
+      "text": "这双鞋穿过一次还能不能走退货",
+      "gold": "REFUND_ELIGIBILITY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问具体商品是否满足退货条件",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-eligibility-02",
+      "text": "买错颜色了，还可以退换吗",
+      "gold": "REFUND_ELIGIBILITY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问退换资格",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-eligibility-03",
+      "text": "拆封后发现问题，能退吗",
+      "gold": "REFUND_ELIGIBILITY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问拆封后的退货资格",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-eligibility-04",
+      "text": "超过一个月了还有机会退吗",
+      "gold": "REFUND_ELIGIBILITY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问超期后的退货资格",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-eligibility-05",
+      "text": "赠品要一起退吗，主商品可以退不",
+      "gold": "REFUND_ELIGIBILITY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问退货范围与赠品处理",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-eligibility-06",
+      "text": "这件衣服洗过一次，符合退货要求吗",
+      "gold": "REFUND_ELIGIBILITY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问使用后的退货资格",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-eligibility-07",
+      "text": "我这种情况算不算可以退",
+      "gold": "REFUND_ELIGIBILITY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问资格判断",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-eligibility-08",
+      "text": "收到货十天了，还能不能退",
+      "gold": "REFUND_ELIGIBILITY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问时限内的退货资格",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-eligibility-09",
+      "text": "包装丢了还能退吗",
+      "gold": "REFUND_ELIGIBILITY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问缺包装的退货资格",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-eligibility-10",
+      "text": "定制款做错了，可以退吗",
+      "gold": "REFUND_ELIGIBILITY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问定制商品的退货资格",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-eligibility-11",
+      "text": "用了过敏，这个能全退吗",
+      "gold": "REFUND_ELIGIBILITY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问过敏情形下的退货资格",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-eligibility-12",
+      "text": "少发的那件能按缺货退吗",
+      "gold": "REFUND_ELIGIBILITY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问少发情形的退款资格",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-fd54b3b92cad",
+      "text": "我刚拍的刀纸地址选错了",
+      "gold": "ORDER_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "改收货地址属于订单字段",
+      "provenance": {
+        "gap_id": "gap-fd54b3b92cad",
+        "source": "intent-gap-loop",
+        "cycle": "2026-10-26"
+      }
+    },
+    {
+      "id": "gap-handoff-01",
+      "text": "帮我接一个能拍板的人",
+      "gold": "HUMAN_HANDOFF",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "要求有决定权的人接管，不是创建工单",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-handoff-02",
+      "text": "机器人说不明白，换个人跟我说",
+      "gold": "HUMAN_HANDOFF",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "明确拒绝继续与自动回复对话",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-handoff-03",
+      "text": "我要和你们主管聊",
+      "gold": "HUMAN_HANDOFF",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "点名上级接管",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-handoff-04",
+      "text": "麻烦叫一位同事来处理这件事",
+      "gold": "HUMAN_HANDOFF",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "要求同事接手",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-handoff-05",
+      "text": "别让系统回了，我要活人",
+      "gold": "HUMAN_HANDOFF",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "明确要真人",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-handoff-06",
+      "text": "你们这有人能负责吗",
+      "gold": "HUMAN_HANDOFF",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "要求有负责人介入，问句也要人接管",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-handoff-07",
+      "text": "给我转售后服务专员",
+      "gold": "HUMAN_HANDOFF",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "要求转具体岗位",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-handoff-08",
+      "text": "我想找一位能处理退款的人谈谈",
+      "gold": "HUMAN_HANDOFF",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "要人谈退款，重点在人不在退款动作",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-handoff-09",
+      "text": "让你们的负责人联系我",
+      "gold": "HUMAN_HANDOFF",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "要求负责人回联",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-handoff-10",
+      "text": "客服从哪里接入，我要真人对话",
+      "gold": "HUMAN_HANDOFF",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问入口但明确要真人",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-handoff-11",
+      "text": "这单我信不过自动回复，安排个人跟进",
+      "gold": "HUMAN_HANDOFF",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "写动作语境，但诉求是人接管",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-handoff-12",
+      "text": "把你们值班的同事叫来",
+      "gold": "HUMAN_HANDOFF",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "要求当班人员接管",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-logistics-01",
+      "text": "发的是什么快递",
+      "gold": "LOGISTICS_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问承运商",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-logistics-02",
+      "text": "现在到哪个城市了",
+      "gold": "LOGISTICS_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问轨迹位置",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-logistics-03",
+      "text": "明天能送到吗",
+      "gold": "LOGISTICS_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问预计送达",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-logistics-04",
+      "text": "单号发我一下",
+      "gold": "LOGISTICS_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "要运单号",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-logistics-05",
+      "text": "从哪个仓发货",
+      "gold": "LOGISTICS_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问发货仓",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-logistics-06",
+      "text": "大概几天能到",
+      "gold": "LOGISTICS_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问时效",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-logistics-07",
+      "text": "能指定顺丰吗",
+      "gold": "LOGISTICS_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问承运商选择",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-logistics-08",
+      "text": "今天下单什么时候发出",
+      "gold": "LOGISTICS_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问发货时间",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-logistics-09",
+      "text": "派送员电话是多少",
+      "gold": "LOGISTICS_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问派送联系方式",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-logistics-10",
+      "text": "包裹现在在哪个中转站",
+      "gold": "LOGISTICS_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问中转位置",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-logistics-11",
+      "text": "你们默认走哪家物流",
+      "gold": "LOGISTICS_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问默认承运商",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-logistics-12",
+      "text": "订单 ORD-DEMO-1001 的运输进度呢",
+      "gold": "LOGISTICS_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "带订单号问运输进度",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-order-01",
+      "text": "帮我看看上周买的那笔付款了没有",
+      "gold": "ORDER_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "只问订单字段，不提物流位置",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-order-02",
+      "text": "我买的那个订单信息对吗",
+      "gold": "ORDER_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "核对订单信息",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-order-03",
+      "text": "订单里的地址能改吗",
+      "gold": "ORDER_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "改订单地址",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-order-04",
+      "text": "查一下我最近一笔订单",
+      "gold": "ORDER_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "查订单",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-order-05",
+      "text": "订单显示已下单，但我没看到详情",
+      "gold": "ORDER_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "查订单详情",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-order-06",
+      "text": "我的订单号是多少",
+      "gold": "ORDER_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "要订单号",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-order-07",
+      "text": "这笔订单买的是什么",
+      "gold": "ORDER_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "查订单内容",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-order-08",
+      "text": "订单被取消了，原因是什么",
+      "gold": "ORDER_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "查取消原因",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-order-09",
+      "text": "能查一下订单的付款状态吗",
+      "gold": "ORDER_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "查付款状态",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-order-10",
+      "text": "我想确认订单里的收货人",
+      "gold": "ORDER_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "核对收货人",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-order-11",
+      "text": "订单 ORD-DEMO-1001 现在是什么状态",
+      "gold": "ORDER_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "带订单号的状态查询",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-order-12",
+      "text": "帮我把订单里的电话改一下",
+      "gold": "ORDER_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "改订单联系方式",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-policy-01",
+      "text": "你们退货要满足哪些条件",
+      "gold": "POLICY_QA",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问退货规则",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-policy-02",
+      "text": "七天无理由从哪天开始算",
+      "gold": "POLICY_QA",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问无理由期限的计算口径",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-policy-03",
+      "text": "退款一般几天能到账，规则怎么写的",
+      "gold": "POLICY_QA",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问退款到账规则",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-policy-04",
+      "text": "运费险怎么赔",
+      "gold": "POLICY_QA",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问运费险规则",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-policy-05",
+      "text": "超过时效还能申请售后吗",
+      "gold": "POLICY_QA",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问时效规则",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-policy-06",
+      "text": "审批退款需要谁签字",
+      "gold": "POLICY_QA",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问审批规则",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-policy-07",
+      "text": "什么情况下平台会介入",
+      "gold": "POLICY_QA",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问平台介入条件",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-policy-08",
+      "text": "破损赔偿的标准是什么",
+      "gold": "POLICY_QA",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问赔偿标准",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-policy-09",
+      "text": "退货运费由谁承担",
+      "gold": "POLICY_QA",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问运费承担规则",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-policy-10",
+      "text": "订单满多少免运费",
+      "gold": "POLICY_QA",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问包邮门槛",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-policy-11",
+      "text": "优惠券和满减能一起用吗",
+      "gold": "POLICY_QA",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问优惠叠加规则",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-policy-12",
+      "text": "发票开错了怎么重开",
+      "gold": "POLICY_QA",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问发票规则",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-product-01",
+      "text": "这款的承重是多少",
+      "gold": "PRODUCT_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问商品参数",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-product-02",
+      "text": "有别的颜色可选吗",
+      "gold": "PRODUCT_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问商品规格",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-product-03",
+      "text": "这个材质会不会过敏",
+      "gold": "PRODUCT_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问材质",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-product-04",
+      "text": "机器怎么安装",
+      "gold": "PRODUCT_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问安装方式",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-product-05",
+      "text": "尺寸 120 和 150 差多少",
+      "gold": "PRODUCT_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问规格差异",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-product-06",
+      "text": "保修多久",
+      "gold": "PRODUCT_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问保修",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-product-07",
+      "text": "配件清单里有什么",
+      "gold": "PRODUCT_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问配件",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-product-08",
+      "text": "这个型号支持蓝牙吗",
+      "gold": "PRODUCT_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问型号参数",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-product-09",
+      "text": "怎么清洗比较合适",
+      "gold": "PRODUCT_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问清洁保养",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-product-10",
+      "text": "和另一款比哪个更轻",
+      "gold": "PRODUCT_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问商品对比",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-product-11",
+      "text": "这个适合放在多大房间",
+      "gold": "PRODUCT_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问适用场景",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-product-12",
+      "text": "标准版和加厚版用料一样吗",
+      "gold": "PRODUCT_QUERY",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问版本差异",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-refundreq-01",
+      "text": "这单 129 元我不要了，钱原路返回",
+      "gold": "REFUND_REQUEST",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "明确退款写动作且带金额",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-refundreq-02",
+      "text": "货没发，把 129 元付款退回来",
+      "gold": "REFUND_REQUEST",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "明确退款写动作且带金额",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-refundreq-03",
+      "text": "麻烦把这 258 元退到我账户",
+      "gold": "REFUND_REQUEST",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "明确退款写动作且带金额",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-refundreq-04",
+      "text": "我不等了，199 元直接退",
+      "gold": "REFUND_REQUEST",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "明确退款写动作且带金额",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-refundreq-05",
+      "text": "帮我退款 ORD-DEMO-1001 129 元",
+      "gold": "REFUND_REQUEST",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "带订单号与金额的完整退款请求；用来测任务与审批上界",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-refundreq-06",
+      "text": "这笔交易给我撤了",
+      "gold": "REFUND_REQUEST",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "撤单退款",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-refundreq-07",
+      "text": "付的钱请原数返还",
+      "gold": "REFUND_REQUEST",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "要求返还付款",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-refundreq-08",
+      "text": "我要把这单撤掉并拿回款",
+      "gold": "REFUND_REQUEST",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "撤单并退款",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-refundreq-09",
+      "text": "东西不要了，走退款",
+      "gold": "REFUND_REQUEST",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "明确退款写动作",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-refundreq-10",
+      "text": "请把 129 元退给我",
+      "gold": "REFUND_REQUEST",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "带金额的退款请求",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-refundreq-11",
+      "text": "这个订单 ORD-DEMO-1001 帮我退 129 元",
+      "gold": "REFUND_REQUEST",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "带订单号与金额的退款请求",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-refundreq-12",
+      "text": "我不想买了，把 99 元退回来",
+      "gold": "REFUND_REQUEST",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "明确退款写动作且带金额",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-refundstatus-01",
+      "text": "我上周提交的退款现在到哪一步了",
+      "gold": "REFUND_STATUS",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问已有退款申请的进度",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-refundstatus-02",
+      "text": "钱怎么还没回到卡里",
+      "gold": "REFUND_STATUS",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问退款到账",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-refundstatus-03",
+      "text": "退款单号能查一下吗",
+      "gold": "REFUND_STATUS",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "查退款记录",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-refundstatus-04",
+      "text": "这笔钱退了一个星期还没动静",
+      "gold": "REFUND_STATUS",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "报告退款停滞",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-refundstatus-05",
+      "text": "我的退款现在是什么情况",
+      "gold": "REFUND_STATUS",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问退款状态",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-refundstatus-06",
+      "text": "退款到账要多久，我已经等三天了",
+      "gold": "REFUND_STATUS",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问已有退款的到账时间",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-refundstatus-07",
+      "text": "退款申请已经提交，129 元还没到账",
+      "gold": "REFUND_STATUS",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "陈述退款状态；规则会把「退款申请」当成新的写请求",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-refundstatus-08",
+      "text": "退款处理到哪了",
+      "gold": "REFUND_STATUS",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问退款进度",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-refundstatus-09",
+      "text": "钱退回来了吗，我没看到",
+      "gold": "REFUND_STATUS",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问退款是否完成",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-refundstatus-10",
+      "text": "帮我看看退款有没有成功",
+      "gold": "REFUND_STATUS",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "查退款结果",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-refundstatus-11",
+      "text": "申请提交后有回音吗，钱一直没到",
+      "gold": "REFUND_STATUS",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问已有申请的处理结果",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-refundstatus-12",
+      "text": "我退的那笔款什么时候能到账",
+      "gold": "REFUND_STATUS",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "问已有退款的到账时间",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-ticket-01",
+      "text": "我要把这次体验登记成正式问题，让上面跟进",
+      "gold": "TICKET_CREATE",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "要求登记并升级处理",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-ticket-02",
+      "text": "给我开一个售后记录，我要留档",
+      "gold": "TICKET_CREATE",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "要求创建可追踪记录",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-ticket-03",
+      "text": "这件事我要走正式反馈渠道",
+      "gold": "TICKET_CREATE",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "要求进入正式流程",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-ticket-04",
+      "text": "我要把快递丢件这件事报上去",
+      "gold": "TICKET_CREATE",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "要求上报事件",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-ticket-05",
+      "text": "帮我登记一下，我要追究这次延误",
+      "gold": "TICKET_CREATE",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "要求登记并追责",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-ticket-06",
+      "text": "我要正式反映客服态度问题",
+      "gold": "TICKET_CREATE",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "要求正式反映问题",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-ticket-07",
+      "text": "请把这次破损记成需要处理的案件",
+      "gold": "TICKET_CREATE",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "要求建立待处理案件",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-ticket-08",
+      "text": "我要立案，商品和描述完全不符",
+      "gold": "TICKET_CREATE",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "要求立案处理",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-ticket-09",
+      "text": "这次问题我要留个书面记录",
+      "gold": "TICKET_CREATE",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "要求书面记录",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-ticket-10",
+      "text": "我要向平台反映你们不发货",
+      "gold": "TICKET_CREATE",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "要求平台升级投诉",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-ticket-11",
+      "text": "把这次少发登记成待跟进事项",
+      "gold": "TICKET_CREATE",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "要求创建跟进事项",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-ticket-12",
+      "text": "我要一个可查询的处理编号",
+      "gold": "TICKET_CREATE",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "要求可追踪编号",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-unknown-01",
+      "text": "你好",
+      "gold": "UNKNOWN",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "招呼，无业务诉求",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-unknown-02",
+      "text": "谢谢",
+      "gold": "UNKNOWN",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "道谢，无业务诉求",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-unknown-03",
+      "text": "嗯嗯",
+      "gold": "UNKNOWN",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "应答，无业务诉求",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-unknown-04",
+      "text": "好的我知道了",
+      "gold": "UNKNOWN",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "确认，无业务诉求",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-unknown-05",
+      "text": "在吗",
+      "gold": "UNKNOWN",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "招呼，无业务诉求",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-unknown-06",
+      "text": "今天天气不错",
+      "gold": "UNKNOWN",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "寒暄，无业务诉求",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-unknown-07",
+      "text": "你们公司在哪里",
+      "gold": "UNKNOWN",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "目录无公司地址能力",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-unknown-08",
+      "text": "我随便看看",
+      "gold": "UNKNOWN",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "浏览，无明确诉求",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-unknown-09",
+      "text": "这个字怎么念",
+      "gold": "UNKNOWN",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "与售后无关",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-unknown-10",
+      "text": "麻烦帮我写个好评",
+      "gold": "UNKNOWN",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "目录无写好评能力",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-unknown-11",
+      "text": "你们招人吗",
+      "gold": "UNKNOWN",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "招聘，非客户诉求",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    },
+    {
+      "id": "gap-unknown-12",
+      "text": "我想聊聊别的事情",
+      "gold": "UNKNOWN",
+      "layer": "authored_gap",
+      "label_source": "human",
+      "note": "明确脱离售后",
+      "provenance": {
+        "authored": "intent-corpus-eval-2026-10"
+      }
+    }
+  ]
+}

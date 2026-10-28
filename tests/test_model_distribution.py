@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.agent.pydantic_agent import IntentLiteral, IntentOutput, ModelTrace
+from app.agent.pydantic_agent import IntentOutput, ModelTrace
 from evals.model_distribution import CASES, Case, _tv_distance, run
 
 
@@ -11,13 +11,16 @@ class _StubExtractor:
         self.outputs = outputs
 
     def parse(
-        self, request: str, context: dict[str, Any] | None = None
+        self,
+        request: str,
+        context: dict[str, Any] | None = None,
+        candidates: object = None,
     ) -> tuple[IntentOutput, ModelTrace]:
         return self.outputs[request], ModelTrace(requests=1)
 
 
 def _output(
-    intent: IntentLiteral, *, amount_cents: int | None = None, confidence: float = 0.8
+    intent: str, *, amount_cents: int | None = None, confidence: float = 0.8
 ) -> IntentOutput:
     return IntentOutput(
         intent=intent,

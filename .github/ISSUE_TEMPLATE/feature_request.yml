@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         本项目刻意保持「确定性工作流骨架 + 有界语言模型节点」。
-        先读 [SCOPE.md](../../docs/SCOPE.md)：通用 Memory、多 Agent 协作、向量检索、真实支付渠道等**不在 MVP 范围**。
+        先读 [范围与边界.md](../../docs/guide/范围与边界.md)：通用 Memory、多 Agent 协作、向量检索、真实支付渠道等**不在 MVP 范围**。
         如果你的想法会削弱四眼审批、幂等、对账或租户隔离，请先说明为什么安全边界不受影响。
   - type: textarea
     id: problem
@@ -45,7 +45,7 @@ body:
     attributes:
       label: 提交前确认
       options:
-        - label: 我已阅读 SCOPE.md，并确认这与现有安全边界不冲突
+        - label: 我已阅读 范围与边界.md，并确认这与现有安全边界不冲突
           required: true
         - label: 这是可讨论的产品建议，不是安全漏洞（安全漏洞请走私密报告）
           required: true

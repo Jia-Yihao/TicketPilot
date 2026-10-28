@@ -8,7 +8,13 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.time import utcnow
 from app.db.base import Base
-from app.models.enums import LogisticsStatus, OrderStatus, RefundStatus
+from app.models.enums import (
+    LogisticsStatus,
+    OrderStatus,
+    RefundReason,
+    RefundStatus,
+    RefundType,
+)
 
 
 class Order(Base):
@@ -65,6 +71,15 @@ class Refund(Base):
     status: Mapped[RefundStatus] = mapped_column(
         SAEnum(RefundStatus, native_enum=False, length=32, validate_strings=True)
     )
+    reason: Mapped[RefundReason | None] = mapped_column(
+        SAEnum(RefundReason, native_enum=False, length=32, validate_strings=True),
+        nullable=True,
+    )
+    refund_type: Mapped[RefundType | None] = mapped_column(
+        SAEnum(RefundType, native_enum=False, length=32, validate_strings=True),
+        nullable=True,
+    )
+    reason_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
     provider: Mapped[str] = mapped_column(String(32), default="mock")
     external_refund_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     idempotency_key: Mapped[str] = mapped_column(String(128))

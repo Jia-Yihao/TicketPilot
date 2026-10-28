@@ -101,7 +101,7 @@ def test_trace_of_a_refund_task_records_the_tool_and_the_approval(
     created = client.post(
         "/api/v1/tasks",
         headers={"X-Tenant-Id": "demo", "X-User-Id": "alice"},
-        json={"request": "我要申请退款，订单 ORD-DEMO-1001，金额 129 元"},
+        json={"request": "我要申请退款，订单 ORD-DEMO-1001，金额 129 元，商品有质量问题"},
     )
     assert created.status_code == 201
     task = created.json()
@@ -157,7 +157,10 @@ def test_approving_a_refund_appends_to_the_task_trace(client: TestClient) -> Non
     created = client.post(
         "/api/v1/tasks",
         headers={"X-Tenant-Id": "demo", "X-User-Id": "alice"},
-        json={"request": "我要申请退款，订单 ORD-DEMO-1001，金额 129 元"},
+        json={
+            "request": "我要申请退款，订单 ORD-DEMO-1001，金额 129 元",
+            "context": {"refund_reason": "QUALITY"},
+        },
     )
     assert created.status_code == 201
     task = created.json()

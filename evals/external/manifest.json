@@ -1,0 +1,13 @@
+{
+  "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
+  "dataset_url": "https://www.modelscope.cn/datasets/modelscope_mp_677764216/E_commerce_Customer_Service",
+  "license": "Apache-2.0",
+  "source_file": "dev_clean_v2.jsonl",
+  "source_sha256": "202e45eed3e53e0f8bfcca8283e5183e3b7119bdd433a9b2158f25eaac3d427c",
+  "source_rows": 16205,
+  "sample_file": "ecommerce_customer_service_queries.jsonl",
+  "sample_rows": 200,
+  "sample_sha256": "bc0a3769f87ee57d58122906ed467e7263cae434dd01224d174859de2be0c0f3",
+  "selection": "first 200 unique user messages in file order, 4-40 characters, containing a policy topic word; no answer or label is copied",
+  "used_for": "phrasing source only; not a labelled retrieval case"
+}

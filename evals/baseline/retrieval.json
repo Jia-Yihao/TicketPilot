@@ -1,0 +1,40 @@
+{
+  "_meta": {
+    "command": [
+      "evals/retrieval_metrics.py",
+      "--json"
+    ],
+    "recorded_at": "2026-10-28T12:53:05",
+    "source": "retrieval"
+  },
+  "readings": {
+    "channels.bm25.dense_decisions.-": 17,
+    "channels.bm25.failure_count": 0,
+    "channels.bm25.layers.legacy_gold.cross_tenant_hits": 0.0,
+    "channels.bm25.layers.legacy_gold.dense_trigger_rate": 0.0,
+    "channels.bm25.layers.legacy_gold.intent_accuracy": 1.0,
+    "channels.bm25.layers.legacy_gold.mrr": 1.0,
+    "channels.bm25.layers.legacy_gold.ndcg@5": 0.9772439525156154,
+    "channels.bm25.layers.legacy_gold.recall@1": 0.9705882352941176,
+    "channels.bm25.layers.legacy_gold.recall@3": 0.9705882352941176,
+    "channels.bm25.layers.legacy_gold.recall@5": 0.9705882352941176,
+    "channels.bm25.layers.legacy_gold.stale_hits": 0.0,
+    "channels.bm25.metrics.cross_tenant_hits": 0.0,
+    "channels.bm25.metrics.dense_trigger_rate": 0.0,
+    "channels.bm25.metrics.intent_accuracy": 1.0,
+    "channels.bm25.metrics.mrr": 1.0,
+    "channels.bm25.metrics.ndcg@5": 0.9772439525156154,
+    "channels.bm25.metrics.recall@1": 0.9705882352941176,
+    "channels.bm25.metrics.recall@3": 0.9705882352941176,
+    "channels.bm25.metrics.recall@5": 0.9705882352941176,
+    "channels.bm25.metrics.stale_hits": 0.0,
+    "thresholds.cross_tenant_hits": 0,
+    "thresholds.intent_accuracy": 0.55,
+    "thresholds.mrr": 0.8,
+    "thresholds.ndcg@5": 0.8,
+    "thresholds.recall@1": 0.7,
+    "thresholds.recall@3": 0.85,
+    "thresholds.recall@5": 0.9,
+    "thresholds.stale_hits": 0
+  }
+}

@@ -84,6 +84,15 @@ function payloadNumber(detail: ApprovalDetail, key: string): number | null {
   return typeof value === 'number' ? value : null
 }
 
+// 退款原因 / 退款类型的中文唯一名由服务端给（`refund_reason_label` /
+// `refund_type_label`），前端只显示，不自己维护一份枚举到中文的映射。
+// 读顶层字段而不是载荷：载荷是被摘要钉死的那一份，不该承载展示文案。
+function snapshotString(detail: ApprovalDetail, key: string): string | null {
+  const source = detail as unknown as Record<string, unknown>
+  const value = source[key]
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
 function deriveSafety(
   detail: ApprovalDetail,
   isApprover: boolean,
@@ -527,6 +536,8 @@ export function ApprovalWorkbench() {
   const safety = detail
     ? deriveSafety(detail, isApprover, identity.user, now)
     : []
+  // 补充说明只在坐席 / 审批详情侧可见：不进载荷、不进摘要、不进公开回执。
+  const reasonNote = detail ? snapshotString(detail, 'refund_reason_note') : null
   const eligibilityBlocked = safety[0]?.state === 'block'
   const bindingBlocked = safety[1]?.state === 'block'
   const canApprove =
@@ -922,6 +933,20 @@ export function ApprovalWorkbench() {
                     </dd>
                   </div>
                   <div>
+                    <dt>退款原因</dt>
+                    <dd>{snapshotString(detail, 'refund_reason_label') ?? '未提供'}</dd>
+                  </div>
+                  <div>
+                    <dt>退款类型</dt>
+                    <dd>{snapshotString(detail, 'refund_type_label') ?? '未提供'}</dd>
+                  </div>
+                  {reasonNote ? (
+                    <div>
+                      <dt>补充说明</dt>
+                      <dd>{reasonNote}</dd>
+                    </div>
+                  ) : null}
+                  <div>
                     <dt>审批号</dt>
                     <dd>
                       <CopyValue
@@ -1076,8 +1101,8 @@ export function ApprovalWorkbench() {
                   />
                 </header>
                 <p className="digest__copy">
-                  摘要覆盖动作、订单、金额、币种、资源版本与政策版本。
-                  执行退款前，服务端会重算摘要并比对订单版本；任何漂移都会使审批失效。
+                  摘要覆盖动作、订单、金额、币种、资源版本、政策版本、退款原因、退款类型与审批档位。
+                  执行退款前，服务端会重算摘要并比对订单版本与审批档位；任何漂移都会使审批失效、不执行退款，转人工复核。
                 </p>
                 <details className="raw-block">
                   <summary>查看签名载荷</summary>

@@ -110,6 +110,7 @@ def get_trace(
     identity: Identity = Depends(get_identity),
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
+    """读一条 trace 的全部 span；staff 可读租户内任意一条，客户只读自己的。"""
     repository = TraceRepository(session)
     spans = repository.list_for_trace(trace_id)
     if not spans:

@@ -2,7 +2,8 @@
 
 The sparse BM25 channel is always present. The dense and rerank channels are
 opt-in: without them the service stays exactly the deterministic BM25 baseline
-that the offline evaluation measures.
+that the offline evaluation measures. The query rewriter, when enabled, wraps
+the finished chain instead of being one of its channels.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from app.retrieval.dense import (
 )
 from app.retrieval.hybrid import DenseGate, HybridPolicySearch
 from app.retrieval.rerank import RerankClient
+from app.retrieval.rewrite import QueryRewriter, RewritingPolicySearch
 from app.retrieval.search import PolicySearch, PolicySearchService
 
 
@@ -59,6 +61,19 @@ def build_reranker(settings: Settings) -> RerankClient | None:
     )
 
 
+def build_rewriter(settings: Settings) -> QueryRewriter | None:
+    """The query rewriter, or ``None`` when the master switch is off."""
+    if not settings.retrieval_query_rewrite_enabled:
+        return None
+    return QueryRewriter(
+        numbers=settings.retrieval_query_rewrite_numbers,
+        synonyms=settings.retrieval_query_rewrite_synonyms,
+        sections=settings.retrieval_query_rewrite_sections,
+        max_section_hints=settings.retrieval_query_rewrite_max_section_hints,
+        max_expansions=settings.retrieval_query_rewrite_max_expansions,
+    )
+
+
 def build_policy_search(
     session: Session,
     settings: Settings,
@@ -75,24 +90,32 @@ def build_policy_search(
     )
     embedder = build_embedder(settings)
     reranker = build_reranker(settings)
+    search: PolicySearch
     if embedder is None and reranker is None:
-        return sparse
-    dense_gate = (
-        DenseGate(
-            min_top1_score=settings.retrieval_dense_gate_min_top1_score,
-            min_coverage=settings.retrieval_dense_gate_min_coverage,
+        search = sparse
+    else:
+        dense_gate = (
+            DenseGate(
+                min_top1_score=settings.retrieval_dense_gate_min_top1_score,
+                min_coverage=settings.retrieval_dense_gate_min_coverage,
+            )
+            if settings.retrieval_dense_gate_enabled
+            else None
         )
-        if settings.retrieval_dense_gate_enabled
-        else None
-    )
-    return HybridPolicySearch(
-        session,
-        sparse=sparse,
-        embedder=embedder,
-        reranker=reranker,
-        rrf_k=settings.retrieval_rrf_k,
-        max_results=results,
-        candidate_pool=settings.retrieval_candidate_pool,
-        dense_min_score=settings.retrieval_dense_min_score,
-        dense_gate=dense_gate,
-    )
+        search = HybridPolicySearch(
+            session,
+            sparse=sparse,
+            embedder=embedder,
+            reranker=reranker,
+            rrf_k=settings.retrieval_rrf_k,
+            max_results=results,
+            candidate_pool=settings.retrieval_candidate_pool,
+            dense_min_score=settings.retrieval_dense_min_score,
+            dense_gate=dense_gate,
+        )
+    # The rewriter wraps the finished chain: the dense gate and the reranker
+    # must see the same rewritten text the sparse channel scored.
+    rewriter = build_rewriter(settings)
+    if rewriter is None:
+        return search
+    return RewritingPolicySearch(search, rewriter)

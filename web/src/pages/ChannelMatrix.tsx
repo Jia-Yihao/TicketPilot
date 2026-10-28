@@ -18,16 +18,21 @@ const CHANNEL_LABELS: Record<string, string> = {
   SMS: '短信',
 }
 
-const INBOUND_LABELS: Record<string, string> = {
-  WEB: '控制台会话',
-  EMAIL: '签名回调',
-  WECHAT: '签名回调',
-  WECOM: '签名回调',
+// The inbound availability reason comes from the backend (`availability`).
+// The console only maps that value to Chinese text; it keeps no list of its
+// own about which channels can take inbound traffic, so the two sides cannot
+// drift apart. An unregistered value falls through to the raw value instead of
+// being shown as "available".
+const AVAILABILITY_LABELS: Record<string, string | undefined> = {
+  available: '可入站',
+  webhook_secret_missing: '缺验签密钥（请求会 503）',
+  not_enabled: '未启用（开关关闭）',
+  not_implemented: '未实现入站',
 }
 
 const CELL_LABELS = {
   status: '状态',
-  inbound: '入站',
+  inbound: '入站可用性',
   stream: '流式',
   card: '富卡片',
   voice: '语音',
@@ -129,7 +134,7 @@ export function ChannelMatrix() {
       <PageHeader
         eyebrow="CHANNELS / 渠道矩阵"
         title="渠道矩阵"
-        description="渲染矩阵决定同一答案在每个渠道里长成什么样；入站只有配了适配器与验签的渠道能进来。"
+        description="渲染矩阵决定同一答案在每个渠道里长成什么样；入站能不能进来，看「入站可用性」一列给出的原因。"
         meta={
           <div className="matrix-summary">
             <span className="chip">
@@ -160,7 +165,10 @@ export function ChannelMatrix() {
         <Icon name="shield" size={16} />
         <p>
           未接入的渠道会灰显但不隐藏：它们在枚举与渲染矩阵里存在，入站请求一律
-          404。签名格式是本项目自定义的 HMAC，还没有对接任何真实服务商协议。
+          404（未实现与未启用都是 404，理由文本不同）。入站形态只有两种——控制台
+          会话与签名回调（邮件、微信、企业微信）；某个渠道此刻通不通，看「入站
+          可用性」一列给出的原因。签名格式是本项目自定义的 HMAC，还没有对接任何
+          真实服务商协议。
         </p>
       </div>
 
@@ -233,7 +241,7 @@ export function ChannelMatrix() {
                     className="matrix-table__plain"
                     data-label={CELL_LABELS.inbound}
                   >
-                    {INBOUND_LABELS[item.channel] ?? '无入站通道'}
+                    {AVAILABILITY_LABELS[item.availability] ?? item.availability}
                   </td>
                   <td data-label={CELL_LABELS.stream}>
                     <Flag

@@ -99,6 +99,20 @@ _KIND_TO_STEP: dict[FailureKind, str] = {
 }
 
 
+# The kinds that say the upstream is unhealthy. A business rejection or a bad
+# argument means the tool answered, so counting it would let three customers
+# mistyping an order number shed every lookup in the process for half a
+# minute. UNKNOWN counts: it is how a timeout surfaces on a side-effect tool.
+_FAULT_KINDS = frozenset(
+    {
+        FailureKind.TIMEOUT,
+        FailureKind.UPSTREAM,
+        FailureKind.UNKNOWN,
+        FailureKind.INTERNAL,
+    }
+)
+
+
 def classify_failure(exc: BaseException) -> FailureKind:
     """Turn a raised exception into the kind of failure it is."""
     if isinstance(exc, UnknownOutcomeError):
@@ -335,19 +349,19 @@ class ToolExecutor:
                 result = handler(attempt_ctx, args)
             except AppError as exc:
                 kind = classify_failure(exc)
-                self.breaker.record_failure(manifest.name)
+                self._count_failure(manifest, kind)
                 if self._may_retry(manifest, kind, attempt):
                     self._sleep(self._backoff_s(manifest, attempt))
                     continue
                 return self._failed(manifest, kind, exc, attempt, started)
             except Exception as exc:  # noqa: BLE001 - classified, never swallowed
-                self.breaker.record_failure(manifest.name)
+                self._count_failure(manifest, FailureKind.INTERNAL)
                 return self._failed(manifest, FailureKind.INTERNAL, exc, attempt, started)
 
             elapsed_ms = int((self._clock() - started) * 1000)
             if not result.ok and result.retryable:
                 kind = _kind_of_result(result)
-                self.breaker.record_failure(manifest.name)
+                self._count_failure(manifest, kind)
                 if self._may_retry(manifest, kind, attempt):
                     self._sleep(self._backoff_s(manifest, attempt))
                     continue
@@ -382,6 +396,11 @@ class ToolExecutor:
             )
 
     # ------------------------------------------------------------- internals
+    def _count_failure(self, manifest: ToolManifest, kind: FailureKind) -> None:
+        """A failure the tool answered with is not evidence the tool is down."""
+        if kind in _FAULT_KINDS:
+            self.breaker.record_failure(manifest.name)
+
     def _may_retry(self, manifest: ToolManifest, kind: FailureKind, attempt: int) -> bool:
         if attempt >= manifest.retry.max_attempts:
             return False

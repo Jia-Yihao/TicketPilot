@@ -1,0 +1,467 @@
+{
+  "version": 1,
+  "description": "800 条模板银标：每个模板 8 个问法 × 5 个槽位，标签由构造决定。槽位措辞参考公开客服语料的问法，但外部数据的问答/意图标签一律不采用。只用于覆盖与压力，不单独构成质量结论。",
+  "slot_sets": {
+    "orders": [
+      {"order": "还没发货的订单"},
+      {"order": "已取消的订单"},
+      {"order": "已发货但没签收的订单"},
+      {"order": "已签收的订单"},
+      {"order": "刚付款还没出库的订单"}
+    ],
+    "durations": [
+      {"n": "3", "u": "天"},
+      {"n": "7", "u": "天"},
+      {"n": "15", "u": "天"},
+      {"n": "30", "u": "天"},
+      {"n": "45", "u": "天"}
+    ],
+    "amounts": [
+      {"n": "1", "u": "元"},
+      {"n": "50", "u": "元"},
+      {"n": "99", "u": "元"},
+      {"n": "129", "u": "元"},
+      {"n": "300", "u": "元"}
+    ],
+    "approvers": [
+      {"approver": "客服主管"},
+      {"approver": "财务专员"},
+      {"approver": "风控人员"},
+      {"approver": "值班组长"},
+      {"approver": "人工审批人"}
+    ],
+    "results": [
+      {"result": "接口返回成功"},
+      {"result": "状态显示 PENDING_CONFIRMATION"},
+      {"result": "退款记录显示成功"},
+      {"result": "外部调用超时"},
+      {"result": "用户说钱还没到"}
+    ],
+    "handling": [
+      {"case": "严重延迟"},
+      {"case": "延迟订单"},
+      {"case": "包裹晚到"},
+      {"case": "物流停滞"},
+      {"case": "长时间没签收"}
+    ],
+    "evidence": [
+      {"evidence": "物流记录"},
+      {"evidence": "订单物流轨迹"},
+      {"evidence": "政策版本"},
+      {"evidence": "承运商回执"},
+      {"evidence": "签收记录"}
+    ],
+    "steps": [
+      {"step": "寄回商品"},
+      {"step": "验收通过"},
+      {"step": "退款审批"},
+      {"step": "资金退回"},
+      {"step": "状态更新"}
+    ],
+    "return_items": [
+      {"item": "未拆封商品"},
+      {"item": "已拆封的贴身用品"},
+      {"item": "食品"},
+      {"item": "定制商品"},
+      {"item": "缺少配件的商品"}
+    ],
+    "wording": [
+      {"state": "已同意退货"},
+      {"state": "退货验收通过"},
+      {"state": "退款还在审批"},
+      {"state": "退货申请已提交"},
+      {"state": "用户要求退款"}
+    ],
+    "ticket_types": [
+      {"case": "资金安全"},
+      {"case": "重复扣款"},
+      {"case": "严重延迟"},
+      {"case": "明确投诉"},
+      {"case": "功能建议"}
+    ],
+    "creation": [
+      {"action": "重复提交"},
+      {"action": "只提供订单号"},
+      {"action": "帮别人建单"},
+      {"action": "同一请求重试"},
+      {"action": "批量导入"}
+    ],
+    "handoff": [
+      {"reason": "证据不足"},
+      {"reason": "政策冲突"},
+      {"reason": "用户要求人工介入"},
+      {"reason": "重试超过上限"},
+      {"reason": "无法自动判断"}
+    ],
+    "conditions": [
+      {"condition": "没有可退余额"},
+      {"condition": "已有审批中的退款"},
+      {"condition": "订单已取消"},
+      {"condition": "未发货"},
+      {"condition": "有状态未知的退款记录"}
+    ],
+    "calc": [
+      {"item": "部分退款"},
+      {"item": "优惠券"},
+      {"item": "运费"},
+      {"item": "税费"},
+      {"item": "多件商品"}
+    ],
+    "approval_events": [
+      {"event": "订单版本变化"},
+      {"event": "审批等待超过一天"},
+      {"event": "金额被修改"},
+      {"event": "订单状态变化"},
+      {"event": "审批人换班"}
+    ],
+    "confirm": [
+      {"state": "接口超时"},
+      {"state": "返回成功"},
+      {"state": "状态未知"},
+      {"state": "重复提交"},
+      {"state": "对账不一致"}
+    ]
+  },
+  "templates": [
+    {
+      "template_id": "refund-scope-what",
+      "policy_id": "POLICY-REFUND",
+      "section": "适用范围",
+      "facet": "WHAT",
+      "slots": "orders",
+      "patterns": [
+        "{order}也适用退款政策吗",
+        "{order}能不能走退款流程",
+        "退款政策管不管{order}",
+        "{order}在不在退款范围内",
+        "遇到{order}还需要申请退款吗",
+        "{order}是否符合退款政策的适用条件",
+        "这份退款政策覆盖{order}吗",
+        "{order}应该按退款政策处理吗"
+      ]
+    },
+    {
+      "template_id": "refund-window-when",
+      "policy_id": "POLICY-REFUND",
+      "section": "退款条件",
+      "facet": "WHEN",
+      "slots": "durations",
+      "patterns": [
+        "签收后{n}{u}还能申请退款吗",
+        "超过{n}{u}是不是就不能退款了",
+        "签收以后{n}{u}内可以提交退款申请吗",
+        "退款时限是{n}{u}吗",
+        "签收{n}{u}之后再申请退款来得及吗",
+        "订单签收满{n}{u}还能退钱吗",
+        "退款申请必须在签收后{n}{u}内提出吗",
+        "{n}{u}的退款期限从哪天开始算"
+      ]
+    },
+    {
+      "template_id": "refund-amount-what",
+      "policy_id": "POLICY-REFUND",
+      "section": "退款金额",
+      "facet": "WHAT",
+      "slots": "amounts",
+      "patterns": [
+        "这笔订单能退{n}{u}吗",
+        "可退余额够不够退{n}{u}",
+        "退款金额是{n}{u}还是更多",
+        "申请退{n}{u}会超过余额吗",
+        "为什么可退金额只有{n}{u}",
+        "退{n}{u}按什么单位计算",
+        "订单总额和{n}{u}的差额去哪了",
+        "可退余额剩下{n}{u}还能全退吗"
+      ]
+    },
+    {
+      "template_id": "refund-approval-who",
+      "policy_id": "POLICY-REFUND",
+      "section": "审批要求",
+      "facet": "WHO",
+      "slots": "approvers",
+      "patterns": [
+        "退款需要{approver}审批吗",
+        "这笔退款由{approver}审批吗",
+        "{approver}能直接审批退款吗",
+        "退款审批要经过{approver}吗",
+        "审批人必须是{approver}吗",
+        "订单版本变了还要重新找{approver}审批吗",
+        "{approver}有权审核退款申请吗",
+        "退款审批由{approver}负责吗"
+      ]
+    },
+    {
+      "template_id": "refund-confirmation-why",
+      "policy_id": "POLICY-REFUND",
+      "section": "结果确认",
+      "facet": "WHY",
+      "slots": "results",
+      "patterns": [
+        "{result}就代表退款成功了吗",
+        "为什么{result}还不能算退款完成",
+        "{result}之后还要确认什么",
+        "退款结果显示{result}时应该怎么回复用户",
+        "{result}的情况下能不能直接告诉用户到账了",
+        "为什么要查权威记录确认{result}",
+        "{result}时需要先对账吗",
+        "用户看到{result}但钱没到账怎么办"
+      ]
+    },
+    {
+      "template_id": "delay-detection-when",
+      "policy_id": "POLICY-DELAY",
+      "section": "延迟判定",
+      "facet": "WHEN",
+      "slots": "durations",
+      "patterns": [
+        "超过预计送达{n}{u}算严重延迟吗",
+        "物流轨迹停留{n}{u}要联系承运商吗",
+        "包裹晚了{n}{u}还没到算不算延迟",
+        "签收时间超过预计{n}{u}怎么判定",
+        "物流{n}{u}没有更新是不是异常",
+        "超过{n}{u}未签收可以认定严重延迟吗",
+        "延迟判定看的是{n}{u}这个时限吗",
+        "预计送达后{n}{u}还没消息怎么办"
+      ]
+    },
+    {
+      "template_id": "delay-handling-how",
+      "policy_id": "POLICY-DELAY",
+      "section": "处理方式",
+      "facet": "HOW",
+      "slots": "handling",
+      "patterns": [
+        "{case}该怎么处理",
+        "{case}要怎么跟进",
+        "遇到{case}先做什么",
+        "{case}的处理流程是什么",
+        "{case}需要联系承运商吗",
+        "{case}需要优先安排人工联系承运商吗",
+        "{case}要通过什么方式跟进",
+        "{case}能不能直接赔偿用户"
+      ]
+    },
+    {
+      "template_id": "delay-evidence-where",
+      "policy_id": "POLICY-DELAY",
+      "section": "证据要求",
+      "facet": "WHERE",
+      "slots": "evidence",
+      "patterns": [
+        "{evidence}在哪里查看",
+        "回答物流问题时要引用哪份{evidence}",
+        "需要把{evidence}附在回复里吗",
+        "没有{evidence}还能回复用户吗",
+        "为什么回答物流问题要看{evidence}",
+        "怎么核实{evidence}",
+        "{evidence}不足时应该怎么办",
+        "要不要把{evidence}一起发给用户"
+      ]
+    },
+    {
+      "template_id": "return-window-when",
+      "policy_id": "POLICY-RETURN",
+      "section": "七天无理由退货",
+      "facet": "WHEN",
+      "slots": "durations",
+      "patterns": [
+        "签收后{n}{u}内可以无理由退货吗",
+        "超过{n}{u}还能七天无理由吗",
+        "无理由退货的期限是{n}{u}吗",
+        "签收{n}{u}之后再申请无理由退货可以吗",
+        "七天无理由必须在{n}{u}内提出吗",
+        "商品没拆封但过了{n}{u}怎么办",
+        "无理由退货的{n}{u}从哪里开始算",
+        "不满{n}{u}可以无理由退回吗"
+      ]
+    },
+    {
+      "template_id": "return-vs-refund-what",
+      "policy_id": "POLICY-RETURN",
+      "section": "退货与退款的区别",
+      "facet": "WHAT",
+      "slots": "steps",
+      "patterns": [
+        "{step}之后算退货还是退款",
+        "申请{step}就等于退款成功了吗",
+        "{step}和退款是什么关系",
+        "为什么{step}后还要重新检查退款资格",
+        "{step}完成后多久能退款",
+        "{step}和退款状态在哪里看",
+        "先做{step}还是先退款",
+        "{step}没完成能直接退款吗"
+      ]
+    },
+    {
+      "template_id": "return-exclusions-what",
+      "policy_id": "POLICY-RETURN",
+      "section": "不予退货的情形",
+      "facet": "WHAT",
+      "slots": "return_items",
+      "patterns": [
+        "{item}可以退货吗",
+        "{item}是不是不能退",
+        "为什么{item}不予退货",
+        "{item}超过七天还能退吗",
+        "{item}缺少配件还能退吗",
+        "什么情况下{item}不能退",
+        "{item}拆封后还能退吗",
+        "{item}不支持退货的依据是什么"
+      ]
+    },
+    {
+      "template_id": "return-wording-how",
+      "policy_id": "POLICY-RETURN",
+      "section": "操作要求",
+      "facet": "HOW",
+      "slots": "wording",
+      "patterns": [
+        "{state}时应该怎么跟用户说",
+        "{state}能不能表述成已经退款",
+        "回答{state}的问题要引用哪个政策版本",
+        "{state}时要提醒用户什么",
+        "为什么{state}不能直接说退款成功",
+        "{state}的回复话术要注意什么",
+        "怎么向用户解释{state}",
+        "{state}时客服应该怎么表述"
+      ]
+    },
+    {
+      "template_id": "ticket-priority-what",
+      "policy_id": "POLICY-TICKET",
+      "section": "优先级定义",
+      "facet": "WHAT",
+      "slots": "ticket_types",
+      "patterns": [
+        "{case}应该算哪个优先级",
+        "{case}属于 URGENT 吗",
+        "{case}的工单优先级怎么定",
+        "{case}是不是 HIGH",
+        "{case}为什么会是最高优先级",
+        "{case}应该开 NORMAL 还是 HIGH",
+        "{case}的优先级依据是什么",
+        "{case}需要按 URGENT 处理吗"
+      ]
+    },
+    {
+      "template_id": "ticket-creation-why",
+      "policy_id": "POLICY-TICKET",
+      "section": "创建规则",
+      "facet": "WHY",
+      "slots": "creation",
+      "patterns": [
+        "{action}时怎么避免重复工单",
+        "{action}时需要绑定哪些信息",
+        "{action}能不能创建工单",
+        "{action}时应该怎么使用幂等键",
+        "为什么{action}不能直接建单",
+        "{action}后工单号会变吗",
+        "{action}的创建规则是什么",
+        "{action}时幂等键有用吗"
+      ]
+    },
+    {
+      "template_id": "ticket-handoff-when",
+      "policy_id": "POLICY-TICKET",
+      "section": "转人工",
+      "facet": "WHEN",
+      "slots": "handoff",
+      "patterns": [
+        "{reason}时要不要转人工",
+        "{reason}应该什么时候转人工",
+        "{reason}转人工后任务算成功吗",
+        "{reason}怎么创建工单并转人工",
+        "{reason}为什么必须转人工",
+        "{reason}转人工要说明什么状态",
+        "{reason}可以继续自动处理吗",
+        "{reason}的转人工规则在哪里"
+      ]
+    },
+    {
+      "template_id": "refund-scope-when",
+      "policy_id": "POLICY-REFUND",
+      "section": "适用范围",
+      "facet": "WHEN",
+      "slots": "orders",
+      "patterns": [
+        "{order}什么时候适用退款政策",
+        "{order}还没处理完能申请退款吗",
+        "{order}在什么状态下才能退款",
+        "{order}超过退款适用范围后怎么办",
+        "{order}是不是一律不能退",
+        "{order}需要先变成什么状态",
+        "{order}适用退款政策的前提是什么",
+        "{order}不在范围内还能走别的流程吗"
+      ]
+    },
+    {
+      "template_id": "refund-conditions-what",
+      "policy_id": "POLICY-REFUND",
+      "section": "退款条件",
+      "facet": "WHAT",
+      "slots": "conditions",
+      "patterns": [
+        "{condition}时还能申请退款吗",
+        "{condition}符合退款条件吗",
+        "{condition}为什么不能提交退款申请",
+        "{condition}需要先满足什么条件",
+        "{condition}还能走退款流程吗",
+        "{condition}时退款申请会被拒绝吗",
+        "{condition}算不算退款前提不满足",
+        "{condition}的订单怎么处理退款"
+      ]
+    },
+    {
+      "template_id": "refund-amount-how",
+      "policy_id": "POLICY-REFUND",
+      "section": "退款金额",
+      "facet": "HOW",
+      "slots": "calc",
+      "patterns": [
+        "{item}的退款金额怎么算",
+        "{item}要退多少钱",
+        "{item}能不能全额退",
+        "{item}的金额会从可退余额里扣吗",
+        "{item}为什么不能自动计算",
+        "{item}的差额怎么处理",
+        "{item}计算退款金额要注意什么",
+        "{item}的金额超过余额怎么办"
+      ]
+    },
+    {
+      "template_id": "refund-approval-when",
+      "policy_id": "POLICY-REFUND",
+      "section": "审批要求",
+      "facet": "WHEN",
+      "slots": "approval_events",
+      "patterns": [
+        "{event}后旧审批还有效吗",
+        "{event}时什么时候要重新审批",
+        "{event}后多久旧审批失效",
+        "{event}时退款申请要重新发起吗",
+        "{event}为什么会导致审批失效",
+        "{event}后审批需要谁来确认",
+        "{event}时审批流程怎么继续",
+        "{event}前已经审批通过怎么办"
+      ]
+    },
+    {
+      "template_id": "refund-confirmation-how",
+      "policy_id": "POLICY-REFUND",
+      "section": "结果确认",
+      "facet": "HOW",
+      "slots": "confirm",
+      "patterns": [
+        "{state}时怎么确认退款结果",
+        "{state}后要不要对账",
+        "{state}能不能直接重试",
+        "{state}时应该给用户什么状态",
+        "{state}为什么不能算退款成功",
+        "{state}后查哪个退款记录",
+        "{state}时怎么避免重复退款",
+        "{state}的处理步骤是什么"
+      ]
+    }
+  ]
+}
