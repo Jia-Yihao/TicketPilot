@@ -60,6 +60,7 @@ from app.models.enums import (
 )
 from app.models.outbox import OutboxMessage
 from app.models.task import Task
+from app.observability import tracing
 from app.observability.tracing import TraceRecorder
 from app.repositories.approvals import ApprovalRepository
 from app.repositories.audit import AuditRepository
@@ -396,6 +397,10 @@ class TaskRuntime:
             session.commit()
 
             identity = Identity(task.tenant_id, task.user_id, frozenset())
+            # The understand segment's own start: the recorder is only built
+            # after the plan (R9 口径 §2.1.5), so task.route must carry the
+            # reading taken before this call, not the recorder's clock.
+            route_started = time.perf_counter()
             plan, planning_source, model_trace = self.brain.plan(
                 task.request, task.context, decision=decision
             )
@@ -433,7 +438,12 @@ class TaskRuntime:
                         latency_ms=model_trace.latency_ms,
                         status=model_trace.status,
                     )
-            trace.add("understand", "task.route", attributes=route_attributes)
+            trace.add(
+                "understand",
+                "task.route",
+                attributes=route_attributes,
+                latency_ms=tracing.elapsed_ms(route_started),
+            )
             services.tasks.append_event(task.id, "task.routed", routed_payload)
             session.commit()
 
@@ -1351,7 +1361,7 @@ class TaskRuntime:
                         "timeout_ms": manifest.timeout_ms,
                     },
                     status="ERROR",
-                    latency_ms=int((time.perf_counter() - started) * 1000),
+                    latency_ms=tracing.elapsed_ms(started),
                 )
             self._degrade(services, task, name, exc, trace, started)
             raise
@@ -1366,7 +1376,7 @@ class TaskRuntime:
                         "error": type(exc).__name__,
                     },
                     status="ERROR",
-                    latency_ms=int((time.perf_counter() - started) * 1000),
+                    latency_ms=tracing.elapsed_ms(started),
                 )
             raise
         result = outcome.result
@@ -1385,7 +1395,7 @@ class TaskRuntime:
                     "over_budget": outcome.over_budget,
                     "circuit_state": outcome.circuit_state,
                 },
-                latency_ms=int((time.perf_counter() - started) * 1000),
+                latency_ms=tracing.elapsed_ms(started),
             )
         services.tasks.append_event(
             task.id,
@@ -1423,7 +1433,7 @@ class TaskRuntime:
                     "error_code": exc.code,
                 },
                 status="ERROR",
-                latency_ms=int((time.perf_counter() - started) * 1000),
+                latency_ms=tracing.elapsed_ms(started),
             )
         services.tasks.append_event(
             task.id,

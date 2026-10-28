@@ -1,7 +1,15 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+from typing import Any
+
+import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from app.agent.turns import Draft, SupportIntent
+from app.core.security import Identity
+from app.observability import tracing
 from app.observability.redaction import redact, redact_payload
 from app.observability.tracing import TraceRecorder
 
@@ -233,3 +241,142 @@ def test_trace_metrics_are_tenant_scoped_and_staff_only(client: TestClient) -> N
     assert other_tenant.status_code == 200
     assert other_tenant.json()["spans"] == 0
     assert other_tenant.json()["error_rate"] == 0.0
+
+
+# --------------------------------------------------- R9-a: segment latencies
+#
+# R9 口径 §5 acceptance 2: stub the single entry ``tracing.elapsed_ms`` to one
+# fixed non-zero reading and assert every segment span carries it. A real
+# elapsed-time reading is not admissible as the criterion — 0 is a legal
+# reading and would be indistinguishable from a producer that forgot to pass
+# latency_ms at all (§2.2.2). Readings below come from the stub, never from
+# wall-clock assertions or manufactured delays.
+
+
+def _stubbed_spans(
+    client: TestClient, headers: dict[str, str], trace_id: str
+) -> dict[tuple[str, str], int]:
+    response = client.get(f"/api/v1/traces/{trace_id}", headers=headers)
+    assert response.status_code == 200
+    return {
+        (span["kind"], span["name"]): span["latency_ms"]
+        for span in response.json()["spans"]
+    }
+
+
+def test_stubbed_clock_reads_seven_on_every_conversation_segment(
+    app_factory: Callable[..., FastAPI],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(tracing, "elapsed_ms", lambda started: 7)
+    application = app_factory()
+    client = TestClient(application)
+    alice = {"X-Tenant-Id": "demo", "X-User-Id": "alice"}
+
+    profiled = client.put(
+        "/api/v1/memory", headers=alice, json={"preferred_name": "Alice 女士"}
+    )
+    assert profiled.status_code == 200
+
+    policy_turn = client.post(
+        "/api/v1/support/messages",
+        headers=alice,
+        json={"message": "退款条件是什么？"},
+    )
+    assert policy_turn.status_code == 200
+    policy_spans = _stubbed_spans(
+        client, alice, str(policy_turn.json()["trace_id"])
+    )
+    assert policy_spans[("understand", "support.classify")] == 7
+    assert policy_spans[("retrieve", "policy.search")] == 7
+    assert policy_spans[("generate", "memory.personalize")] == 7
+    assert policy_spans[("generate", "support.reply")] == 7
+
+    analytics_turn = client.post(
+        "/api/v1/support/messages",
+        headers=alice,
+        json={"message": "我买了多少订单"},
+    )
+    assert analytics_turn.status_code == 200
+    analytics_spans = _stubbed_spans(
+        client, alice, str(analytics_turn.json()["trace_id"])
+    )
+    assert analytics_spans[("generate", "analytics.narrate")] == 7
+    assert analytics_spans[("guard", "analytics.faithfulness")] == 7
+
+
+def test_stubbed_clock_reads_seven_on_the_task_route(
+    app_factory: Callable[..., FastAPI],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(tracing, "elapsed_ms", lambda started: 7)
+    application = app_factory()
+    client = TestClient(application)
+    alice = {"X-Tenant-Id": "demo", "X-User-Id": "alice"}
+
+    created = client.post(
+        "/api/v1/tasks",
+        headers=alice,
+        json={
+            "request": "我要申请退款，订单 ORD-DEMO-1001，金额 129 元，商品有质量问题"
+        },
+    )
+    assert created.status_code == 201
+    task = created.json()
+    assert task["trace_id"]
+
+    task_spans = _stubbed_spans(client, alice, str(task["trace_id"]))
+    assert task_spans[("understand", "task.route")] == 7
+
+
+def test_stubbed_clock_reads_seven_when_the_output_guard_changes_the_draft(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The guard span only exists when the guard really rewrote the reply
+    # (§5.2): the reply below carries a timeline assertion and the draft has
+    # no source, so ``_guard_output`` cannot take either early return.
+    monkeypatch.setattr(tracing, "elapsed_ms", lambda started: 7)
+    agent: Any = app.state.support_agent
+    recorder = TraceRecorder(tenant_id="demo")
+    draft = Draft(intent=SupportIntent.POLICY_QA, reply="您的退款 3 天内一定到账。")
+
+    with app.state.session_factory() as session:
+        agent._guard_output(
+            session,
+            Identity("demo", "alice", frozenset()),
+            recorder,
+            "conv-demo",
+            draft,
+        )
+
+    span = recorder.find("guard")
+    assert span is not None
+    assert span.name == "output.grounded"
+    assert span.latency_ms == 7
+
+
+def test_analytics_tool_spans_carry_their_duration_in_the_latency_column(
+    client: TestClient,
+) -> None:
+    # §2.1.3: the ledger/attribute duration_ms and the latency column are the
+    # same number written into a second carrier — never a second formula.
+    answered = client.post(
+        "/api/v1/support/messages",
+        headers={"X-Tenant-Id": "demo", "X-User-Id": "alice"},
+        json={"message": "我买了多少订单"},
+    )
+    assert answered.status_code == 200
+    response = client.get(
+        f"/api/v1/traces/{answered.json()['trace_id']}",
+        headers={"X-Tenant-Id": "demo", "X-User-Id": "alice"},
+    )
+    assert response.status_code == 200
+    tool_spans = [
+        span
+        for span in response.json()["spans"]
+        if span["kind"] == "tool" and "duration_ms" in span["attributes"]
+    ]
+    assert tool_spans, "expected a tool span carrying duration_ms"
+    for span in tool_spans:
+        assert span["latency_ms"] == span["attributes"]["duration_ms"]

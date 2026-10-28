@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -30,6 +31,7 @@ from app.core.money import format_cents
 from app.core.policy import EvidenceScore, PolicyEngine
 from app.core.security import Identity
 from app.core.time import utcnow
+from app.observability import tracing
 from app.observability.tracing import TraceRecorder
 from app.services.catalog import CatalogService
 from app.services.llm_usage import LlmUsageService
@@ -328,6 +330,7 @@ _EMPTY_POLICY_REPLIES = {
 
 @action("retrieval.hybrid")
 def policy_question(request: ActionRequest) -> Draft:
+    retrieve_started = time.perf_counter()
     evidence = request.contexts.policy_evidence(
         request.identity, request.message, limit=2
     )
@@ -350,6 +353,7 @@ def policy_question(request: ActionRequest) -> Draft:
                 for card in cards
             ],
         },
+        latency_ms=tracing.elapsed_ms(retrieve_started),
     )
     if not cards:
         return Draft(
@@ -470,6 +474,7 @@ def _prefetch_answer(request: ActionRequest, answer: SqlAnswer) -> Draft:
     if snapshot is None:  # pragma: no cover - guarded by the caller
         summary, card = _analytics_summary(answer)
         return Draft(intent=request.plan.intent, reply=summary, cards=[card])
+    narrate_started = time.perf_counter()
     result = narrate(request.message, snapshot, request.narrator)
     _record_narration_usage(request, result)
     request.trace.add(
@@ -485,6 +490,7 @@ def _prefetch_answer(request: ActionRequest, answer: SqlAnswer) -> Draft:
             "truncated": snapshot.truncated,
             "rows_in_prompt": len(snapshot.recent),
         },
+        latency_ms=tracing.elapsed_ms(narrate_started),
     )
     request.trace.add(
         "guard",
@@ -495,6 +501,7 @@ def _prefetch_answer(request: ActionRequest, answer: SqlAnswer) -> Draft:
             "missing_numbers": list(result.missing),
             "source": result.source,
         },
+        latency_ms=tracing.elapsed_ms(narrate_started),
     )
 
     dataset = DATASETS[snapshot.dataset]

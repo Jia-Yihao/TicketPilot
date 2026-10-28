@@ -24,7 +24,7 @@ from typing import Any, Literal
 
 from app.observability.redaction import redact_payload
 
-__all__ = ["SpanKind", "SpanBuffer", "TraceRecorder", "reply_digest"]
+__all__ = ["SpanKind", "SpanBuffer", "TraceRecorder", "elapsed_ms", "reply_digest"]
 
 _ISO_TIMESTAMP = re.compile(
     r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?"
@@ -32,6 +32,19 @@ _ISO_TIMESTAMP = re.compile(
 _GENERATED_REF = re.compile(
     r"\b(?:rfd|task|trc|conv|tkt|spn)_[0-9a-f]{6,}\b|\bTCK-[0-9A-F]{6,}\b"
 )
+
+
+def elapsed_ms(started: float) -> int:
+    """Whole milliseconds elapsed since a ``time.perf_counter()`` reading.
+
+    The one place the span-latency formula lives (R9 口径 §2.1、§3.4): every
+    segment producer and every timed block reports through here, so a reader
+    can trust that two spans measured the same way. Call sites must go through
+    the module attribute (``tracing.elapsed_ms(...)``) so tests can stub this
+    one symbol. Never clamp or round here: a wrong start reading must stay
+    observable, not be smoothed into a plausible number.
+    """
+    return int((time.perf_counter() - started) * 1000)
 
 
 def reply_digest(text: str) -> str:
@@ -188,4 +201,4 @@ class TraceRecorder:
 
     @staticmethod
     def _elapsed_ms(started: float) -> int:
-        return int((time.perf_counter() - started) * 1000)
+        return elapsed_ms(started)

@@ -248,6 +248,7 @@ class SqlAnalyticsService:
                     "sql": sql,
                     "query_id": row.id,
                 },
+                latency_ms=duration_ms,
             )
         return SqlAnswer(
             plan=plan,
@@ -322,6 +323,7 @@ class SqlAnalyticsService:
                     "rows_returned": len(snapshot.rows),
                     "truncated": snapshot.truncated,
                 },
+                latency_ms=duration_ms,
             )
             trace.add(
                 "tool",
@@ -334,6 +336,7 @@ class SqlAnalyticsService:
                     "estimated_tokens": context["estimated_tokens"],
                     "duration_ms": duration_ms,
                 },
+                latency_ms=duration_ms,
             )
         rows = snapshot.l1_rows()
         return SqlAnswer(

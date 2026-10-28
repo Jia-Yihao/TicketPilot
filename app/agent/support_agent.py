@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -60,6 +61,7 @@ from app.models.conversation import Conversation
 from app.models.enums import AbandonReason, Channel, HandoffStatus, Intent
 from app.models.handoff import HandoffEvent
 from app.models.security_event import SecurityEvent
+from app.observability import tracing
 from app.observability.redaction import digest
 from app.observability.tracing import TraceRecorder, reply_digest
 from app.repositories.commerce import CommerceRepository
@@ -304,6 +306,10 @@ class SupportAgent:
                 )
 
             # --- 阶段二：把这一句读成槽位与意图 ---
+            # The understand segment starts here, before the recorder exists
+            # (R9 口径 §2.1.5): support.classify must carry this reading, not
+            # the recorder's construction clock.
+            classify_started = time.perf_counter()
             reading = self._stage_read_slots(message, order_id, channel, carried)
             # --- 阶段三：决定最终读法（沿用追问 / 展开统计 / 问一次模型）---
             consult = self._stage_consult_model(
@@ -347,6 +353,7 @@ class SupportAgent:
                     "catalog_version": catalog.version,
                     "guard_categories": [event.category for event in guard_events],
                 },
+                latency_ms=tracing.elapsed_ms(classify_started),
             )
             if resealed_keys:
                 # The marker the re-seal owes the reader (ADR-030 决策 6): this
@@ -416,6 +423,7 @@ class SupportAgent:
             # and block on PostgreSQL, so the turn's own writes go in first.
             session.commit()
 
+            reply_started = time.perf_counter()
             takeover = decision is not None and decision.takeover
             if takeover and decision is not None and not decision.continue_task:
                 # The user is going to a human: the handover replaces the
@@ -618,6 +626,7 @@ class SupportAgent:
                     "outcome": outcome,
                     "action": draft.action,
                 },
+                latency_ms=tracing.elapsed_ms(reply_started),
             )
             TraceRepository(session).flush(trace)
             session.commit()
@@ -924,6 +933,7 @@ class SupportAgent:
         if draft.clarification is not None:
             return
         source = self._output_source(draft)
+        guard_started = time.perf_counter()
         result = guard_output(draft.reply, grounded=source is not None)
         if not result.changed:
             return
@@ -953,6 +963,7 @@ class SupportAgent:
                 "replacements": result.replaced,
                 "kinds": list(result.kinds),
             },
+            latency_ms=tracing.elapsed_ms(guard_started),
         )
 
     def _output_source(self, draft: Draft) -> str | None:
@@ -986,6 +997,7 @@ class SupportAgent:
         profile = load_profile(session, identity)
         if profile is None:
             return None
+        personalize_started = time.perf_counter()
         result = personalize(
             draft,
             profile,
@@ -1006,6 +1018,7 @@ class SupportAgent:
                 "matched_product_id": result.matched_product_id,
                 "first_turn": carried.last_intent is None,
             },
+            latency_ms=tracing.elapsed_ms(personalize_started),
         )
         return result.to_dict()
 
