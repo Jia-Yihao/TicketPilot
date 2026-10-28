@@ -38,6 +38,8 @@ from typing import Any
 import pytest
 import yaml
 
+from scripts.build_manual import source_digest
+
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 MANIFEST_FILE = ROOT / "docs" / "fact-baseline.yaml"
 SPEC_FILE = ROOT / "docs" / "spec" / "项目规格.md"
@@ -473,7 +475,7 @@ def test_manual_build_record_matches_the_specification() -> None:
     """
 
     record = _build_record()
-    digest = hashlib.sha256(SPEC_FILE.read_bytes()).hexdigest()
+    digest = source_digest(SPEC_FILE)
     assert record.get("source_sha256") == digest, (
         "说明书落后于规格：docs/spec/项目规格.md 改过之后没有重生成说明书。\n"
         f"  记录里的源文件摘要：{record.get('source_sha256')}\n"
@@ -483,6 +485,20 @@ def test_manual_build_record_matches_the_specification() -> None:
     assert record.get("source") == SPEC_FILE.relative_to(ROOT).as_posix(), (
         f"构建记录指向的源文件是 {record.get('source')!r}，不是规格本身"
     )
+
+
+def test_source_digest_ignores_line_endings() -> None:
+    """钉住「源文件摘要与行位无关」：同一内容分别写成 CRLF 与 LF，摘要必须逐字相等。"""
+
+    text = "line one\nline two\n"
+    normalized = text.encode("utf-8")
+    with tempfile.TemporaryDirectory() as directory:
+        crlf = pathlib.Path(directory) / "crlf.md"
+        lf = pathlib.Path(directory) / "lf.md"
+        crlf.write_bytes(text.replace("\n", "\r\n").encode("utf-8"))
+        lf.write_bytes(normalized)
+        expected = hashlib.sha256(normalized).hexdigest()
+        assert source_digest(crlf) == source_digest(lf) == expected
 
 
 def test_manual_is_in_sync_with_the_specification(manual_paragraphs: list[str]) -> None:

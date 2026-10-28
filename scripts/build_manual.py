@@ -71,7 +71,15 @@ def pandoc_version(pandoc: str) -> str:
 
 
 def source_digest(source: Path) -> str:
-    return hashlib.sha256(source.read_bytes()).hexdigest()
+    """sha256 of the source with CRLF normalized to LF.
+
+    ``.gitattributes`` pins ``eol=lf``: a clean clone holds LF bytes while a
+    local working tree may hold CRLF, so the digest must be line-ending
+    agnostic or the guard only passes on one machine.
+    """
+
+    raw = source.read_bytes().replace(b"\r\n", b"\n")
+    return hashlib.sha256(raw).hexdigest()
 
 
 def _inspect(path: Path) -> dict[str, int]:

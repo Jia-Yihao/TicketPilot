@@ -28,7 +28,7 @@
 「pytest 收集用例数」绑成了事实基线，且该数字在文档里有**三处**说法、其中一处还要求说明书
 docx 同步（`docs/fact-baseline.yaml:163-175`：`智能体平台设想.md` 的「规模事实」行、
 `docs/spec/项目规格.md` 的「本轮收尾读数」行（`in_manual: true`）、`docs/下一步规划.md` 的「| 测试 |」行），
-而事实的唯一定义是现算的 `pytest --collect-only`（`tests/test_docs_consistency.py:145-172`）。
+而事实的唯一定义是现算的 `pytest --collect-only`（`tests/test_docs_consistency.py:147-174`）。
 `bench/` 的归属若不先定死，就会出现两种事故：写了**不受 lint 的代码**，或基线数字被自己刚动的
 目录**搞漂移**——后者会一次性产生一批文档欠账（守卫级联）。
 
@@ -88,14 +88,14 @@ docx 同步（`docs/fact-baseline.yaml:163-175`：`智能体平台设想.md` 的
 - **理由（写成链条，逐环可核对）**：一旦被 pytest 收集，就会改变「`pytest` 收集用例数」这条
   **已进事实基线**的读数。链条是：
 
-  1. 收集数的唯一定义是现算的 `pytest --collect-only`（`tests/test_docs_consistency.py:145-172`），
+  1. 收集数的唯一定义是现算的 `pytest --collect-only`（`tests/test_docs_consistency.py:147-174`），
      登记为事实 `test_collected`（`docs/fact-baseline.yaml:163-175`）；
   2. 该事实有**三处**文档说法，其中 `docs/spec/项目规格.md` 那处标了 `in_manual: true`
      （`docs/fact-baseline.yaml:169-172`），于是还追加一条「说明书 docx 必须重生成」的欠账
-     （同步守卫 `tests/test_docs_consistency.py:446-465` 的 `test_manual_contains_the_claimed_lines`、
-     `:468-486` 的源文件 sha256 比对）；
-  3. 每个事实**至少**要在两处被写出来（`tests/test_docs_consistency.py:435-443`），
-     且文档锚点必须**整行唯一命中**（`tests/test_docs_consistency.py:267-276`），
+     （同步守卫 `tests/test_docs_consistency.py:448-467` 的 `test_manual_contains_the_claimed_lines`、
+     `:470-488` 的源文件 sha256 比对）；
+  3. 每个事实**至少**要在两处被写出来（`tests/test_docs_consistency.py:437-445`），
+     且文档锚点必须**整行唯一命中**（`tests/test_docs_consistency.py:269-278`），
      追加文档内容时不得复现已登记锚点的那句话。
 
   净效果：**一次性能测量附带一批文档欠账**，且失败模式是「守卫红一片、没人说得清哪个数才是对的」。
@@ -141,7 +141,7 @@ docx 同步（`docs/fact-baseline.yaml:163-175`：`智能体平台设想.md` 的
   `strict = true`（`pyproject.toml:72-75`）。
 - **数字与措辞两侧的可核对依据（保留原核实结论）**：
   - 数字侧：事实 `mypy_files` 现算的是 **`app/` 下的 Python 文件数**
-    （`tests/test_docs_consistency.py:132-138`，`_fact_app_py_files` 与 `_fact_mypy_files`
+    （`tests/test_docs_consistency.py:134-140`，`_fact_app_py_files` 与 `_fact_mypy_files`
     都指向 `ROOT / "app"`）。因此「mypy 不覆盖 bench」不会打红数字守卫；反过来，
     一旦扩面，「零错误（148 个文件）」这类**登记在事实基线上的说法**立刻与读数脱节，
     触发守卫级联——这正是裁定不扩面的直接代价依据。
@@ -162,7 +162,7 @@ docx 同步（`docs/fact-baseline.yaml:163-175`：`智能体平台设想.md` 的
 
 1. **不得为了让 bench「不被收集」而把它放进 `tests/` 里面**（例如 `tests/bench/`）。
    那会同时污染测试目录的口径——`_fact_test_py_files` 现算 `tests/` 下的 `.py` 文件数
-   （`tests/test_docs_consistency.py:141-142`，登记为 `test_py_files`，
+   （`tests/test_docs_consistency.py:143-144`，登记为 `test_py_files`，
    `docs/fact-baseline.yaml:149-161`），放进来就直接把这条基线打漂移；而「测性能」与「测正确性」
    混在一个目录树里，后来者无法判断该看哪个入口。
 2. **不得靠 `testpaths` / `norecursedirs` 之外的花招绕过**：允许的机制只有
@@ -179,13 +179,24 @@ docx 同步（`docs/fact-baseline.yaml:163-175`：`智能体平台设想.md` 的
   `("app", "evals", "scripts", "tests", "web", "alembic")`
   （`tests/test_doc_code_anchors.py:39`，扫描范围 `docs/**/*.md` 见 `:172`）；
   数字守卫的现算表 `COMPUTERS` 也没有任何 bench 相关事实
-  （`tests/test_docs_consistency.py:200-215`）。
+  （`tests/test_docs_consistency.py:202-217`）。
   后果：`bench/` 里写的 `文件:行` 与「bench 已进 `lint-bench`」这类说法**当前没有机器核对**，
   只能靠实现轮的显式命令与 reviewer 读 diff。**这就是缺口**，本口径如实登记，不假装已被守卫兜住。
 - 同理，`.qoder/rules/*.md` 不在锚点守卫扫描范围内（只扫 `docs/`，
   `tests/test_doc_code_anchors.py:172`），**本文件自身的 `文件:行` 不被机器核对**。
   因此本文件每处引用在撰写时都是**逐行读到过**的；实现轮若发现某处行号漂了，改本文件并说明，
   不得反过来以「守卫没红」为准。
+- 行号漂移同步登记（R2，2026-10-29）：本轮为把「源文件摘要」归一为单一定义，在
+  `tests/test_docs_consistency.py:41` 引入 `from scripts.build_manual import source_digest`，使该文件原
+  :41 之后的行号整体 +2；本文件对它的 8 个区间引用已按此同步。同批另有 **8 行**同类引用落在
+  `openspec/changes/add-perf-guardrails-and-measurement-2026-10/`（共 **13 处引用点、5 个区间族**，
+  2026-10-29 实测，收尾轮可用
+  `grep -rn "145-172\|446-465\|468-486\|435-443\|267-276\|132-138\|141-142\|200-215\|393-395\|380-388" openspec/changes/add-perf-guardrails-and-measurement-2026-10/`
+  现核）：`plan.md:62` 引 `:267-276`、`plan.md:63` 引 `:393-395`、`plan.md:65` 引 `:435-443` 与
+  `:380-388`、`plan.md:159` 引 `:267-276` 与 `:393-395`、`plan.md:160` 引 `:380-388`、
+  `proposal.md:32` 引 `:200-215`、`specs/project-gates/spec.md:22` 引 `:200-215` 与 `:435-443`、
+  `specs/project-gates/spec.md:23` 引 `:267-276`、`:393-395` 与 `:380-388`。
+  本轮不改，登记留待口径/收尾轮处置。
 
 ---
 
@@ -272,9 +283,9 @@ docx 同步（`docs/fact-baseline.yaml:163-175`：`智能体平台设想.md` 的
    「此为 X 日 Y 时读数，现已变化」。这条既有纪律的直接适用面就是性能读数
    （`docs/spec/项目规格.md:4856` 那条「复跑一次、p95 2497、判定不动」就是它的正确形态）。
 4. **锚点唯一命中**：新增或改写文档行时，不得复现已登记锚点的那句话
-   （`tests/test_docs_consistency.py:267-276` 要求每个锚点在目标文件里**恰好命中一行**）；
-   动了被 `in_manual: true` 绑定的行，必须重生成说明书（`tests/test_docs_consistency.py:446-465`、
-   `:468-486`）。
+   （`tests/test_docs_consistency.py:269-278` 要求每个锚点在目标文件里**恰好命中一行**）；
+   动了被 `in_manual: true` 绑定的行，必须重生成说明书（`tests/test_docs_consistency.py:448-467`、
+   `:470-488`）。
 
 ---
 
@@ -353,7 +364,7 @@ docx 同步（`docs/fact-baseline.yaml:163-175`：`智能体平台设想.md` 的
 
 1. **`bench/` 内无 pytest 可收集文件**：遍历 `bench/`，不存在 `test_*.py` 与 `*_test.py`；
    `python -m pytest --collect-only -q -o addopts=` 的收集数与本口径落地前**同一数字**
-   （该收集数即事实 `test_collected`，`tests/test_docs_consistency.py:145-172`）。
+   （该收集数即事实 `test_collected`，`tests/test_docs_consistency.py:147-174`）。
    ——**待实现**（`bench/` 尚不存在，§2 表第 1 行）。
 2. **`bench` 由独立 `lint-bench` 目标覆盖**：`Makefile` 新增 `lint-bench: ruff check bench`，
    CI 有独立步骤 `ruff check bench`；既有主命令行 `ruff check app tests scripts evals alembic`
@@ -362,7 +373,7 @@ docx 同步（`docs/fact-baseline.yaml:163-175`：`智能体平台设想.md` 的
 3. **mypy 范围不变（不扩面守住项）**：`python -m mypy app` 与「只覆盖 `app`」类范围表述
    （`docs/spec/项目规格.md:4697`、`CONTRIBUTING.md:29` 注释、`docs/records/智能体平台设想.md:855`）
    **逐字保持**；`mypy_files` 读数仍按 `app/` 现算成立
-   （`tests/test_docs_consistency.py:132-138`）。——**已落地即守住**：本轮与实现轮都不得把这些串扩到 `bench`（编排方 2026-10-27 裁定，§2.3）。
+   （`tests/test_docs_consistency.py:134-140`）。——**已落地即守住**：本轮与实现轮都不得把这些串扩到 `bench`（编排方 2026-10-27 裁定，§2.3）。
 4. **每条读数带产出身份**：校验器对缺 `produced_by`（commit / 命令 / 时刻）的 `baseline.json`
    判 FAIL；脏树情形必须有显式声明字段，不得只有一个裸 commit。——**待实现**；
    当前可钉住的替代：无（§2.5 的缺口——两个守卫都不扫 `bench/`）。
@@ -438,7 +449,7 @@ docx 同步（`docs/fact-baseline.yaml:163-175`：`智能体平台设想.md` 的
 >    引用 bench 测量口径一律以本文件为准。实现者不得再回引草案，也不得以「草案里那么写」
 >    为理由少做或多做一条。
 > 2. **§2.5 / §7 第 4–9 条登记的是缺口，不是已达成**：`bench` 不在两个守卫的扫描清单里
->    （`tests/test_doc_code_anchors.py:39`、`tests/test_docs_consistency.py:200-215`），
+>    （`tests/test_doc_code_anchors.py:39`、`tests/test_docs_consistency.py:202-217`），
 >    `.qoder/rules/*.md` 也不在锚点扫描范围（`tests/test_doc_code_anchors.py:172`）。
 >    因此「指纹齐全」「定性未被改写」「事实源仍是表」这三类判定**当前没有机器核对**，
 >    只能由 reviewer 读 diff 兜底；本口径如实写出，不以「文档已声明」冒充「已被断言」。
