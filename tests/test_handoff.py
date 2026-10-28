@@ -11,7 +11,9 @@ from collections.abc import Callable
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
+from app.models.conversation import ConversationMessage
 from tests.conftest import ALICE
 
 SEAT = {"X-Tenant-Id": "demo", "X-User-Id": "agent-1", "X-Roles": "support"}
@@ -276,8 +278,10 @@ def test_idle_session_is_flagged_without_taking_over(
 
 # ------------------------------------------------------------------ 接管静默
 def test_agent_stays_silent_while_a_seat_owns_the_conversation(
-    client: TestClient,
+    client: TestClient, app: FastAPI
 ) -> None:
+    from app.models.enums import Outcome
+
     first = _message(client, ALICE, "转人工")
     assert first["reply"]
     assert first["agent_silent"] is False
@@ -299,6 +303,16 @@ def test_agent_stays_silent_while_a_seat_owns_the_conversation(
     silent = [span for span in spans if span["name"] == "agent.silent"]
     assert silent
     assert silent[0]["attributes"]["reply_chars"] == 0
+
+    # 静默分支同样只经产出点：留痕消息的 payload outcome 必须是枚举里的 AGENT_SILENT。
+    with app.state.session_factory() as session:
+        silent_message = session.scalars(
+            select(ConversationMessage).where(
+                ConversationMessage.conversation_id == second["conversation_id"],
+                ConversationMessage.content == "订单 ORD-DEMO-1001 到哪了",
+            )
+        ).one()
+    assert str(silent_message.payload["outcome"]) == Outcome.AGENT_SILENT.value
 
 
 def test_agent_answers_again_after_the_seat_releases_the_conversation(
@@ -532,3 +546,31 @@ def test_metrics_can_be_scoped_to_a_window(client: TestClient) -> None:
     assert metrics["window_minutes"] == 60
     assert metrics["handoff_conversations"] == 1
     assert metrics["by_signal"]["user_request"] == 1
+
+
+# ------------------------------------------------------- R13：outcome 值域（移交侧）
+def test_handoff_bundle_outcomes_come_from_the_recorded_turns(
+    client: TestClient,
+) -> None:
+    """移交上下文包里的 outcome：除接管当回合的读取侧兜底外，必须全部 ∈ Outcome。
+
+    盘上事实：bundle 是事件创建时的快照，而接管当回合的 payload 在快照之后
+    才写入 outcome（阶段八），所以该行只能是 handoff.py 的兜底值 ``UNKNOWN``；
+    ``UNKNOWN`` 是读取侧兜底，不入枚举、不是产出点。
+    """
+    from app.models.enums import Outcome
+
+    first = _message(client, ALICE, "订单 ORD-DEMO-1001 买的是什么商品？")
+    second = _message(client, ALICE, "转人工", conversation_id=first["conversation_id"])
+    event_id = second["handoff"]["event_id"]
+
+    claimed = client.post(f"/api/v1/handoffs/{event_id}/claim", headers=SEAT)
+    assert claimed.status_code == 200, claimed.text
+    case = _seat_case(client, event_id)
+
+    seen = [str(record["outcome"]) for record in case["bundle"]["intent_history"]]
+    allowed = {member.value for member in Outcome}
+    assert seen[:1] == [Outcome.ANSWERED.value]
+    assert set(seen) <= allowed | {"UNKNOWN"}
+    assert [value for value in seen if value not in allowed] == ["UNKNOWN"]
+    assert Outcome.HANDOFF.value not in seen  # 当回合快照时尚无 outcome，兜底为 UNKNOWN

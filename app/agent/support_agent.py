@@ -58,7 +58,7 @@ from app.core.policy import PolicyEngine
 from app.core.security import Identity
 from app.core.time import utcnow
 from app.models.conversation import Conversation
-from app.models.enums import AbandonReason, Channel, HandoffStatus, Intent
+from app.models.enums import AbandonReason, Channel, HandoffStatus, Intent, Outcome
 from app.models.handoff import HandoffEvent
 from app.models.security_event import SecurityEvent
 from app.observability import tracing
@@ -1050,7 +1050,7 @@ class SupportAgent:
             role="user",
             content=message,
             intent=plan.intent.value,
-            payload={"outcome": "AGENT_SILENT"},
+            payload={"outcome": self._outcome(None, None, silent=True)},
         )
         trace = TraceRecorder(
             tenant_id=identity.tenant_id,
@@ -1370,14 +1370,24 @@ class SupportAgent:
             )
         return candidates
 
-    def _outcome(self, draft: Draft, decision: EscalationDecision | None) -> str:
+    def _outcome(
+        self,
+        draft: Draft | None,
+        decision: EscalationDecision | None,
+        *,
+        silent: bool = False,
+    ) -> Outcome:
+        if silent:
+            return Outcome.AGENT_SILENT
+        if draft is None:
+            raise ValueError("_outcome needs a draft unless silent=True")
         if decision is not None and decision.takeover:
-            return "HANDOFF"
+            return Outcome.HANDOFF
         if draft.clarification is not None:
-            return "CLARIFIED"
+            return Outcome.CLARIFIED
         if not draft.resolved:
-            return "UNRESOLVED"
-        return "ANSWERED"
+            return Outcome.UNRESOLVED
+        return Outcome.ANSWERED
 
     def _handoff_payload(self, event: HandoffEvent | None) -> dict[str, Any] | None:
         if event is None:

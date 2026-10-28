@@ -206,3 +206,13 @@ class AbandonReason(StrEnum):
 
     IDLE_NO_RESOLUTION = "IDLE_NO_RESOLUTION"
     REPEAT_INTENT = "REPEAT_INTENT"
+
+
+class Outcome(StrEnum):
+    """How a support turn closed; produced only by the agent's ``_outcome()``."""
+
+    HANDOFF = "HANDOFF"
+    CLARIFIED = "CLARIFIED"
+    UNRESOLVED = "UNRESOLVED"
+    ANSWERED = "ANSWERED"
+    AGENT_SILENT = "AGENT_SILENT"

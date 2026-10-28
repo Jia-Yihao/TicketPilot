@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from app.core.time import utcnow
 from app.models.commerce import Order, Refund
+from app.models.conversation import ConversationMessage
 from app.models.enums import OrderStatus, RefundStatus
 from tests.conftest import ALICE, CAROL
 
@@ -248,3 +251,51 @@ def test_support_answer_does_not_create_a_task(client: TestClient) -> None:
     _message(client, ALICE, "退款条件是什么？")
 
     assert client.get("/api/v1/tasks", headers=ALICE).json()["total"] == 0
+
+
+# ----------------------------------------------------------- R13：outcome 值域
+def test_every_recorded_outcome_is_an_enum_value(
+    client: TestClient, app: FastAPI
+) -> None:
+    """五种形态各走一遍：落库的每个 outcome 必须落在 Outcome 值域里。"""
+    from app.models.enums import Outcome
+
+    takeover = _message(client, ALICE, "转人工")
+    _message(
+        client, ALICE, "订单 ORD-DEMO-1001 到哪了", conversation_id=takeover["conversation_id"]
+    )
+    answered = _message(client, ALICE, "订单 ORD-DEMO-1001 买的是什么商品？")
+    clarified = _message(client, ALICE, "我要申请退款，质量有问题")
+    unresolved = _message(client, ALICE, "订单 ORD-NOPE-0000 到哪了")
+
+    conversation_ids = {
+        body["conversation_id"] for body in (takeover, answered, clarified, unresolved)
+    }
+    with app.state.session_factory() as session:
+        rows = session.scalars(
+            select(ConversationMessage).where(
+                ConversationMessage.conversation_id.in_(conversation_ids),
+                ConversationMessage.role == "user",
+            )
+        ).all()
+
+    seen = {
+        str(message.payload["outcome"])
+        for message in rows
+        if message.payload and "outcome" in message.payload
+    }
+    assert seen <= {member.value for member in Outcome}
+    assert seen == {"HANDOFF", "AGENT_SILENT", "ANSWERED", "CLARIFIED", "UNRESOLVED"}
+
+
+def test_support_agent_source_has_no_bare_outcome_literals() -> None:
+    """静态扫描：结案状态只能由 ``_outcome()`` 产出，源码里不许再有裸字面量。
+
+    只扫 ``app/agent/support_agent.py``——本测试文件自己就写着这些字面量。
+    """
+    source = (
+        Path(__file__).resolve().parents[1] / "app" / "agent" / "support_agent.py"
+    ).read_text(encoding="utf-8")
+
+    for literal in ('"HANDOFF"', '"CLARIFIED"', '"UNRESOLVED"', '"ANSWERED"', '"AGENT_SILENT"'):
+        assert literal not in source, f"bare outcome literal {literal} left in support_agent.py"
