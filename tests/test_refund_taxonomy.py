@@ -151,7 +151,10 @@ def test_migration_downgrade_removes_the_three_columns(tmp_path: Path) -> None:
     upgraded = {column["name"] for column in sa_inspect(engine).get_columns("refunds")}
     assert {"reason", "refund_type", "reason_note"} <= upgraded
 
-    command.downgrade(config, "-1")
+    # 目标写死为这条迁移的父版本，不用相对值 "-1"：R9-c 之后 head 变成
+    # ea6c2b48d701（task conversation link），"-1" 只会退掉 head 那一条，
+    # 本用例要退的是 d9e4c7a15b82。断言本身不变。
+    command.downgrade(config, PREVIOUS_HEAD)
 
     columns = {column["name"] for column in sa_inspect(engine).get_columns("refunds")}
     assert "reason" not in columns

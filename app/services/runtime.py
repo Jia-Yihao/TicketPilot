@@ -299,6 +299,7 @@ class TaskRuntime:
         *,
         idempotency_key: str | None = None,
         decision: ModelDecision | None = None,
+        conversation_id: str | None = None,
     ) -> dict[str, Any]:
         """Create and run a task, optionally under a client retry key.
 
@@ -307,6 +308,10 @@ class TaskRuntime:
         replaying the old result would answer a question the client did not
         ask. The unique constraint is the arbiter under a race; the lookup
         here only saves the common sequential retry a write.
+
+        ``conversation_id`` 只由对话侧建单传入（R9 口径 §2.4.3：直接调 API 的
+        任务一律 ``NULL``）。它写在列上，绝不写进 ``context``——那会改动
+        ``request_digest``，把同一幂等键的重试变成 409（§2.4.4）。
         """
         key = (idempotency_key or "").strip() or None
         digest = (
@@ -344,6 +349,7 @@ class TaskRuntime:
                     request=request,
                     context=context or {},
                     trace_id=trace_id,
+                    conversation_id=conversation_id,
                     idempotency_key=key,
                     request_digest=digest,
                 )
@@ -407,6 +413,7 @@ class TaskRuntime:
             trace = TraceRecorder(
                 tenant_id=task.tenant_id,
                 trace_id=task.trace_id,
+                conversation_id=task.conversation_id,
                 root_name="task.run",
             )
             route_attributes: dict[str, Any] = {
@@ -911,6 +918,7 @@ class TaskRuntime:
             trace = TraceRecorder(
                 tenant_id=task.tenant_id,
                 trace_id=task.trace_id,
+                conversation_id=task.conversation_id,
                 root_name="task.approve",
             )
             pending = services.approvals.pending_for_task(task.id)

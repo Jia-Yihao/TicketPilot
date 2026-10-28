@@ -398,8 +398,8 @@
    「对话树与任务树有共同关联键」的落地判据。
 8. **迁移双向可行**：在空库上跑通 `upgrade` 与 `downgrade`（形状照 `tests/test_refund_taxonomy.py:118-159`
    的两条用例）。断言：迁移后 `tasks` 有可空的 `conversation_id` 列、`sa_inspect(...).get_indexes("tasks")`
-   里有 `ix_tasks_conversation_id`；历史行的 `conversation_id` 仍是 `NULL`（不得回填）；`downgrade("-1")`
-   后列与索引都消失。
+   里有 `ix_tasks_conversation_id`；历史行的 `conversation_id` 仍是 `NULL`（不得回填）；`downgrade(<本条迁移的父修订号>)`（写死绝对修订号，不用相对值 `"-1"`）
+   后列与索引都消失。（2026-10-28 措辞订正：原文写作 downgrade("-1")。相对目标是「相对当时 head 退一步」，会把用例钉在「本条迁移恰好是 head」这一过期前提上；R9-c 落地时既有用例 tests/test_refund_taxonomy.py::test_migration_downgrade_removes_the_three_columns 即以真实代价触发——head 变为 ea6c2b48d701 后 "-1" 只退掉新迁移，该用例变红，已改为显式目标 tests/test_refund_taxonomy.py:157（PREVIOUS_HEAD = "a1c7e9d4b820"），断言本体未放宽。同一棵树里同一件事只保留一种写法。）
 9. **回放不回退（两组读数逐字相同）**：`evals/replay.py --self-check` 仍打出 `REPLAY DIFF EMPTY`
    （`:443`），且下面两组输出与本轮之前**逐字相同**：
    - `replay: N recorded conversations, M replayable, K skipped`（`:368-371`）——**recorded / replayable /

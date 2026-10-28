@@ -44,6 +44,7 @@ class TaskRepository:
         request: str,
         context: dict[str, Any],
         trace_id: str | None = None,
+        conversation_id: str | None = None,
         idempotency_key: str | None = None,
         request_digest: str | None = None,
     ) -> Task:
@@ -56,6 +57,7 @@ class TaskRepository:
             status=TaskStatus.CREATED,
             version=1,
             trace_id=trace_id,
+            conversation_id=conversation_id,
             idempotency_key=idempotency_key,
             request_digest=request_digest,
         )

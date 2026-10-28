@@ -132,3 +132,50 @@ def test_no_key_still_creates_one_task_per_request(
     assert first.json()["task_id"] != second.json()["task_id"]
     assert second.json()["idempotent_replay"] is False
     assert _count(app) == 2
+
+
+def test_a_retry_keeps_the_same_digest_because_the_key_never_enters_context(
+    client: TestClient, app: FastAPI
+) -> None:
+    """R9 口径 §5.6 之三 / §2.4 第 4 条：关联键只能走列。
+
+    `request_digest` 由 `canonical_digest({"request": request, "context": context or {}})`
+    现算（`app/services/runtime.py:312-316`）。若把 `conversation_id` 塞进 `context`，
+    第二次请求的摘要与第一次不等，`:329-332` 会抛 `ConflictError`——同一幂等键的
+    重试就从「返回第一个任务」变成 409。这条断言同时钉住列本身：直接调 API 建单
+    的 `conversation_id` 必须是 `NULL`（§2.4 第 3 条），且不能出现在 `context` 里。
+    """
+    request = "帮我查询订单 ORD-DEMO-1001"
+    first = _post(client, "task-key-digest", request)
+    assert first.status_code == 201, first.text
+
+    with app.state.session_factory() as session:
+        created = session.get(Task, first.json()["task_id"])
+        assert created is not None
+        digest_after_first = created.request_digest
+    assert digest_after_first
+
+    second = _post(client, "task-key-digest", request)
+    assert second.status_code == 201, second.text
+    assert second.json()["task_id"] == first.json()["task_id"]
+    assert second.json()["idempotent_replay"] is True
+    assert _count(app) == 1
+
+    with app.state.session_factory() as session:
+        task = session.get(Task, first.json()["task_id"])
+        assert task is not None
+        rows = len(
+            session.scalars(
+                select(Task.id).where(
+                    Task.tenant_id == "demo",
+                    Task.user_id == "alice",
+                    Task.idempotency_key == "task-key-digest",
+                )
+            ).all()
+        )
+    # 重试没有改写摘要——摘要一变即 409（§2.4 第 4 条），所以「与第一次相同」
+    # 这条读数就是「键没进 context」的证据。
+    assert task.request_digest == digest_after_first
+    assert rows == 1
+    assert "conversation_id" not in task.context
+    assert task.conversation_id is None

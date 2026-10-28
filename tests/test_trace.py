@@ -1,17 +1,25 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, text
+from sqlalchemy import inspect as sa_inspect
 
 from app.agent.turns import Draft, SupportIntent
 from app.core.security import Identity
+from app.models.conversation import Conversation
+from app.models.task import Task
 from app.observability import tracing
 from app.observability.redaction import redact, redact_payload
 from app.observability.tracing import SpanBuffer, TraceRecorder
+from app.repositories.traces import TraceRepository
+from tests.conftest import ALICE
+from tests.test_refund_taxonomy import _alembic_config
 
 
 def test_recorder_records_spans_in_order() -> None:
@@ -590,3 +598,155 @@ def test_finalize_never_raises_and_nameless_recorders_grow_no_root() -> None:
     plain.add("tool", "get_order")
     plain.finalize()
     assert plain.kinds() == ["tool"]
+
+
+# --------------------------------------------------- R9-c: 关联键 conversation_id
+#
+# R9 口径 §2.4 / §5.6–5.8：`tasks.conversation_id` 是把「对话树」与「任务树」
+# 落到同一个对话下的唯一关联键。它只走列（§2.4.4：进 `task.context` 会改
+# `request_digest`，把同一幂等键的重试从「返回第一个任务」变成 409），只由
+# 对话侧建单写入（§2.4.3：直接 `POST /api/v1/tasks` 一律 NULL，对外不加字段）。
+#
+# 命中 QUALITY 规则表的一句话：槽位齐了，对话侧会真的建单（`actions.py::_create_task`）。
+REFUND_WITH_REASON = "我要申请退款，订单 ORD-DEMO-1001，金额 129 元，商品有质量问题"
+
+
+def test_a_dialog_created_task_records_the_turn_conversation_id(
+    client: TestClient, app: FastAPI
+) -> None:
+    # §5.6 之一：对话侧建单 → tasks.conversation_id 等于当轮 conversations.id。
+    response = client.post(
+        "/api/v1/support/messages",
+        headers=ALICE,
+        json={"message": REFUND_WITH_REASON},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    task_id = str(body["task"]["task_id"])
+
+    with app.state.session_factory() as session:
+        task = session.get(Task, task_id)
+        conversation = session.get(Conversation, str(body["conversation_id"]))
+        assert task is not None, task_id
+        assert conversation is not None, body["conversation_id"]
+        assert task.conversation_id == conversation.id
+    # 键不落进 context（§2.4.4）：写进去会改摘要，重试即 409。
+    assert "conversation_id" not in task.context
+
+
+def test_a_task_created_through_the_api_carries_no_conversation_key(
+    client: TestClient, app: FastAPI
+) -> None:
+    # §5.6 之二 + §2.4.3：直接调 API 建的单一律 NULL，且对外响应不带这个键。
+    created = client.post(
+        "/api/v1/tasks",
+        headers=ALICE,
+        json={"request": "帮我查询订单 ORD-DEMO-1001"},
+    )
+    assert created.status_code == 201, created.text
+    assert "conversation_id" not in created.json()
+
+    with app.state.session_factory() as session:
+        task = session.get(Task, created.json()["task_id"])
+        assert task is not None
+        assert task.conversation_id is None
+
+
+def test_the_dialog_tree_and_the_task_tree_share_one_conversation_key(
+    client: TestClient, app: FastAPI
+) -> None:
+    # §5.7：按 tasks.conversation_id 查 trace_spans，同一个对话下同时读到
+    # root/support.turn 与 root/task.run 两棵树，且两棵树的 trace_id 不同。
+    response = client.post(
+        "/api/v1/support/messages",
+        headers=ALICE,
+        json={"message": REFUND_WITH_REASON},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+
+    with app.state.session_factory() as session:
+        task = session.get(Task, str(body["task"]["task_id"]))
+        assert task is not None and task.conversation_id is not None
+        spans = TraceRepository(session).list_for_conversation(task.conversation_id)
+
+    roots = [(span.name, span.trace_id) for span in spans if span.kind == "root"]
+    assert sorted(name for name, _ in roots) == ["support.turn", "task.run"]
+    trace_ids = {trace_id for _, trace_id in roots}
+    assert len(trace_ids) == 2, roots
+    # 两棵树各自的 trace_id 与读到的对话树 / 任务记录一致。
+    assert str(body["trace_id"]) in trace_ids
+    assert str(task.trace_id) in trace_ids
+    assert all(span.conversation_id == task.conversation_id for span in spans)
+
+
+# --- §5.8：迁移双向可行（形状照 tests/test_refund_taxonomy.py 的同名用例）-----
+
+# 新迁移的前一版；历史行必须在这一版上写进去，才谈得上「不得回填」。
+LINK_PREVIOUS_HEAD = "d9e4c7a15b82"
+
+
+def _seed_legacy_task(database_url: str) -> None:
+    engine = create_engine(database_url)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO tasks (id, tenant_id, user_id, status, request, context,"
+                " version, created_at, updated_at) VALUES ('task_legacy', 'demo',"
+                " 'alice', 'SUCCEEDED', '帮我查询订单 ORD-DEMO-1001', '{}', 1,"
+                " '2026-01-01 00:00:00', '2026-01-01 00:00:00')"
+            )
+        )
+    engine.dispose()
+
+
+def test_migration_adds_a_nullable_conversation_key_without_backfilling(
+    tmp_path: Path,
+) -> None:
+    from alembic import command
+
+    database_url = f"sqlite+pysqlite:///{(tmp_path / 'link.db').as_posix()}"
+    config = _alembic_config(database_url)
+    command.upgrade(config, LINK_PREVIOUS_HEAD)
+    _seed_legacy_task(database_url)
+
+    command.upgrade(config, "head")
+
+    engine = create_engine(database_url)
+    columns = {
+        column["name"]: column for column in sa_inspect(engine).get_columns("tasks")
+    }
+    assert "conversation_id" in columns, "迁移后 tasks 缺少 conversation_id 列"
+    assert columns["conversation_id"]["nullable"] is True
+    indexed = {index["name"] for index in sa_inspect(engine).get_indexes("tasks")}
+    assert "ix_tasks_conversation_id" in indexed, sorted(indexed)
+    with engine.connect() as connection:
+        row = connection.execute(
+            text("SELECT conversation_id FROM tasks WHERE id = 'task_legacy'")
+        ).one()
+    assert row == (None,), "迁移不得回填历史行"
+    engine.dispose()
+
+
+def test_migration_downgrade_removes_the_conversation_key(tmp_path: Path) -> None:
+    from alembic import command
+
+    database_url = f"sqlite+pysqlite:///{(tmp_path / 'link-down.db').as_posix()}"
+    config = _alembic_config(database_url)
+    command.upgrade(config, "head")
+
+    engine = create_engine(database_url)
+    assert "conversation_id" in {
+        column["name"] for column in sa_inspect(engine).get_columns("tasks")
+    }
+
+    # 目标写死为父版本，不用相对值 `"-1"`：`"-1"` 把用例钉在
+    # 「本条迁移恰好是 head」上，下一条迁移落地即变红（同一棵树里
+    # refunds 用例已以真实代价验证）。
+    command.downgrade(config, LINK_PREVIOUS_HEAD)
+
+    columns = {column["name"] for column in sa_inspect(engine).get_columns("tasks")}
+    assert "conversation_id" not in columns
+    indexed = {index["name"] for index in sa_inspect(engine).get_indexes("tasks")}
+    assert "ix_tasks_conversation_id" not in indexed
+    engine.dispose()

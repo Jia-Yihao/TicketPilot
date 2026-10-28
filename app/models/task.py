@@ -44,6 +44,12 @@ class Task(Base):
     context: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     result: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     trace_id: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    # R9 关联键：对话树与任务树落到同一个对话上。只走列——写进 context 会改
+    # request_digest，把同一幂等键的重试从「返回第一个任务」变成 409。
+    # 无外键：与 tasks.trace_id / trace_spans.conversation_id 同形状（裸列 + 索引）。
+    conversation_id: Mapped[str | None] = mapped_column(
+        String(40), nullable=True, index=True
+    )
     # The replay contract: same key + same digest returns the first task;
     # same key + a different request is a 409, never a silent overwrite.
     idempotency_key: Mapped[str | None] = mapped_column(String(200), nullable=True)

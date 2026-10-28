@@ -403,6 +403,7 @@ def _create_task(request: ActionRequest) -> Draft:
         request.request_text,
         request.context or None,
         decision=request.model_decision,
+        conversation_id=request.conversation_id,
     )
     result = task.get("result") or {}
     summary = result.get("summary") or "任务已创建。"
