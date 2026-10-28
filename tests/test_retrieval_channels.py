@@ -21,7 +21,7 @@ from app.retrieval.fusion import rrf_fuse, zscore_fuse
 from app.retrieval.hybrid import DenseGate, HybridPolicySearch
 from app.retrieval.rerank import RerankClient
 from app.retrieval.rewrite import RewritingPolicySearch
-from app.retrieval.search import PolicySearchService, tokenize
+from app.retrieval.search import SCORE_KINDS, PolicySearchService, tokenize
 from app.seed import seed_all
 
 ALICE = Identity(tenant_id="demo", user_id="alice", roles=frozenset())
@@ -106,6 +106,39 @@ def test_tokenizer_emits_unigrams_and_bigrams() -> None:
 
 def test_tokenizer_keeps_latin_words_whole() -> None:
     assert tokenize("ORD-1001") == ["ord", "1001"]
+
+
+# ----------------------------------------------------------- score kinds
+def test_score_kinds_are_one_closed_vocabulary() -> None:
+    assert set(SCORE_KINDS) == {"sparse", "dense", "fusion", "rerank"}
+
+
+def test_sparse_search_tags_its_score_as_sparse(seeded) -> None:
+    with seeded() as session:
+        scored = PolicySearchService(session).ranked(ALICE, "退款条件", limit=3)
+
+    assert scored
+    assert all(item.score_kind == "sparse" for item in scored)
+    assert scored[0].to_retrieved().score_kind == "sparse"
+
+
+def test_citation_does_not_carry_the_score_kind(seeded) -> None:
+    """The citation key set is a published contract; the kind stays internal."""
+    with seeded() as session:
+        hits = PolicySearchService(session).search(ALICE, "退款条件", limit=1)
+
+    assert set(hits[0].citation()) == {
+        "type",
+        "chunk_id",
+        "document_id",
+        "version",
+        "title",
+        "section",
+        "source_uri",
+        "effective_from",
+        "effective_to",
+        "score",
+    }
 
 
 # ----------------------------------------------------------------- dense
@@ -272,6 +305,109 @@ def test_hybrid_surfaces_a_chunk_only_the_dense_channel_found(seeded) -> None:
 
     assert hits
     assert hits[0].chunk_id == target.id
+
+
+def test_hybrid_returns_the_fusion_score_alongside_the_fused_order(seeded) -> None:
+    provider = HashingEmbedder(128)
+    query = "退款条件"
+    with seeded() as session:
+        sparse = PolicySearchService(session, max_results=20, min_score=0.01)
+        sparse_hits = sparse.ranked(ALICE, query, limit=20)
+        sparse_ids = [hit.chunk.id for hit in sparse_hits]
+        sparse_raw = {hit.chunk.id: hit.score for hit in sparse_hits}
+        assert len(sparse_ids) >= 3
+
+        # Exactly one visible chunk carries a vector, and BM25 cannot see it: the
+        # dense channel is then the singleton [target], so both channel id lists
+        # are known to the test and the fusion score can be recomputed outside.
+        target = next(
+            chunk
+            for chunk, _ in sparse.visible_chunks(ALICE)
+            if chunk.id not in set(sparse_ids)
+        )
+        store_embeddings(session, provider, chunk_ids=[target.id])
+        session.commit()
+        vector = provider.embed([f"{target.section}\n{target.content}"])[0]
+
+        class _FixedProvider:
+            def embed(self, texts: list[str]) -> list[list[float]]:
+                return [vector]
+
+        hybrid = HybridPolicySearch(
+            session,
+            sparse=sparse,
+            embedder=_FixedProvider(),
+            max_results=3,
+        )
+        hits = hybrid.search(ALICE, query, limit=3)
+
+    expected = rrf_fuse([sparse_ids, [target.id]], k=60)
+    expected_scores = dict(expected)
+    expected_order = [chunk_id for chunk_id, _ in expected]
+
+    assert [hit.chunk_id for hit in hits] == expected_order[:3]
+    scores = [hit.score for hit in hits]
+    # The old defect: the order came from the fusion while the score came from
+    # whichever channel entered ``by_id`` first, so the two could disagree.
+    assert scores == sorted(scores, reverse=True)
+    for hit in hits:
+        assert hit.score == pytest.approx(expected_scores[hit.chunk_id])
+        assert hit.score_kind == "fusion"
+    # The best hit really is a sparse-channel chunk, not the dense-only
+    # singleton that only the second channel saw.
+    assert hits[0].chunk_id in sparse_raw
+    assert hits[0].score != pytest.approx(sparse_raw.get(hits[0].chunk_id, -1.0))
+
+
+def test_rerank_reports_one_scale_for_the_whole_list(seeded, monkeypatch) -> None:
+    query = "退款条件"
+
+    def fake_post(url, *, json, headers, timeout):  # noqa: ANN001, ANN202
+        assert len(json["documents"]) >= 3
+        # The endpoint answers for the first two candidates only, reversing
+        # them: index 1 first, index 0 second.
+        return httpx.Response(
+            200,
+            json={
+                "results": [
+                    {"index": 1, "relevance_score": 0.9},
+                    {"index": 0, "relevance_score": 0.4},
+                ]
+            },
+        )
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    client = RerankClient("http://rerank.local/rerank", "unit-test-model")
+
+    with seeded() as session:
+        sparse = PolicySearchService(session, max_results=20, min_score=0.01)
+        # A single channel keeps the candidate order equal to the sparse order,
+        # so the endpoint indices below mean known chunks.
+        candidates = [hit.chunk.id for hit in sparse.ranked(ALICE, query, limit=5)]
+        assert len(candidates) >= 3
+        hybrid = HybridPolicySearch(
+            session,
+            sparse=sparse,
+            reranker=client,
+            max_results=5,
+            candidate_pool=5,
+        )
+        hits = hybrid.search(ALICE, query, limit=5)
+
+    assert [hit.chunk_id for hit in hits][:2] == [candidates[1], candidates[0]]
+    assert hits[0].score == pytest.approx(0.9)
+    assert hits[1].score == pytest.approx(0.4)
+    scores = [hit.score for hit in hits]
+    assert scores == sorted(scores, reverse=True)
+    assert all(hit.score_kind == "rerank" for hit in hits)
+    tail = hits[2:]
+    assert tail, "the endpoint answered for two candidates, the rest is the tail"
+    # Clamped below the weakest endpoint score, not padded with a 0.0 placeholder.
+    assert all(hit.score <= 0.4 + 1e-9 for hit in tail)
+    fused_scores = dict(rrf_fuse([candidates], k=60))
+    assert [hit.score for hit in tail] == pytest.approx(
+        [fused_scores[hit.chunk_id] for hit in tail]
+    )
 
 
 def test_hybrid_never_returns_another_tenants_chunks(seeded) -> None:

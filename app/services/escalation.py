@@ -25,7 +25,7 @@ from typing import Literal
 
 from app.agent.escalation import EscalationCatalog, EscalationSignal
 from app.agent.handoff import SentimentSnapshot
-from app.core.policy import PolicyEngine
+from app.core.policy import EvidenceScore, PolicyEngine
 from app.models.enums import RiskLevel
 
 __all__ = [
@@ -148,7 +148,7 @@ class EscalationEngine:
             intent=intent,
             risk_level=risk_level,
             state=state,
-            evidence_score=None,
+            evidence=None,
         )
 
     def evaluate_post(
@@ -156,7 +156,7 @@ class EscalationEngine:
         *,
         intent: str,
         state: EscalationState,
-        evidence_score: float | None,
+        evidence: EvidenceScore | None,
     ) -> EscalationDecision | None:
         """Signals that need the outcome of the action."""
         return self._evaluate(
@@ -165,7 +165,7 @@ class EscalationEngine:
             intent=intent,
             risk_level=None,
             state=state,
-            evidence_score=evidence_score,
+            evidence=evidence,
         )
 
     def sentiment(self, text: str, state: EscalationState) -> SentimentSnapshot:
@@ -188,7 +188,7 @@ class EscalationEngine:
         intent: str,
         risk_level: RiskLevel | None,
         state: EscalationState,
-        evidence_score: float | None,
+        evidence: EvidenceScore | None,
     ) -> EscalationDecision | None:
         for signal in self.catalog.ordered():
             if signal.phase != phase:
@@ -201,7 +201,7 @@ class EscalationEngine:
                 intent=intent,
                 risk_level=risk_level,
                 state=state,
-                evidence_score=evidence_score,
+                evidence=evidence,
             )
             if decision is not None:
                 return decision
@@ -215,7 +215,7 @@ class EscalationEngine:
         intent: str,
         risk_level: RiskLevel | None,
         state: EscalationState,
-        evidence_score: float | None,
+        evidence: EvidenceScore | None,
     ) -> EscalationDecision | None:
         trigger = signal.trigger
         if trigger == "intent":
@@ -251,10 +251,13 @@ class EscalationEngine:
                 )
             return None
         if trigger == "no_evidence":
-            if self._below_evidence(signal, evidence_score):
-                return EscalationDecision(
-                    signal, f"evidence_score={evidence_score}"
+            if self._below_evidence(signal, evidence):
+                detail = (
+                    "evidence_score=None"
+                    if evidence is None
+                    else f"evidence_score={evidence.score},evidence_kind={evidence.kind}"
                 )
+                return EscalationDecision(signal, detail)
             return None
         return None
 
@@ -290,16 +293,19 @@ class EscalationEngine:
         return self.policy.requires_approval(state.amount_cents)
 
     def _below_evidence(
-        self, signal: EscalationSignal, score: float | None
+        self, signal: EscalationSignal, evidence: EvidenceScore | None
     ) -> bool:
-        """True when the evidence is missing or below the policy threshold.
+        """True when the evidence is missing or below the line for its scale.
 
-        The threshold is on the sparse BM25 scale; a dense-only hit carries a
-        cosine score, which is a different scale and is only compared when it
-        is zero.
+        Each scale carries its own limit: a BM25 score in the tens and a cosine
+        score in 0..1 cannot share one number. ``signal.threshold`` no longer
+        picks the value — it only names the family this trigger reads, and a
+        typo there still has to fail loudly.
         """
-        threshold = signal.threshold or "no_evidence_score"
-        limit = self.policy.escalation.threshold(threshold)
-        if score is None:
+        family = signal.threshold or "no_evidence_score"
+        self.policy.escalation.threshold(family)
+        if evidence is None:
             return True
-        return score < limit
+        return evidence.score < self.policy.escalation.no_evidence_threshold(
+            evidence.kind
+        )

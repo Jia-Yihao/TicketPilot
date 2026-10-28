@@ -31,6 +31,30 @@ def tokenize(text: str) -> list[str]:
     return tokens
 
 
+# Closed vocabulary for "which scale is this score on". Defined here, next to
+# the chunk types that carry it, and nowhere else in ``app/``.
+SCORE_KINDS: tuple[str, ...] = ("sparse", "dense", "fusion", "rerank")
+
+# Why a search came back empty. The three mean different things to the customer:
+# nothing to search for, no usable clause in the library at all, or clauses that
+# exist but did not match this phrasing.
+EMPTY_REASONS: tuple[str, ...] = ("empty_query", "no_visible_chunks", "no_match")
+
+
+def classify_empty(query: str, visible: int) -> str:
+    """Name why a search returned nothing.
+
+    ``visible`` is the number of chunks the identity may read right now. A blank
+    query never looks at the library; a non-empty one with no visible chunk means
+    the library has nothing to offer; everything else is a miss on this phrasing.
+    """
+    if not query.strip():
+        return "empty_query"
+    if visible <= 0:
+        return "no_visible_chunks"
+    return "no_match"
+
+
 @dataclass(frozen=True, slots=True)
 class RetrievedChunk:
     chunk_id: str
@@ -43,6 +67,9 @@ class RetrievedChunk:
     score: float
     effective_from: date
     effective_to: date | None
+    # Appended last so the fields above keep their required-ness and every
+    # existing construction site stays untouched.
+    score_kind: str = "sparse"
 
     def citation(self) -> dict[str, Any]:
         return {
@@ -66,6 +93,7 @@ class ScoredChunk:
     chunk: DocumentChunk
     document: Document
     score: float
+    score_kind: str = "sparse"
 
     def to_retrieved(self) -> RetrievedChunk:
         return RetrievedChunk(
@@ -79,6 +107,7 @@ class ScoredChunk:
             score=self.score,
             effective_from=self.document.effective_from,
             effective_to=self.document.effective_to,
+            score_kind=self.score_kind,
         )
 
 

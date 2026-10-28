@@ -10,7 +10,7 @@
 [![Support Set](https://img.shields.io/badge/Support%20Set-62%2F62-146b5c)](#怎么验证这些说法)
 [![License](https://img.shields.io/badge/License-MIT-0e1b2c)](LICENSE)
 
-**40/40 Golden · 62/62 Support · 收集 1080 条用例 · 48 条 API 路径 · 36 篇 ADR · 模型改变写路径路由 0/16**
+**40/40 Golden · 62/62 Support · 收集 1080 条用例 · 48 条 API 路径 · 37 篇 ADR · 模型改变写路径路由 0/16**
 
 覆盖商品咨询、政策问答、订单与物流查询、工单创建、退款申请与按金额分层的审批（未达阈值走自动执行，
 仍过同一套资格、台账与对账），外加一类受控的 Text-to-SQL 自助统计。主链路在本机就能跑完，不需要任何云 API。
@@ -444,7 +444,7 @@ python scripts/guard_negative_check.py  # 守卫的反向验证：6 处破坏全
 | 接口契约与错误码 | [docs/guide/接口说明.md](docs/guide/接口说明.md) |
 | 评测集、指标口径与基线 | [docs/guide/评测说明.md](docs/guide/评测说明.md) |
 | 威胁模型与 fail-closed 配置 | [docs/guide/安全说明.md](docs/guide/安全说明.md) |
-| 关键取舍（36 篇，含反例） | [docs/adr/](docs/adr/) |
+| 关键取舍（37 篇，含反例） | [docs/adr/](docs/adr/) |
 
 ## 项目结构
 

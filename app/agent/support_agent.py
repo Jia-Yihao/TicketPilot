@@ -475,7 +475,7 @@ class SupportAgent:
             post = self.escalation.evaluate_post(
                 intent=plan.intent.value,
                 state=escalation_state,
-                evidence_score=draft.evidence_score,
+                evidence=draft.evidence,
             )
             if decision is None or (
                 post is not None and post.takeover and not decision.takeover
@@ -1308,7 +1308,9 @@ class SupportAgent:
                     version=str(fields.get("version", "")),
                     section=fields.get("matched_section"),
                     source_uri=fields.get("source_uri"),
-                    score=draft.evidence_score if first else None,
+                    score=draft.evidence.score
+                    if first and draft.evidence is not None
+                    else None,
                 )
             )
             first = False

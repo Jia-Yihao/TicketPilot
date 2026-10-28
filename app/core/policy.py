@@ -18,7 +18,32 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from app.core.config import Settings
 
-__all__ = ["PolicyEngine", "RefundThresholds", "EscalationThresholds"]
+__all__ = [
+    "EVIDENCE_KINDS",
+    "EscalationThresholds",
+    "EvidenceScore",
+    "PolicyEngine",
+    "RefundThresholds",
+]
+
+# The scales an evidence score can be on. Written out as literals on purpose:
+# this module is tier 0 and ``app/retrieval`` is tier 2, so importing
+# ``SCORE_KINDS`` from there would be an upward dependency the architecture
+# guard rejects. ``app/retrieval/search.py`` still owns the retrieval half of
+# the vocabulary; a test pins the two against each other.
+EVIDENCE_KINDS: tuple[str, ...] = ("sparse", "dense", "fusion", "rerank", "verdict")
+
+# A verdict score is the action layer's own 0-or-1 answer, not a retrieval
+# score. 0.5 is the only meaningful line through it, so it takes no setting.
+_VERDICT_NO_EVIDENCE_THRESHOLD = 0.5
+
+
+@dataclass(frozen=True, slots=True)
+class EvidenceScore:
+    """A score together with the scale it was measured on."""
+
+    score: float
+    kind: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,6 +63,9 @@ class EscalationThresholds:
     clarification_rounds: int
     after_failed_attempts: int
     no_evidence_score: float
+    no_evidence_score_dense: float
+    no_evidence_score_fusion: float
+    no_evidence_score_rerank: float
     session_idle_minutes: int
     claim_timeout_seconds: int
     repeat_window_hours: int
@@ -56,6 +84,25 @@ class EscalationThresholds:
         if name not in values:
             raise KeyError(f"Unknown escalation threshold: {name}.")
         return values[name]
+
+    def no_evidence_threshold(self, kind: str) -> float:
+        """The "too weak to answer" line for the scale this score is on.
+
+        A BM25 score in the tens and a cosine score in 0..1 are not the same
+        kind of number, so one shared limit would be wrong on at least one of
+        them. An unknown kind is a programming error, never a fall back to the
+        sparse line.
+        """
+        thresholds = {
+            "sparse": self.no_evidence_score,
+            "dense": self.no_evidence_score_dense,
+            "fusion": self.no_evidence_score_fusion,
+            "rerank": self.no_evidence_score_rerank,
+            "verdict": _VERDICT_NO_EVIDENCE_THRESHOLD,
+        }
+        if kind not in thresholds:
+            raise KeyError(f"Unknown evidence score kind: {kind}.")
+        return thresholds[kind]
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +127,9 @@ class PolicyEngine:
                 clarification_rounds=settings.escalation_clarification_rounds,
                 after_failed_attempts=settings.handoff_after_failed_attempts,
                 no_evidence_score=settings.escalation_no_evidence_score,
+                no_evidence_score_dense=settings.escalation_no_evidence_score_dense,
+                no_evidence_score_fusion=settings.escalation_no_evidence_score_fusion,
+                no_evidence_score_rerank=settings.escalation_no_evidence_score_rerank,
                 session_idle_minutes=settings.session_idle_minutes,
                 claim_timeout_seconds=settings.handoff_claim_timeout_seconds,
                 repeat_window_hours=settings.handoff_repeat_window_hours,

@@ -1,8 +1,8 @@
 {
-  "bytes": 295925,
+  "bytes": 302405,
   "pandoc": "3.8",
-  "paragraphs": 4142,
+  "paragraphs": 4200,
   "source": "docs/spec/项目规格.md",
-  "source_sha256": "393f41e796711757a33119eda3d94b298546f2cdbe3f6522622645963d48f103",
-  "tables": 91
+  "source_sha256": "52c3ccf315405e79009c86bb2b1afb14599dc7d34080ec686edd13c6aa515cd0",
+  "tables": 93
 }

@@ -10,7 +10,7 @@
 
 边界：动作依赖运行时，运行时、工具实现与仓储都不该反过来依赖动作。入参面只有
 ``ActionRequest`` 一个，加字段要同时想清楚哪些动作会读到它、哪些动作读不到也
-不该假装读到了——``Draft.resolved`` 与 ``evidence_score`` 是转人工判定的输入，
+不该假装读到了——``Draft.resolved`` 与 ``Draft.evidence`` 是转人工判定的输入，
 凭空填成「已解决」会让信号表看不出失败。
 """
 
@@ -27,7 +27,7 @@ from app.agent.escalation import EscalationSignal, get_escalation_catalog
 from app.agent.turns import Draft, SupportPlan, Turn
 from app.core.errors import NotFoundError
 from app.core.money import format_cents
-from app.core.policy import PolicyEngine
+from app.core.policy import EvidenceScore, PolicyEngine
 from app.core.security import Identity
 from app.core.time import utcnow
 from app.observability.tracing import TraceRecorder
@@ -311,18 +311,36 @@ def refund_status(request: ActionRequest) -> Draft:
     )
 
 
+# Two different situations, two different sentences: the library has no clause
+# for this tenant at all (stop and say so), versus the clause exists but this
+# phrasing found nothing (rephrase, or hand over). The handover signal replaces
+# both for the customer, but the trace and the draft keep them apart.
+_EMPTY_POLICY_REPLIES = {
+    # Kept verbatim from before: this sentence has always meant the library.
+    "empty_query": "未检索到当前租户下仍在有效期内的适用政策。建议转人工核实。",
+    "no_visible_chunks": "未检索到当前租户下仍在有效期内的适用政策。建议转人工核实。",
+    "no_match": (
+        "这次没检索到和这个问题相关的条款：问法可能和条款措辞对不上。"
+        "可以换个说法再问一次，或者直接转人工核实。"
+    ),
+}
+
+
 @action("retrieval.hybrid")
 def policy_question(request: ActionRequest) -> Draft:
-    cards, evidence_score = request.contexts.policy_evidence(
+    evidence = request.contexts.policy_evidence(
         request.identity, request.message, limit=2
     )
+    cards = evidence.cards
     request.trace.add(
         "retrieve",
         "policy.search",
         attributes={
             "query": request.message,
             "hits": len(cards),
-            "evidence_score": evidence_score,
+            "evidence_score": evidence.best.score if evidence.best else None,
+            "evidence_kind": evidence.best.kind if evidence.best else None,
+            "empty_reason": evidence.empty_reason,
             "citations": [
                 {
                     "document_id": card["card_id"],
@@ -336,9 +354,9 @@ def policy_question(request: ActionRequest) -> Draft:
     if not cards:
         return Draft(
             intent=request.plan.intent,
-            reply="未检索到当前租户下仍在有效期内的适用政策。建议转人工核实。",
+            reply=_EMPTY_POLICY_REPLIES[evidence.empty_reason or "no_visible_chunks"],
             suggestions=["查询订单", "转人工"],
-            evidence_score=None,
+            evidence=None,
             resolved=False,
         )
     top = cards[0]
@@ -349,15 +367,19 @@ def policy_question(request: ActionRequest) -> Draft:
         f"根据《{top['title']}》{version}{where}：{top['summary']} "
         "完整章节仍在卡片中按需展开，引用会随章节一起返回。"
     )
-    threshold = request.policy.escalation.no_evidence_score
-    grounded = evidence_score is not None and evidence_score >= threshold
+    best = evidence.best
+    if best is None:
+        # A card only ever comes from a scored hit, so a card without a score is
+        # a programming error — never a reason to guess a scale for the number.
+        raise RuntimeError("Policy cards came back without an evidence score.")
+    threshold = request.policy.escalation.no_evidence_threshold(best.kind)
     return Draft(
         intent=request.plan.intent,
         reply=reply,
         cards=cards,
         suggestions=["查询订单", "申请退款", "转人工"],
-        evidence_score=evidence_score,
-        resolved=grounded,
+        evidence=best,
+        resolved=best.score >= threshold,
     )
 
 
@@ -426,7 +448,7 @@ def analytics_query(request: ActionRequest) -> Draft:
             intent=request.plan.intent,
             reply="这个问题我没法从记录里直接回答，已转人工同事帮你核对。",
             suggestions=["查询订单", "退款状态", "转人工"],
-            evidence_score=0.0,
+            evidence=EvidenceScore(score=0.0, kind="verdict"),
             resolved=False,
         )
     if answer.route == "PREFETCH" and answer.snapshot is not None:
@@ -437,7 +459,7 @@ def analytics_query(request: ActionRequest) -> Draft:
         reply=summary,
         cards=[card],
         suggestions=["查询订单", "退款状态", "转人工"],
-        evidence_score=1.0,
+        evidence=EvidenceScore(score=1.0, kind="verdict"),
         resolved=True,
     )
 
@@ -496,7 +518,7 @@ def _prefetch_answer(request: ActionRequest, answer: SqlAnswer) -> Draft:
         reply=result.reply,
         cards=[card],
         suggestions=["查询订单", "退款状态", "转人工"],
-        evidence_score=1.0,
+        evidence=EvidenceScore(score=1.0, kind="verdict"),
         resolved=True,
         analytics_query_id=snapshot.query_id,
     )
@@ -517,7 +539,7 @@ def analytics_expand(request: ActionRequest) -> Draft:
             intent=request.plan.intent,
             reply="没有可以展开的统计结果，请先提出一个统计问题。",
             suggestions=["我买了多少订单", "我退了几笔款", "转人工"],
-            evidence_score=1.0,
+            evidence=EvidenceScore(score=1.0, kind="verdict"),
             resolved=False,
         )
     snapshot = request.analytics.get_snapshot(query_id, request.identity)
@@ -534,7 +556,7 @@ def analytics_expand(request: ActionRequest) -> Draft:
                 "请重新提出统计问题，我再展开明细。"
             ),
             suggestions=["我买了多少订单", "我退了几笔款", "转人工"],
-            evidence_score=1.0,
+            evidence=EvidenceScore(score=1.0, kind="verdict"),
             resolved=True,
         )
 
@@ -561,7 +583,7 @@ def analytics_expand(request: ActionRequest) -> Draft:
         reply=" ".join(sentences),
         cards=[card],
         suggestions=["查询订单", "退款状态", "转人工"],
-        evidence_score=1.0,
+        evidence=EvidenceScore(score=1.0, kind="verdict"),
         resolved=True,
         analytics_query_id=snapshot.query_id,
     )

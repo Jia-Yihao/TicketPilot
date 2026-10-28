@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy import select
@@ -7,13 +8,18 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import NotFoundError, ValidationAppError
 from app.core.money import format_cents
-from app.core.policy import PolicyEngine
+from app.core.policy import EvidenceScore, PolicyEngine
 from app.core.security import Identity
 from app.core.time import utcnow
 from app.models.commerce import Order
 from app.models.document import Document, DocumentChunk
 from app.repositories.commerce import CommerceRepository
-from app.retrieval.search import PolicySearch, PolicySearchService, RetrievedChunk
+from app.retrieval.search import (
+    PolicySearch,
+    PolicySearchService,
+    RetrievedChunk,
+    classify_empty,
+)
 from app.services.catalog import CatalogProduct, CatalogService
 from app.services.orders import OrderService
 from app.services.refund_policy import RefundPolicy
@@ -112,6 +118,20 @@ def order_candidate(order: Order, product: CatalogProduct | None) -> dict[str, A
     }
 
 
+@dataclass(frozen=True, slots=True)
+class PolicyEvidence:
+    """The policy cards, how strong the best hit was, and why it was empty.
+
+    ``best`` is ``None`` when nothing matched at all; ``empty_reason`` then says
+    which kind of emptiness it was. Keeping the two next to the cards means a
+    caller never has to re-derive "was this empty?" on its own.
+    """
+
+    cards: list[dict[str, Any]]
+    best: EvidenceScore | None
+    empty_reason: str | None
+
+
 class SupportContextService:
     """Builds compact cards first and serves full sections on demand."""
 
@@ -181,20 +201,29 @@ class SupportContextService:
     def policy_cards(
         self, identity: Identity, query: str, *, limit: int = 2
     ) -> list[dict[str, Any]]:
-        cards, _ = self.policy_evidence(identity, query, limit=limit)
-        return cards
+        return self.policy_evidence(identity, query, limit=limit).cards
 
     def policy_evidence(
         self, identity: Identity, query: str, *, limit: int = 2
-    ) -> tuple[list[dict[str, Any]], float | None]:
-        """The policy cards plus the score of the best hit.
+    ) -> PolicyEvidence:
+        """The policy cards plus the strength of the best hit, on its own scale.
 
-        The score is what the escalation table compares against: no score
-        means the retrieval found nothing at all.
+        ``best`` is what the escalation table compares against: no score means
+        the retrieval found nothing at all, and ``empty_reason`` says whether the
+        library had nothing or this phrasing simply missed.
         """
         matches = self.policy_search.search(identity, query)
         if not matches:
-            return [], None
+            # A blank query never touches the library; only a real miss pays for
+            # the visibility count. The count comes from the BM25 service itself:
+            # the injected searcher may be a rewriter or a hybrid channel, and
+            # neither answers "could this tenant read anything at all?".
+            visible = 0
+            if query.strip():
+                visible = len(
+                    PolicySearchService(self.session).visible_chunks(identity)
+                )
+            return PolicyEvidence([], None, classify_empty(query, visible))
         grouped: dict[str, RetrievedChunk] = {}
         for match in matches:
             grouped.setdefault(match.document_id, match)
@@ -206,7 +235,10 @@ class SupportContextService:
             cards.append(self._policy_card(document, top=top))
             if len(cards) >= limit:
                 break
-        return cards, max((top.score for top in grouped.values()), default=None)
+        best = max(grouped.values(), key=lambda hit: hit.score)
+        return PolicyEvidence(
+            cards, EvidenceScore(score=best.score, kind=best.score_kind), None
+        )
 
     def policy_card(
         self, identity: Identity, document_id: str

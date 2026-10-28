@@ -56,7 +56,13 @@ class Settings(BaseSettings):
     # conversation over before the customer ever sees a candidate.
     escalation_clarification_rounds: int = 3
     handoff_after_failed_attempts: int = 2
-    escalation_no_evidence_score: float = 0.35
+    escalation_no_evidence_score: float = 5.0
+    # The same "no evidence" line on the other scales: a cosine score, an RRF
+    # score and a reranker score are not BM25 numbers, so each ruler carries
+    # its own limit.
+    escalation_no_evidence_score_dense: float = 0.35
+    escalation_no_evidence_score_fusion: float = 0.0164
+    escalation_no_evidence_score_rerank: float = 0.35
     session_idle_minutes: int = 20
     handoff_claim_timeout_seconds: int = 120
     handoff_repeat_window_hours: int = 24

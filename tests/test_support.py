@@ -1,10 +1,72 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
+from contextlib import contextmanager
 
+import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from app.agent.actions import ActionRequest, policy_question
+from app.agent.turns import SupportIntent, SupportPlan, Turn
+from app.core.security import Identity
+from app.observability.tracing import TraceRecorder
+from app.retrieval.search import PolicySearchService
+from app.services.catalog import CatalogService
+from app.services.support import SupportContextService
 from tests.conftest import ALICE, CAROL, REVIEWER
+
+DEMO = Identity(tenant_id="demo", user_id="alice", roles=frozenset())
+NO_POLICIES = Identity(tenant_id="acme", user_id="carol", roles=frozenset())
+
+LIBRARY_IS_EMPTY = "未检索到当前租户下仍在有效期内的适用政策。建议转人工核实。"
+
+
+class _NothingFound:
+    """A searcher that never matches, whatever the library holds."""
+
+    def search(self, identity, query, *, today=None, limit=None):  # noqa: ANN001, ANN202
+        return []
+
+
+@contextmanager
+def _contexts(
+    app: FastAPI, *, policy_search: PolicySearchService | _NothingFound | None = None
+) -> Iterator[SupportContextService]:
+    """A context service on its own session; closes it on the way out."""
+    with app.state.session_factory() as session:
+        yield SupportContextService(
+            session,
+            CatalogService(),
+            engine=app.state.policy,
+            policy_search=policy_search,  # type: ignore[arg-type]
+        )
+
+
+def _action_request(
+    app: FastAPI,
+    contexts: SupportContextService,
+    message: str,
+    trace: TraceRecorder,
+    *,
+    identity: Identity = DEMO,
+) -> ActionRequest:
+    return ActionRequest(
+        session=contexts.session,
+        identity=identity,
+        contexts=contexts,
+        catalog=CatalogService(),
+        policy=app.state.policy,
+        runtime=app.state.runtime,
+        analytics=app.state.analytics,
+        plan=SupportPlan(intent=SupportIntent.POLICY_QA),
+        state=Turn(conversation_id="conv-empty-policy"),
+        message=message,
+        request_text=message,
+        context={},
+        trace=trace,
+    )
 
 
 def _message(
@@ -172,3 +234,131 @@ def test_unknown_card_kind_and_section_are_rejected(client: TestClient) -> None:
         headers=ALICE,
     )
     assert missing.status_code == 404
+
+
+# ------------------------------------------------- why a policy search is empty
+def test_a_blank_question_is_named_an_empty_query(app: FastAPI) -> None:
+    """Nothing was asked, so nothing was searched for."""
+    with _contexts(app) as contexts:
+        evidence = contexts.policy_evidence(DEMO, "   ")
+
+    assert evidence.cards == []
+    assert evidence.best is None
+    assert evidence.empty_reason == "empty_query"
+
+
+def test_a_tenant_without_a_policy_clause_is_the_library_being_empty(
+    app: FastAPI,
+) -> None:
+    """Tenant ``acme`` seeds no policy document at all: the library is empty,
+    not this phrasing."""
+    with _contexts(app) as contexts:
+        evidence = contexts.policy_evidence(NO_POLICIES, "退款条件是什么？")
+
+    assert evidence.cards == []
+    assert evidence.best is None
+    assert evidence.empty_reason == "no_visible_chunks"
+
+
+def test_a_clause_that_exists_but_does_not_match_is_a_miss(app: FastAPI) -> None:
+    """The very same tenant, the very same question, only the searcher is
+    blind: now the clause is there and this phrasing missed it."""
+    with _contexts(app, policy_search=_NothingFound()) as contexts:
+        evidence = contexts.policy_evidence(DEMO, "退款条件是什么？")
+
+    assert evidence.cards == []
+    assert evidence.best is None
+    assert evidence.empty_reason == "no_match"
+
+
+def test_a_blank_question_never_counts_the_library(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A blank query is classified without a second trip to the database."""
+    def _boom(self: PolicySearchService, identity: Identity, *, today: object = None) -> None:
+        raise AssertionError("a blank question must not count the visible chunks")
+
+    monkeypatch.setattr(PolicySearchService, "visible_chunks", _boom)
+
+    with _contexts(app) as contexts:
+        evidence = contexts.policy_evidence(DEMO, "")
+
+    assert evidence.empty_reason == "empty_query"
+
+
+def test_the_two_kinds_of_empty_retrieval_get_different_replies(
+    app: FastAPI,
+) -> None:
+    """The action layer keeps "no such clause" and "not this phrasing" apart.
+
+    Customer-visible text is not where this shows: the ``no_evidence`` signal
+    replaces the draft (registered cost, ``.qoder/rules/score-kinds-and-scales.md``
+    §2.4). The draft and the trace are.
+    """
+    with _contexts(app) as contexts:
+        library = policy_question(
+            _action_request(
+                app,
+                contexts,
+                "退款条件是什么？",
+                TraceRecorder(tenant_id="acme"),
+                identity=NO_POLICIES,
+            )
+        )
+    with _contexts(app, policy_search=_NothingFound()) as contexts:
+        miss = policy_question(
+            _action_request(
+                app,
+                contexts,
+                "退款条件是什么？",
+                TraceRecorder(tenant_id="demo"),
+            )
+        )
+
+    assert library.reply == LIBRARY_IS_EMPTY
+    assert miss.reply != LIBRARY_IS_EMPTY
+    assert "没检索到" in miss.reply
+    assert library.evidence is None
+    assert miss.evidence is None
+    assert library.resolved is False
+    assert miss.resolved is False
+
+
+def test_the_retrieve_span_names_the_empty_reason(app: FastAPI) -> None:
+    trace = TraceRecorder(tenant_id="demo")
+    with _contexts(app, policy_search=_NothingFound()) as contexts:
+        policy_question(
+            _action_request(app, contexts, "退款条件是什么？", trace)
+        )
+
+    attributes = trace.attributes_of("retrieve")
+    assert attributes["hits"] == 0
+    assert attributes["empty_reason"] == "no_match"
+    assert attributes["evidence_score"] is None
+    assert attributes["evidence_kind"] is None
+
+
+def test_the_retrieve_span_names_the_scale_of_a_real_hit(app: FastAPI) -> None:
+    """A hit carries a number *and* the scale it was measured on."""
+    trace = TraceRecorder(tenant_id="demo")
+    with _contexts(app) as contexts:
+        policy_question(
+            _action_request(app, contexts, "退款条件是什么？", trace)
+        )
+
+    attributes = trace.attributes_of("retrieve")
+    assert attributes["hits"] >= 1
+    assert attributes["empty_reason"] is None
+    assert attributes["evidence_kind"] == "sparse"
+    assert isinstance(attributes["evidence_score"], float)
+
+
+# ------------------------------------------------------- end to end, unchanged
+def test_a_statistics_answer_is_not_handed_over(client: TestClient) -> None:
+    """The action layer's own 0/1 verdict is not a weak retrieval score, so a
+    statistics answer keeps its answer instead of becoming a handoff."""
+    body = _message(client, ALICE, "我买了多少订单")
+
+    assert body["intent"] == "SELF_ANALYTICS"
+    assert body["context_cards"]
+    assert body["handoff"] is None

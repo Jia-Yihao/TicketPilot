@@ -14,7 +14,7 @@ is not enough on this corpus.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 
 from sqlalchemy.orm import Session
@@ -143,11 +143,48 @@ class HybridPolicySearch:
             channels.append([hit.chunk.id for hit in dense_hits])
 
         fused = rrf_fuse(channels, k=self.rrf_k)
-        order = [chunk_id for chunk_id, _ in fused]
+        candidate_order = [chunk_id for chunk_id, _ in fused]
+        reranked: list[tuple[str, float]] = []
         if self.reranker is not None:
-            order = self._rerank(query, order, by_id)
-        top = order[: (limit or self.max_results)]
-        return [by_id[chunk_id].to_retrieved() for chunk_id in top if chunk_id in by_id]
+            reranked = self._rerank(query, candidate_order, by_id)
+        top = self._scored_order(fused, reranked)[: (limit or self.max_results)]
+        return [
+            replace(by_id[chunk_id].to_retrieved(), score=score, score_kind=kind)
+            for chunk_id, score, kind in top
+            if chunk_id in by_id
+        ]
+
+    @staticmethod
+    def _scored_order(
+        fused: list[tuple[str, float]],
+        reranked: Sequence[tuple[str, float]],
+    ) -> list[tuple[str, float, str]]:
+        """Return ``(chunk_id, score, score_kind)`` in one scale per list.
+
+        The order comes from the fusion (or the reranker), so the number next to
+        it has to come from the same place: reporting a raw per-channel score
+        here would let the score and the rank disagree. Without a rerank answer
+        every row carries its RRF score. With one, the answered ids carry the
+        endpoint score and the tail — the candidates the endpoint did not answer
+        for — keeps its fusion score clamped below the weakest endpoint score,
+        so the list stays sorted and never mixes two rulers.
+        """
+        if not reranked:
+            return [(chunk_id, score, "fusion") for chunk_id, score in fused]
+        floor = min(score for _, score in reranked)
+        answered = {chunk_id for chunk_id, _ in reranked}
+        # The endpoint's order is not guaranteed to follow its own scores, so
+        # sort by score and keep the endpoint order on ties.
+        head = sorted(enumerate(reranked), key=lambda item: (-item[1][1], item[0]))
+        scored: list[tuple[str, float, str]] = [
+            (chunk_id, score, "rerank") for _, (chunk_id, score) in head
+        ]
+        scored.extend(
+            (chunk_id, min(score, floor), "rerank")
+            for chunk_id, score in fused
+            if chunk_id not in answered
+        )
+        return scored
 
     # ------------------------------------------------------------- channels
     def _dense_ranked(
@@ -185,7 +222,7 @@ class HybridPolicySearch:
                 scored.append((chunk, document, score))
         scored.sort(key=lambda item: -item[2])
         return [
-            ScoredChunk(chunk=chunk, document=document, score=score)
+            ScoredChunk(chunk=chunk, document=document, score=score, score_kind="dense")
             for chunk, document, score in scored[: self.candidate_pool]
         ]
 
@@ -194,14 +231,14 @@ class HybridPolicySearch:
         query: str,
         order: list[str],
         by_id: dict[str, ScoredChunk],
-    ) -> list[str]:
+    ) -> list[tuple[str, float]]:
+        """Ask the endpoint for ``(chunk_id, score)`` pairs; empty means no opinion."""
         documents = [
             (chunk_id, chunk_text(by_id[chunk_id].chunk)) for chunk_id in order
         ]
         reranked = self.reranker.rerank(query, documents) if self.reranker else None
         if not reranked:
-            return order
-        scores = dict(reranked)
-        reranked_ids = [chunk_id for chunk_id, _ in reranked if chunk_id in scores]
-        remaining = [chunk_id for chunk_id in order if chunk_id not in set(reranked_ids)]
-        return reranked_ids + remaining
+            return []
+        return [
+            (chunk_id, score) for chunk_id, score in reranked if chunk_id in by_id
+        ]

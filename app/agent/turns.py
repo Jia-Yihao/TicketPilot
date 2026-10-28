@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
+from app.core.policy import EvidenceScore
 from app.models.enums import RefundReason, RefundType
 
 
@@ -62,9 +63,10 @@ class Draft:
     suggestions: list[str] = field(default_factory=list)
     task: dict[str, Any] | None = None
     clarification: dict[str, Any] | None = None
-    # How strong the evidence behind the answer was. ``None`` means the
-    # action had no evidence to weigh (a lookup, not a retrieval).
-    evidence_score: float | None = None
+    # How strong the evidence behind the answer was, and which scale it was
+    # measured on. ``None`` means the action had no evidence to weigh (a
+    # lookup, not a retrieval).
+    evidence: EvidenceScore | None = None
     # False when the turn left the user without an answer; the escalation
     # counters count these.
     resolved: bool = True
