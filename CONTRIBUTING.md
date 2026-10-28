@@ -27,7 +27,7 @@ uvicorn app.asgi:app --reload --port 8000
 ```bash
 ruff check app tests scripts evals alembic
 python -m mypy app                        # strict 模式，零错误（148 个文件）
-python -m pytest                          # 收集 1080 条、74 个测试文件（2026-10-28 实测 1074 passed / 6 skipped / 0 failed；上一轮 AUTO 对账回落轮读数 1029 passed，该轮早前读数 1025 passed 系三条说明书同步守卫仍红时取得，docx 重生成后已清零；跳过的 6 条需要 PostgreSQL 或 Redis）
+python -m pytest                          # 收集 1080 条、74 个测试文件（2026-10-28 实测 1074 passed / 6 skipped / 0 failed；当前读数见 `docs/spec/项目规格.md` §19.1；跳过的 6 条需要 PostgreSQL 或 Redis）
 python evals/run.py                       # 40/40 任务路径 Golden Set
 python evals/support_run.py               # 62/62 只读路径（含多轮澄清）
 python evals/clarification_candidates.py  # 澄清降级前后对比（同一批 5 段剧本跑旧预算=2 / 新预算=3）
@@ -67,7 +67,7 @@ TICKETPILOT_TEST_POSTGRES_URL=postgresql+psycopg://... TICKETPILOT_TEST_REDIS_UR
 > 当时是 13 条迁移（head `b4e8d2f6a1c9`）；第 14 条 `a1c7e9d4b820`（P4）没在那次手工全量里，
 > 但已在运行中的 PostgreSQL 16 容器上单独验过 `upgrade head` + `check`（见 `docs/guide/证据索引.md` 的 P4 一节）与 CI 的 `postgres-migration` 作业。
 > 当前迁移链 **15 条**（head `d9e4c7a15b82`），本地 `alembic check` → `No new upgrade operations detected.`；
-> 默认 `pytest` 当前收集 1080 条（2026-10-28 实测：1074 passed / 6 skipped / 0 failed；上一轮 AUTO 对账回落轮读数 1029 passed），它与 PG 历史读数不要混写；
+> 默认 `pytest` 当前收集 1080 条（2026-10-28 实测：1074 passed / 6 skipped / 0 failed；当前读数见 `docs/spec/项目规格.md` §19.1），它与 PG 历史读数不要混写；
 > **查询改写、分层检索集、意图语料评测、意图缺口闭环、P2/P3/P6、预取式统计、P4 规则治理、P11 澄清候选降级与 P8 意图候选化新增的 347 条，加渠道可用性轮 19 条，再加 B-1/B-3 落地与后续各轮（收尾返工轮、R1/R3 端到端能力、R4 指标基线、R5 答案层、R7 采纳面收口）新增的 194 条（未逐轮拆分归因），共 560 条目前只有 SQLite 证据**，尚未在 PG 上复跑。
 > **检索指标脚本本身也在 PG 上跑过**（`retrieval_metrics.py --channels bm25,dense,hybrid,gated,rerank`
 > 在 `tp_eval` 库上跑出五行读数，与 SQLite 逐位一致）。
