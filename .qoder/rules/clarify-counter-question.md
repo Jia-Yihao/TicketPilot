@@ -80,7 +80,7 @@
 4. **文案生成方**：**服务端**。问句主干与每个选项的显示名都来自 §4.6 的 YAML 数据；模型只贡献意图读数，**不生成任何面向客户的文案**。依据：项目不变量「意图与转人工条件是 YAML 数据，不是提示词」（`.qoder/rules/intent-candidates.md` 同族纪律）；且现状 `_clarify` 的选项文案同样出自服务端拼接（`app/agent/support_agent.py:1186-1195`）。
 5. **形状**：问句 = 主干模板 + 选项显示名列表 + 既有兜底句「你也可以直接说「转人工」，我会转给人工同事接手。」（复用 `_clarify` 尾句原文，`app/agent/support_agent.py:1195`）。选项落进 `Draft.suggestions`（顺序同呈现序），**不落进 `Draft.cards`**（cards 的 `kind` 词表保持封闭，现状只有 `order_candidate` 计入 `clarify_candidates`，`app/agent/support_agent.py:149-158`；新增 card kind 会扩大留痕面，不做）。
 6. **裁定数据落点：新独立 YAML `app/agent/counter_question.yaml` + 独立 loader（定死）**。顶层键封闭集合：`version`、`prompt_template`（问句主干）、`labels`（`intent_id → 中文显示名` 映射，必须覆盖 `app/agent/intents.yaml` 当前 12 行——意图行现状**没有任何显示名字段**：`_INTENT_FIELDS`（`app/agent/intent_catalog.py:62-82`）无 label/display 键，`intents.yaml` 各行（:58 起）只有 `cues` 等匹配字段，`SupportIntent` 枚举值是英文 ID（`app/agent/turns.py:24-33`），因此标签数据必须新写）、`max_options`。loader 以 `_TOP_FIELDS` 式封闭校验拒绝未知键——**沿用 `intent_catalog._reject_unknown` 的形态**（`app/agent/intent_catalog.py:252`，调用点 :264/:267/:281；独立文件+独立 loader 的先例：`escalation.yaml` 与 `refund_reason_rules.yaml`）。**不给 `intents.yaml` 加键、不放宽 `_TOP_FIELDS`（:94）与 `_INTENT_FIELDS`（:62-82）**：放宽会把「拼写键静默改变判定」的守卫拆掉一个角，而反问数据与意图行是两种生命周期（§15.7「意图目录：暂不扩张，先接稳已有行」`docs/下一步规划.md:2812`）。
-7. 读数意图在 `labels` 中无对应显示名时：**不反问**并让该跳过可从审计缺席观察到（不静默吞——记日志级别事实由验收用例断言，见 §12.6）。理由：半截反问（选项缺一块）比不反问更误导。
+7. 读数意图或**本次要呈现的任一选项**在 `labels` 中无对应显示名时：**不反问**并让该跳过可从审计缺席观察到（不静默吞——记日志级别事实由验收用例断言，见 §12.6）。理由：半截反问（选项缺一块）比不反问更误导。
 
 ## 5. 单轮上限状态位（定死）
 
@@ -127,7 +127,7 @@
 
 1. **结构论证**（口径，实现必须保持）：反问的产生点在 §3 表列的两个出口的「读数消费」处，位于任务/工单/退款创建（`Draft` 的 action 执行）之前，且反问分支返回 `resolved=False` 的澄清 Draft（§6.1），永不进入动作执行。
 2. **可判定判据**：对 `AGENT_MODE=pydantic_ai` 与 `rules` 两组，任一批次消息在 F-1 前后 `tasks` / `tickets` / `refunds` / `approvals` / `handoff_events` 表的行数增量**逐条相等**（差值 0）。
-3. **既有用例/读数锚点**（实现轮必须保持通过、不得修改其断言）：`tests/test_llm_gap.py::test_model_gate_names_the_three_levels`（`tests/test_llm_gap.py:234-253`，锚定三出口）；`intents.yaml` 写路径行现状事实（第 3 轮返工按现盘重对）：`write_path: true` 共**三行**——`app/agent/intents.yaml:92 REFUND_REQUEST`（行起 :80）、`:115 TICKET_CREATE`（行起 :106）、`:235 DELIVERY_ISSUE`（行起 :223）；写路径判定的受检成员为**两个**：`app/agent/routing.py:272 _WRITE_INTENT_IDS = frozenset({Intent.REFUND_REQUEST, Intent.TICKET_CREATE})`，`DELIVERY_ISSUE` 经 `app/agent/routing.py:273-281 _WRITE_INTENT_EXEMPT` 显式豁免（理由注释 :273-275：目录行存在但无 Intent 成员，由 `classify_support()` 按目录单独决定）；`app/agent/pydantic_agent.py:44-46` `WRITE_INTENTS` 同为两成员。footer 注释「the one checked rule on the write path」（`app/agent/intents.yaml:348-358`，:348）与两受检成员的出入登记见 §14.1。**实现轮不得改这些行（intents.yaml 写路径行、routing 受检/豁免集合），`tests/test_llm_gap.py:234` 断言不动，`evals/intent_metrics.py` 的 write 口径只读、不改**（§11）。
+3. **既有用例/读数锚点**（实现轮必须保持通过、不得修改其断言）：`tests/test_llm_gap.py::test_model_gate_names_the_three_levels`（`tests/test_llm_gap.py:234-253`，锚定三出口）；`intents.yaml` 写路径行现状事实（第 3 轮返工按现盘重对）：`write_path: true` 共**三行**——`app/agent/intents.yaml:92 REFUND_REQUEST`（行起 :80）、`:115 TICKET_CREATE`（行起 :106）、`:235 DELIVERY_ISSUE`（行起 :223）；写路径判定的受检成员为**两个**：`app/agent/routing.py:272 _WRITE_INTENT_IDS = frozenset({Intent.REFUND_REQUEST, Intent.TICKET_CREATE})`，`DELIVERY_ISSUE` 经 `app/agent/routing.py:273-281 _WRITE_INTENT_EXEMPT` 显式豁免（理由注释 :273-275：目录行存在但无 Intent 成员，由 `classify_support()` 按目录单独决定）；`app/agent/pydantic_agent.py:44-46` `WRITE_INTENTS` 同为两成员。footer 注释「the one checked rule on the write path」（`app/agent/intents.yaml:348-358`，:348）与两受检成员的出入登记见 §14.1。**实现轮不得改这些行（intents.yaml 写路径行、routing 受检/豁免集合），`tests/test_llm_gap.py:234` 断言不动，`evals/intent_metrics.py` 的 write 口径只读、不改**（§11）。另登记 `tests/test_security_model_cross.py::test_question_with_a_guard_hit_moves_no_money`（原 `test_question_with_a_guard_hit_costs_no_model_call`，编辑后行号 `tests/test_security_model_cross.py:81-96`）：**写路面断言必须原样通过、不得修改**——`injection-question` 的 `"PROMPT_INJECTION" in categories`（:90）与 `task_status is None`（:92）、`clean-question` 的 `categories == []`（:95）、以及全表「护栏命中不动钱」面（`test_no_security_conversation_moves_money` 等其余用例）逐字不动；该用例的**成本断言** `model_calls`（:91、:96）是 §13.3 登记的预期可变项，本轮按实测读数更新。
 4. `TICKET_CREATE` / `HUMAN_HANDOFF` 的模型读数**不建任务、不进移交**——`handoff.escalate` 仍只由规则分类或 cue 触发（`app/services/handoff.py:348-351` 审计先例的消费路径不变）。
 
 ## 8. 副作用面与审计（定死）
@@ -171,7 +171,7 @@
 
 - 反问全部代码挂在两道既有 model 闸门之后：`app/agent/support_agent.py:1491-1492`（`agent_mode != "pydantic_ai"` 即 `return plan, None, None, None`：rules 模式下 `model_gap` 就是 `None`，与落地前逐字一致；`:1493-1508` 那份固定 gap 键集只在 `pydantic_ai` 模式走问句支时才产生，rules 模式**不可达**，不得据此要求 rules 模式凭空长出一个 gap）与 `app/agent/pydantic_agent.py:547-548`（plan 的 rules 早退）。状态位读、YAML 标签读、审计写都在这两道闸之后，rules 模式**不可达**。
 - 定死三不变：rules 模式下 ① 模型调用 0 次（`llm_usage` 行数不变）；② 无 `counter_question.asked` 审计行；③ span 键集与取值与落地前逐字一致（含 `model_gap` 与 `support.reply`）。
-- **对照方式**（验收用）：同一批探针语句（`scripts/llm_gap_probe.py` 的 11 句，:86-105）分别在 `AGENT_MODE=rules` 下跑，导出 trace/审计/业务表行数与落地前基线 diff=0；`tests/test_llm_gap.py` 全量既有用例不修改断言地通过。（本口径文件作者未运行测试——另一 agent 在同一工作树执行测试中，运行证据由实现轮复核。）
+- **对照方式**（验收用）：同一批探针语句（`scripts/llm_gap_probe.py` 的 11 句，:86-105）分别在 `AGENT_MODE=rules` 下跑，导出 trace/审计/业务表行数与落地前基线 diff=0；`tests/test_llm_gap.py` 中 §7.3 逐条登记的受保护锚点（`test_model_gate_names_the_three_levels` 等）断言不改地通过；`test_questions_never_reach_the_model_and_refunds_still_do` 的 `assert len(rows) == len(refunds)` 按 §13.3 登记的代价改为 `len(refunds) + 2`（问句门新增两次模型调用落账），除此之外该文件的既有断言逐字不变。`tests/test_security_model_cross.py::test_question_with_a_guard_hit_moves_no_money`（原 `test_question_with_a_guard_hit_costs_no_model_call`）的 `model_calls` 成本断言按 §13.3 登记改为本轮实测读数——属 F-1 预告的预期变化，允许改成本断言、不得改判据形状（该用例的写路径/护栏断言逐字不变，见 §7.3）。（本口径文件作者未运行测试——另一 agent 在同一工作树执行测试中，运行证据由实现轮复核。）
 
 ## 10. 配置与开关（定死）
 
@@ -204,7 +204,7 @@
 | # | 判据 | 验证方式 |
 |---|---|---|
 | 1 | 探针 11 句（`scripts/llm_gap_probe.py:86-105`）中转人工三句（:100-102「叫个活人来」「找你们负责人」「找个真人」）在 `AGENT_MODE=pydantic_ai` 下**至少一种**变成反问（回复为问句且 `suggestions` 含选项、伴随恰一条 `counter_question.asked`） | 探针重跑输出 + 新回归用例断言（实现轮以新回归用例满足，探针实跑读数归用户侧——本仓库评测指标由用户自行复跑；实现轮交付物中探针侧为「期望」而非「实测」） |
-| 2 | 写路径结果零变化：§7.2 的行数增量差 0 判据；`tests/test_llm_gap.py` 既有用例断言不改地通过 | 对照运行 |
+| 2 | 写路径结果零变化：§7.2 的行数增量差 0 判据；§7.3 登记的受保护锚点断言不改地通过；`assert len(rows) == len(refunds)` 按 §13.3 改为 `len(refunds) + 2` | 对照运行 |
 | 3 | 反问上限一轮：**正用例**第一次满足触发即反问；**反用例**同一会话**顺序执行**的两次满足触发（后一回合在前一反问回合完成槽位写回 §5.1 之后开始）时第二次**不反问**且行为与落地前逐字相同（trace/审计/回复 diff）；并发情形不设上界（见 §5.1 竞态段、§13.4 代价登记），不入本条验收 | 新增两条正反用例 |
 | 4 | `AGENT_MODE=rules` 逐字不变：§9 三不变 | §9 对照法 |
 | 5 | 反问轮不产生第二个计数键污染：问句门反问成功的轮次，四计数键 `None`（不落盘）；consult 出口轮次四键写值与落地前一致；全库无问句门轮产生的 `ModelDecision` 行 | trace/台账表断言 |
@@ -219,7 +219,7 @@
 
 1. **升级预算消耗**：每次反问 `clarification_count` +1（§5.2），离 `clarification_rounds`（默认 3）更近；「转人工率」读数（`repeated_clarification` 命中数、takeover 计数）在 F-1 后可能上升——这是把「菜单打转」换成「一次确认」的预期代价，不是缺陷。会浮动的读数：`repeated_clarification` 命中数、转人工率、平均每会话轮数。
 2. **自结率**：反问成功→下一轮意图确定、自结路径更快；反问失败→更近升级、自结率降。报告口径须用 `clarify_reason=COUNTER_QUESTION_INTENT_AMBIGUOUS` 把反问轮单列（为 R10 的「问句/陈述分列」预埋，`docs/下一步规划.md:73`；R10 依赖 F-1，属 R10 范围，本文件不裁定 R10 怎么做）。§10.2 边界原文「二次确认是多一轮对话，要计入转人工率与自结率的口径说明」（`docs/下一步规划.md:1946`）在本节登记履行。
-3. **问句门新增模型调用**：现状 question 出口 0 次调用（`app/agent/support_agent.py:1493-1508` 直接返回），F-1 后每个满足触发条件的问句轮 1 次调用；`llm_usage` 行数与 token 成本上升，读数即成本证据（§9 要求 rules 模式此项不变）。
+3. **问句门新增模型调用**：现状 question 出口 0 次调用（`app/agent/support_agent.py:1493-1508` 直接返回），F-1 后每个满足触发条件的问句轮 1 次调用；`llm_usage` 行数与 token 成本上升，读数即成本证据（§9 要求 rules 模式此项不变）。**受影响既有用例（实现轮登记）**：`tests/test_security_model_cross.py::test_question_with_a_guard_hit_costs_no_model_call`（重命名后 `test_question_with_a_guard_hit_moves_no_money`，编辑后行号 `tests/test_security_model_cross.py:81-96`）——其两条 `model_calls == 0` 成本断言（编辑后 `injection-question` :91、`clean-question` :96）按本轮实测读数更新为 `== 1`；同一用例的「护栏命中不动钱」断言（`task_status is None` 等写路径面）**不改**，受保护登记见 §7.3，判据形状不变登记见 §9。
 4. **上限换耐心**：单轮上限放弃了「客户补充细节后第二次反问」的机会；补偿是 consult 出口的常规采纳/改道读数仍然照常生长（§2.2），信息没有丢，只是不再问第二遍。另登记：上限的判定域是顺序回合（§1、§5.1），并发情形**不设上界**、不承诺收敛时点（§5.1 竞态段、§14.2）——维持为已登记的代价，不进 §12.3 验收判据。
 5. **默认开启值与 P8 不退化门槛的关系裁定（§14.2 登记为补充裁定）**：
    - **先区分两种「不退化」**：`.qoder/rules/intent-candidates.md` §5 不退化门槛（:169-170）约束的是**意图读数**（11 句探针与 62 条支持集的 `intent_accuracy`）；F-1 在 `pydantic_ai` 模式下改变的是**问句轮可见回复文本**（兜底菜单→反问）。两者不是一个维度：反问轮的意图读数永不采纳、不进路由（§2.1、§3.2），分类语义不变。
@@ -257,6 +257,7 @@
 | 默认开启与 intent-candidates §5 不退化门槛相容的裁定（评测装配 rules 模式下 F-1 不可达、读数不变）、处置=随实现轮同步、评测轮再开为否决备选 | **补充裁定**（第 2 轮返工；依据 `app/core/config.py:116`、`evals/support_run.py:734-738`、`evals/replay.py:56-64, :304-309`，§13.5） |
 | DoD 第 11 行：门禁与文档同步的可判定判据 | **补充裁定**（第 2 轮返工；级联依据 `.qoder/rules/task-order.md` §3） |
 | 审计样例补 `actor_id`/`tenant_id` 实参、`outcome` 取大写形态 | **修正对齐**（第 2 轮返工；非新裁定——样例改为与真实签名 `app/repositories/audit.py:15-25` 与先例 `app/services/handoff.py:349-354` 逐字一致） |
+| §4.7 缺 label 不反问的适用范围：从「读数意图在 `labels` 中无对应显示名」扩到「读数意图或**本次要呈现的任一选项**在 `labels` 中无对应显示名」 | **补充裁定（T4 实现轮）**（理由同一句：半截反问比不反问更误导——任一呈现项缺名都会发出缺块的问句） |
 
 ### 14.3 与既有口径文件的交叉（只登记，不动手修订）
 

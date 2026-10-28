@@ -52,8 +52,10 @@ class ContextSectionDetail(BaseModel):
 class SupportClarification(BaseModel):
     reason: str
     prompt: str
-    expected_slot: str
-    resumable_intent: str
+    # 反问轮缺的是意图不是槽位，续跑也不携带未确认的读数
+    # （``.qoder/rules/clarify-counter-question.md`` §6.1），两者都会以 null 出现。
+    expected_slot: str | None
+    resumable_intent: str | None
 
 
 class HandoffTicket(BaseModel):

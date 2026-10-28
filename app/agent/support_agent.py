@@ -29,6 +29,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.agent import actions
 from app.agent.actions import ActionRequest
 from app.agent.analytics_narrator import build_analytics_narrator
+from app.agent.counter_question import get_counter_question
 from app.agent.decision import ModelDecision, request_digest
 from app.agent.escalation import EscalationSignal, get_escalation_catalog
 from app.agent.handoff import ActionRecord, CandidateOrder, Citation
@@ -98,7 +99,7 @@ from app.sql.router import asks_for_detail_followup
 from app.sql.service import SqlAnalyticsService
 
 if TYPE_CHECKING:
-    from app.agent.pydantic_agent import ModelTrace
+    from app.agent.pydantic_agent import ModelTrace, QuestionProbe
 
 __all__ = [
     "SupportAgent",
@@ -156,6 +157,78 @@ def _clarify_candidate_count(draft: Draft) -> int:
     if draft.clarification is None:
         return 0
     return sum(1 for card in draft.cards if card.get("kind") == "order_candidate")
+
+
+# The clarification reason a formed counter-question rides on (口径
+# ``.qoder/rules/clarify-counter-question.md`` §6.1): a new *value* on the
+# existing ``clarify_reason`` trace key, not a new key.
+COUNTER_QUESTION_REASON = "COUNTER_QUESTION_INTENT_AMBIGUOUS"
+
+# The handoff tail sentence, verbatim from ``_clarify`` (§4.5): the
+# counter-question reuses the one sentence the product already says instead
+# of writing a second promise the customer could hold us to.
+_HANDOFF_TAIL = "你也可以直接说「转人工」，我会转给人工同事接手。"
+
+# Today's question-gate gap, kept byte-identical as the fallback (§3.2): a
+# question round that does not become a counter-question must not look like
+# one, even when the probe already paid for the call.
+_QUESTION_GAP: dict[str, Any] = {
+    "source": "rules",
+    "intent": "UNKNOWN",
+    "adopted": False,
+    "gate": "question",
+    # 没成反问就没有发生过任何采纳判定：既没有采纳的改道，也没有被拒的改道。
+    "redirect": False,
+    "redirect_rejected": False,
+    "redirect_kind": "none",
+}
+
+
+def _counter_question_draft(probe: QuestionProbe, plan: SupportPlan) -> Draft | None:
+    """Compose the one counter-question a successful probe buys (§4, §6.1).
+
+    ``None`` whenever the question would come out half-built: a missing
+    display name for the reading or for any option to be shown is refused
+    rather than papered over, because a truncated question misleads more
+    than no question at all (§4.7). Options keep the candidate set's returned
+    order — reordering would silently restate the server's evidence — drop
+    ``UNKNOWN`` (its customer language is the fallback tail), and stop at the
+    data value ``max_options``. No model output text enters any string here.
+    """
+    spec = get_counter_question()
+    if probe.intent is None or probe.candidate_set is None:
+        return None
+    if spec.labels.get(probe.intent) is None:
+        return None
+    labels: list[str] = []
+    for candidate in probe.candidate_set.candidates:
+        if len(labels) >= spec.max_options:
+            break
+        if candidate.intent_id == SupportIntent.UNKNOWN.value:
+            continue
+        label = spec.labels.get(candidate.intent_id)
+        if label is None:
+            return None
+        labels.append(label)
+    if not labels:
+        return None
+    return Draft(
+        # The *rule* reading, never the bare probe row name: a counter-question
+        # confirms, it does not route (§6.1; the reading may not even be an
+        # ``Intent`` member).
+        intent=plan.intent,
+        reply=f"{spec.prompt_template}{'、'.join(labels)}。{_HANDOFF_TAIL}",
+        suggestions=labels,
+        clarification={
+            "reason": COUNTER_QUESTION_REASON,
+            "prompt": spec.prompt_template,
+            "expected_slot": None,
+            # ``None``, never the probe reading: the pending stack resumes a
+            # *confirmed* intent, and nothing here is confirmed yet (§6.1).
+            "resumable_intent": None,
+        },
+        resolved=False,
+    )
 
 
 def classify_support(
@@ -218,6 +291,8 @@ class _Consultation:
     model_gap: dict[str, Any] | None
     model_trace: ModelTrace | None
     model_decision: ModelDecision | None
+    # 问句门谈成的一次反问草稿（口径 §6.1）；其余出口恒为 ``None``。
+    counter_draft: Draft | None
     resealed_keys: list[str]
 
 
@@ -329,6 +404,7 @@ class SupportAgent:
             expand_query_id = consult.expand_query_id
             model_gap = consult.model_gap
             model_decision = consult.model_decision
+            counter_draft = consult.counter_draft
             resealed_keys = consult.resealed_keys
 
             # --- 阶段四：落 ledger 与回合状态（trace 从这里开始记）---
@@ -426,6 +502,7 @@ class SupportAgent:
 
             reply_started = time.perf_counter()
             takeover = decision is not None and decision.takeover
+            counter_asked = False
             if takeover and decision is not None and not decision.continue_task:
                 # The user is going to a human: the handover replaces the
                 # answer instead of being appended to it.
@@ -457,21 +534,27 @@ class SupportAgent:
                     ),
                 )
             else:
-                contexts = self._contexts(session)
-                draft = self._dispatch(
-                    session,
-                    identity,
-                    contexts,
-                    plan,
-                    state,
-                    message=message,
-                    request_text=request_text,
-                    context=context,
-                    trace=trace,
-                    action_name="analytics.expand" if expand_query_id else None,
-                    expand_query_id=expand_query_id,
-                    model_decision=model_decision,
-                )
+                if counter_draft is not None and plan.intent is SupportIntent.UNKNOWN:
+                    # The counter-question replaces only the UNKNOWN fallback
+                    # menu (§3.3); every other landing keeps its own answer.
+                    draft = counter_draft
+                    counter_asked = True
+                else:
+                    contexts = self._contexts(session)
+                    draft = self._dispatch(
+                        session,
+                        identity,
+                        contexts,
+                        plan,
+                        state,
+                        message=message,
+                        request_text=request_text,
+                        context=context,
+                        trace=trace,
+                        action_name="analytics.expand" if expand_query_id else None,
+                        expand_query_id=expand_query_id,
+                        model_decision=model_decision,
+                    )
 
             # --- 阶段七：回合后再判一次，转人工与措辞都由信号表给 ---
             clarified = draft.clarification is not None
@@ -593,6 +676,9 @@ class SupportAgent:
                 failed_intents=escalation_state.failed_intents,
                 clarification_count=escalation_state.clarification_count,
                 negative_rounds=escalation_state.negative_rounds,
+                # 单轮上限随本回合唯一一次槽位写回落库（best-effort，口径 §5.1）：
+                # 只有反问文本真的产出了才置位，被拦的轮次不清 carried 位。
+                counter_question_asked=carried.counter_question_asked or counter_asked,
                 last_intent=plan.intent.value,
                 last_analytics_query_id=self._next_analytics_query_id(
                     carried, draft, expand_query_id
@@ -761,6 +847,7 @@ class SupportAgent:
             }
             model_trace = None
             model_decision = None
+            counter_draft: Draft | None = None
         else:
             # The candidate kernel never queries the database (口径 §2.2): the
             # caller resolves the order status here, under the same scope as
@@ -769,13 +856,15 @@ class SupportAgent:
             order_state = self._scoped_order_state(
                 session, identity, reading.resolved_order
             )
-            plan, model_gap, model_trace, model_decision = self._consult_model(
-                plan,
-                route,
-                message,
-                context,
-                carried=carried,
-                order_state=order_state,
+            plan, model_gap, model_trace, model_decision, counter_draft = (
+                self._consult_model(
+                    plan,
+                    route,
+                    message,
+                    context,
+                    carried=carried,
+                    order_state=order_state,
+                )
             )
         if model_trace is not None:
             # Written on the turn's own session, before the commit below:
@@ -837,6 +926,7 @@ class SupportAgent:
             model_gap=model_gap,
             model_trace=model_trace,
             model_decision=model_decision,
+            counter_draft=counter_draft,
             resealed_keys=resealed_keys,
         )
 
@@ -1192,7 +1282,7 @@ class SupportAgent:
         elif slot != "order_id" and plan.order_id:
             reply = f"{prompt}订单号 {plan.order_id} 我已经记住了。"
         else:
-            reply = f"{prompt}你也可以直接说「转人工」，我会转给人工同事接手。"
+            reply = f"{prompt}{_HANDOFF_TAIL}"
         return Draft(
             intent=plan.intent,
             reply=reply,
@@ -1450,7 +1540,13 @@ class SupportAgent:
         *,
         carried: ConversationSlots,
         order_state: str | None = None,
-    ) -> tuple[SupportPlan, dict[str, Any] | None, ModelTrace | None, ModelDecision | None]:
+    ) -> tuple[
+        SupportPlan,
+        dict[str, Any] | None,
+        ModelTrace | None,
+        ModelDecision | None,
+        Draft | None,
+    ]:
         """The one place a chat turn may reach the model, and what it may buy.
 
         The intent catalog decides first. A turn is a gap when the rule table
@@ -1484,7 +1580,11 @@ class SupportAgent:
         the turn was asked, what came back, and whether it was adopted. The
         third value is the cost record of that call (``None`` when the model
         was not asked); the caller writes it to the usage ledger on the
-        turn's own transaction.
+        turn's own transaction. The fifth value is the one counter-question
+        the question gate may buy (F-1, ``.qoder/rules/clarify-counter-question.md``
+        §3/§6.1): only ever set when a question actually formed, and the
+        question branch never calls ``plan`` — a probe reading must not
+        reach the ledger-reuse branch, which would adopt it de facto.
 
         Wiring (``.qoder/rules/intent-candidates.md`` §2.2): the candidate
         kernel takes ``context:`` evidence from the ``pending_intent`` /
@@ -1497,32 +1597,50 @@ class SupportAgent:
         """
         decision = model_gate(plan, route, message)
         if decision == "rules_hit":
-            return plan, None, None, None
+            return plan, None, None, None, None
         if self.settings.agent_mode != "pydantic_ai":
-            return plan, None, None, None
-        if decision == "question":
-            return (
-                plan,
-                {
-                    "source": "rules",
-                    "intent": "UNKNOWN",
-                    "adopted": False,
-                    "gate": "question",
-                    # 问句不进模型，因此既没有采纳的改道，也没有被拒的改道。
-                    "redirect": False,
-                    "redirect_rejected": False,
-                    "redirect_kind": "none",
-                },
-                None,
-                None,
-            )
+            return plan, None, None, None, None
         # Model-only derivation: the two slot keys come from the carried
         # conversation state, verbatim field names (口径 §2.2). A missing slot
         # is None, and the kernel reads None as "no such evidence" — it is
-        # never a placeholder that could fake an inclusion.
+        # never a placeholder that could fake an inclusion. Derived once
+        # because both model branches (the question probe and the consult
+        # call) hand the kernel the same evidence.
         model_context = dict(context)
         model_context["pending_intent"] = carried.pending_intent
         model_context["last_intent"] = carried.last_intent
+        if decision == "question":
+            if carried.counter_question_asked:
+                # 上限已用：不调模型，今天的 gap 逐字返回。顺序回合内尽力
+                # （best-effort），并发不设上界（口径 §5.1）。
+                return plan, dict(_QUESTION_GAP), None, None, None
+            if plan.intent is not SupportIntent.UNKNOWN:
+                # 入口守卫：反问只替代 UNKNOWN 兜底菜单（§3.3），规则读数非
+                # UNKNOWN 的这一轮（例如带订单号被读成 ORDER_QUERY、却因第二门
+                # 进入问句支的回合）按构造不可能展示给客户，付它没有任何可观察
+                # 收益。不调模型、今天 gap 逐字返回、零成本、不产 ModelDecision、
+                # 不写状态位。:537 的消费处检查保留，作第二道保险。
+                return plan, dict(_QUESTION_GAP), None, None, None
+            probe = self.runtime.brain.probe_question(
+                message, model_context, order_state=order_state
+            )
+            if not probe.asks or probe.trace is None:
+                # 没成反问就不改 gap 的键集（§3.2），但这次调用已经付了钱，
+                # 成本行照落（§13.3）。``probe.trace is None`` 只在 rules 模式
+                # 探针出现，本分支实际不可达，仍然如实返回 None 不伪造成本行。
+                return plan, dict(_QUESTION_GAP), probe.trace, None, None
+            draft = _counter_question_draft(probe, plan)
+            if draft is None:
+                # 标签表凑不出完整问句：不反问、gap 照旧，但调用已发生，
+                # 成本经既有用量台账照常可见（§4.7 不静默吞）。
+                return plan, dict(_QUESTION_GAP), probe.trace, None, None
+            question_gap = dict(_QUESTION_GAP)
+            # The only two changes §2.2 allows when a question formed: the
+            # real reading source, and the cost record carried — not
+            # recomputed — onto the existing ``understand`` span.
+            question_gap["source"] = probe.source
+            question_gap["model"] = probe.trace.as_dict()
+            return plan, question_gap, probe.trace, None, draft
         routed, source, model_trace = self.runtime.brain.plan(
             message, model_context, order_state=order_state
         )
@@ -1565,7 +1683,7 @@ class SupportAgent:
                 trace=model_trace.as_dict(),
             )
         if source != "pydantic_ai" or routed.intent not in ADOPTABLE_INTENTS:
-            return plan, gap, model_trace, record
+            return plan, gap, model_trace, record, None
         gap["adopted"] = True
         return (
             SupportPlan(
@@ -1575,6 +1693,7 @@ class SupportAgent:
             gap,
             model_trace,
             record,
+            None,
         )
 
     def _scoped_order_state(

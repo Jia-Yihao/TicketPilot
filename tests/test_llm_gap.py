@@ -26,11 +26,14 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
+from app.agent.candidates import build_candidates
+from app.agent.intent_catalog import get_catalog
 from app.agent.pydantic_agent import (
     IntentAgent,
     IntentBrain,
     IntentOutput,
     ModelTrace,
+    QuestionProbe,
 )
 from app.agent.routing import RoutePlan, classify
 from app.agent.support_agent import SupportIntent, SupportPlan, model_gate
@@ -128,6 +131,42 @@ class FixedBrain:
             "pydantic_ai",
             ModelTrace(requests=1),
         )
+
+    def probe_question(
+        self,
+        request: str,
+        context: dict[str, Any] | None = None,
+        *,
+        order_state: str | None = None,
+    ) -> QuestionProbe:
+        """Mirror the real read-only probe (same refusal order, fixed answer).
+
+        The question gate may ask (F-1 口径 §3.2); only a legal new reading
+        buys a counter-question. ``plan`` is not touched here, so ``requests``
+        still counts consult calls only.
+        """
+        rules = classify(request, context)
+        candidate_set = build_candidates(
+            request,
+            context,
+            rules,
+            catalog=get_catalog(),
+            order_state=order_state,
+            max_candidates=6,
+        )
+        trace = ModelTrace(requests=1)
+        if self.intent == "UNKNOWN":
+            # UNKNOWN 在真实探针里恒过 allows()，落在 model_unknown（§3.1 条件 4）。
+            return QuestionProbe(None, candidate_set, trace, "pydantic_ai", "model_unknown")
+        if not candidate_set.allows(self.intent):
+            return QuestionProbe(
+                None, candidate_set, trace, "pydantic_ai", "model_out_of_candidates"
+            )
+        if self.intent == rules.intent.value:
+            return QuestionProbe(
+                None, candidate_set, trace, "pydantic_ai", "matches_rule"
+            )
+        return QuestionProbe(self.intent, candidate_set, trace, "pydantic_ai", None)
 
 
 def _app(tmp_path: Path, brain: Any, *, agent_mode: str = "pydantic_ai") -> FastAPI:
@@ -308,7 +347,8 @@ def test_questions_never_reach_the_model_and_refunds_still_do(tmp_path: Path) ->
                 select(LlmUsageRecord).where(LlmUsageRecord.source == "chat")
             )
         )
-    assert len(rows) == len(refunds)
+    # 问句门两次调用落账（口径 §13.3）：两条问句各付一次探针钱。
+    assert len(rows) == len(refunds) + 2
 
 
 def test_chat_asks_the_model_where_the_rules_cannot_read(tmp_path: Path) -> None:
@@ -330,11 +370,13 @@ def test_chat_asks_the_model_where_the_rules_cannot_read(tmp_path: Path) -> None
     assert _tasks(app) == 0
 
 
-def test_chat_does_not_spend_a_model_call_on_a_question(tmp_path: Path) -> None:
+def test_a_question_spends_no_plan_call_and_builds_no_task(tmp_path: Path) -> None:
     """``blocks_write_action`` still runs first: a question is not a request.
 
-    The model reads "运费谁出？" as POLICY_QA, but no reading would be adopted
-    for a read question, so the gate does not ask and the turn stays UNKNOWN.
+    After F-1 the question gate may pay one probe call for at most one
+    counter-question, but it never calls ``plan``: the model reading
+    "POLICY_QA" buys no adoption and no task, and the turn's routing intent
+    stays the rule reading ``UNKNOWN``.
     """
     brain = FixedBrain("POLICY_QA")
     app = _app(tmp_path, brain)

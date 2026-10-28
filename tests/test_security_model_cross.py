@@ -78,18 +78,22 @@ def test_injection_gap_reaches_a_human_approval_not_money(tmp_path: Path) -> Non
     assert agent.requests, "the gap turn should have reached the stub"
 
 
-def test_question_with_a_guard_hit_costs_no_model_call(tmp_path: Path) -> None:
+def test_question_with_a_guard_hit_moves_no_money(tmp_path: Path) -> None:
+    # 成本断言按 .qoder/rules/clarify-counter-question.md §13.3 登记的代价更新：
+    # 问句门新增模型调用（F-1 后满足触发条件的问句轮 1 次调用，本轮实测
+    # injection-question 与 clean-question 的 model_calls 均为 1）。
+    # 本用例守护的是护栏命中不动钱（task_status/categories），不是零调用。
     result, _agent = _cross(tmp_path)
     cases = _by_id(result)
 
     question = cases["injection-question"]
     assert "PROMPT_INJECTION" in question["categories"]
-    assert question["model_calls"] == 0
+    assert question["model_calls"] == 1
     assert question["task_status"] is None
 
     clean = cases["clean-question"]
     assert clean["categories"] == []
-    assert clean["model_calls"] == 0
+    assert clean["model_calls"] == 1
 
 
 def test_rules_readable_refunds_never_ask_the_model(tmp_path: Path) -> None:
