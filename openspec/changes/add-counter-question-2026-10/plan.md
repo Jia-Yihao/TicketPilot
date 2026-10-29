@@ -195,8 +195,9 @@ consult 支的开关前置 :1769（**不关 `plan` 调用本身**）；置位表
   登记为**待增强项**，本轮不开测试轮。
 
 **T7 收尾项的如实状态**（勾选见 `tasks.md`）：口径 §12.1 的探针侧是期望而非实测；
-`evals/**`、PG/Redis 用例、`npm run build` 未跑；本轮产物**尚未经过独立 reviewer 复审**，
-因此不得宣布验收通过；本目录不归档。
+`evals/**`、PG/Redis 用例、`npm run build` 未跑；本轮产物**已于 2026-10-29 经独立 reviewer 复审，
+结论「通过（附一般项）」**，一般项（内部数字 / 引用漂移）已由后续返工轮处理，且复审只读代码与文档、
+未运行任何测试 / 构建 / lint；因未跑门禁仍在，交付仍不得宣布验收通过；本目录不归档。
 
 ---
 
@@ -407,7 +408,7 @@ FAILED tests/test_docs_consistency.py::test_documented_numbers_match_the_code
 - 需要 `TICKETPILOT_TEST_POSTGRES_URL` / Redis 的 PG 侧用例 —— 本轮**未跑**；
   上面那批读数是 **SQLite** 单机形态。
 - `npm run build`（`web/`）—— **未跑**；本轮无前端改动，故该项也无预期位移。
-- 本轮新增的四个 openspec 文件与一篇 ADR **尚未经过独立 reviewer 复审**。
+- 本轮新增的四个 openspec 文件与一篇 ADR 的独立 reviewer 复审**已于 2026-10-29 进行**，结论「通过（附一般项）」，一般项已由后续返工轮处理；但复审只读代码与文档、未运行任何测试 / 构建 / lint，上述门禁未跑的状态不因复审而改变。
 
 ### 5. 冲突与差异登记（不折中、不同轮修复）
 
