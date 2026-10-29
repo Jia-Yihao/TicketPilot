@@ -36,6 +36,8 @@
 
 **consult 出口**（现有陈述句通路）：四计数键**照 R7 现状记，F-1 不改任何写值与语义**。合法非退款读数「从回落通用菜单改为触发一次反问」只是给同一个读数换了消费端；`decide_adoption` 判 `adopted=False`、`redirect_rejected` 照记（`app/agent/pydantic_agent.py:581`、trace 写回 :602-614）。
 
+**consult 出口的反问所需数据载体（T4b 补充裁定，路线 γ，定死）**：`ModelTrace` 新增两个**带内（in-band）、永不序列化**字段——`answer: str | None`（经 `NONE_ANSWER`/越界改写之后的**有效**模型读数）与 `candidate_ids: tuple[str, ...] | None`（当轮 `CandidateSet.candidates` 按返回序的 intent_id 序列；`candidate_set is None` 时为 `None`）。二者只由 `IntentBrain.plan` 新路径那唯一一处 `replace(trace, …)` 写入；台账复用分支（`ModelTrace.from_dict`）与 `probe_question` 均不写（恒 `None`）。定死四不变：`as_dict()` 键集、`from_dict()` 读取键集、四计数键写值与语义、`ModelDecision` 字段与 `trace=model_trace.as_dict()` 全部**逐字不变**，两字段默认 `None`。理由：字段内容是模型读数串与候选 id 序，属本轮回复的私有数据，**不得落盘、不得进 span、不得进审计 detail、不得进客户文本**；对话层不得为此拓宽 `plan()` 返回元组、不得二次调用候选内核。登记见 §14.2（T4b 实现轮），可判定条目见 §8.3、§12.12–12.14。
+
 **反问之后的确认轮**：是一次普通新轮次，按 R7 既有规则记键，无特殊待遇。
 
 ### 2.3 关键事实：`IntentBrain.plan` 没有只读入口，F-1 必须新增只读问询通路（定死）
@@ -56,6 +58,8 @@
 3. `ConversationSlots` 的单轮上限状态位未置位（§5）；
 4. 该轮模型返回**合法候选读数**，定义：`CandidateSet.allows(answer)` 为真（`app/agent/candidates.py:78-80`）且读数不是 `UNKNOWN` 且不是 `NONE`（`NONE_ANSWER`，`app/agent/pydantic_agent.py:29`）。
 
+**consult 出口的触发判据（T4b 补充裁定，定死，可判定）**：条件 4 在 consult 出口的唯一合法实现是复用采纳面已经算好的那一个布尔——`model_trace is not None and model_trace.redirect_rejected is True`。`decide_adoption` 的公式（`app/agent/pydantic_agent.py:100-112`：`(not adopted) and legal and kind != "none"`）已经排除了「无改道」「NONE」「越界」三类读数，对话层**不得重写等价逻辑**（不得在 `support_agent` 里再拼 `adopted`/`redirect_kind` 组合判据）。读数与候选 id 序经 §2.2 的两个带内字段同轮携带。另两条 consult 专属前置（§3.2 表、§3.3 守卫）：单轮上限未置位（条件 3）；`INTENT_CANDIDATES_ENABLED=false` 时候选内核返回 `None`（`app/agent/pydantic_agent.py:506-507`）、`candidate_ids` 为 `None`，consult 出口**不反问**——这是期望行为，不得为反问凭空造候选集。
+
 ### 3.2 分出口裁定
 
 | 出口 / 读数 | 后果（定死） |
@@ -65,16 +69,18 @@
 | `question` 出口，读数 `NONE` | **不反问**。还原为今天的问句出口返回（`app/agent/support_agent.py:1493-1508` 的 gap 键集逐字不变）。理由：`NONE` 的口径是「候选里没有一个是对的」（`.qoder/rules/adoption-surface.md` §1），拿它当反问依据等于凭空造选项。 |
 | `question` 出口，读数越界（不在候选集） | **不反问**，同上还原。与 consult 出口的 `model_out_of_candidates` 处理同形（`app/agent/pydantic_agent.py:568-572`：越界读数被还原为规则读数）。 |
 | `question` 出口，模型调用失败 / 解析抛错 | **不反问**，行为与 consult 出口现有失败兜底同形（`app/agent/pydantic_agent.py:553-558`）。失败必须可从 `llm_usage`（`app/models/llm_usage.py`；计数写回 `app/agent/pydantic_agent.py:401-402`）与既有 trace 观察到，不得静默——但**不为此新增 trace 键**（覆盖读数留给 R10，`docs/下一步规划.md:73`）。 |
-| `consult` 出口，`decide_adoption` 判不采纳的合法非退款读数 | 产生一次反问（§4）；四计数键照 §2.2 记。读数 ∈ `ADOPTABLE_INTENTS`（即 `REFUND_REQUEST`）时走今天既有采纳路径，**不反问**。 |
+| `consult` 出口，`decide_adoption` 判不采纳的合法非退款读数 | 产生一次反问（§4）；四计数键照 §2.2 记。读数 ∈ `ADOPTABLE_INTENTS`（即 `REFUND_REQUEST`）时走今天既有采纳路径，**不反问**。T4b 落地形态（定死）：触发判据 = §3.1 的 `model_trace.redirect_rejected is True`（采纳路径四键组合不可能同时满足该判据与采纳，故采纳 return 点不反问无需另设条件）；形成点仅在 `_consult_model` 的「不采纳 → 原样返回规则读数」return 点（现盘 `app/agent/support_agent.py:1705`），采纳 return 点、`rules_hit`、rules 模式早退等其余 return 点逐字不变；反问不改变 gap 键集与四键搬运（`app/agent/support_agent.py:1682-1689`）。 |
 | 任一出口，读数与规则读数相同（无改道） | **不反问**。反问的信息增量来自「规则读不出、模型读出了别的」；规则已命中的轮次（含 `UNKNOWN`↔`UNKNOWN`）没有可确认的分歧。此条为补充裁定（§14.2）。 |
 
 ### 3.3 触发之后
 
 反问产生时：置位状态位（§5）、记一条审计事件（§8）、产生本轮 gap/trace（§2.2、§8.3）、`clarification_count` 递增（§5.2）。反问**不阻塞**同一轮里既有的只读回答（规则命中只读意图时的正常答复照常；反问只替代「UNKNOWN 兜底菜单」这一种落点）。
 
+**形成侧落点守卫（T4b 补充裁定，定死）**：消费点只展示 `plan.intent is SupportIntent.UNKNOWN` 的反问草稿（现盘 `app/agent/support_agent.py:536-541`，第二道保险），因此 consult 出口**只有在 `plan.intent is SupportIntent.UNKNOWN` 时才允许形成**反问草稿——落点非 UNKNOWN 的轮次（如带订单号被规则读成 `ORDER_QUERY`、却因第二门进入反问候选面的 consult 轮）形成的草稿永不可见，付它没有任何可观察收益，不得为它构造。该守卫与消费点条件同判据、两处并存（形成侧先拦，消费侧兜底），不删任一侧。
+
 ## 4. 选项来源与形状（定死）
 
-1. **来源层级**：当前轮已构造的 `CandidateSet`（`build_candidates()`，`app/agent/candidates.py:125-181`）——与 consult 通路同一调用、同一纯函数内核，**不新建候选集构造器**、不为反问扩大候选（`narrowed` 与否都照用当轮真实候选，理由：候选集是「服务端有证据的行」，反问选项的证据边界必须与之一致）。
+1. **来源层级**：当前轮已构造的 `CandidateSet`（`build_candidates()`，`app/agent/candidates.py:125-181`）——与 consult 通路同一调用、同一纯函数内核，**不新建候选集构造器**、不为反问扩大候选（`narrowed` 与否都照用当轮真实候选，理由：候选集是「服务端有证据的行」，反问选项的证据边界必须与之一致）。T4b 落地形态（定死）：consult 出口的选项来源是**同一次 `plan` 调用**构造的那个 `CandidateSet` 的 intent_id 序，经 §2.2 的 `ModelTrace.candidate_ids` 带内字段携带到对话层——**不重算、不在对话侧二次调用候选内核**；问句门与 consult 出口共用同一个渲染函数（现盘 `_counter_question_draft`，`app/agent/support_agent.py:187-239`），呈现序 = 携带序 = 模型实际收到的候选序，`max_options` 截断、`UNKNOWN` 跳过、缺显示名整句不反问（§4.7）的行为两处逐字一致。
 2. **排除项**：`UNKNOWN` 不进选项（它的客户语言是「都不是」，由问句兜底句承担）；`HUMAN_HANDOFF` 是候选（`_UNCONDITIONAL`，`app/agent/candidates.py:40`），出现时按正常选项呈现，同时兜底句仍在（§4.5，两条通道并存不算重复：兜底句是客户主动表达路径，选项是呈现路径）。
 3. **数量上限**：`max_options = 3`（数据值，见 §4.6）。候选多于 3 项时取 `CandidateSet.candidates` 的前 3 项，**按返回顺序，不重排**（顺序即证据序：`_ordered`，`app/agent/candidates.py:184-193`，catalog `priority` 升序、同优先级按 `intent_id`；`build_candidates` 的 narrowed 截断规则 docstring :137-139 与实现 :170-179（按桶再按 priority 截断）不变）。不放开到候选集上限 6（`_DEFAULT_MAX_CANDIDATES`，:47）——那是给模型封闭答案空间的，给客户看的选项要更窄。此数值为补充裁定（§14.2）。
 4. **文案生成方**：**服务端**。问句主干与每个选项的显示名都来自 §4.6 的 YAML 数据；模型只贡献意图读数，**不生成任何面向客户的文案**。依据：项目不变量「意图与转人工条件是 YAML 数据，不是提示词」（`.qoder/rules/intent-candidates.md` 同族纪律）；且现状 `_clarify` 的选项文案同样出自服务端拼接（`app/agent/support_agent.py:1186-1195`）。
@@ -159,6 +165,7 @@
 
 - 零新增 span 键：反问轮经 §6.1 自动落既有键 `clarify_reason`（值为 `COUNTER_QUESTION_INTENT_AMBIGUOUS`）与 `clarified=True`（`app/agent/support_agent.py:613-626`）；`clarify_slot` 为 None、`clarify_candidates` 为 0（选项不是 order card，:149-158 只数 `order_candidate`，语义不破坏）。
 - `understand` span 的 `model_gap`（`app/agent/support_agent.py:347`）按 §2.2 的键集规则变化，除 §2.2 允许的两处（consult 消费端行为、question 成功反问时 `source`）外逐字不变。
+- **两个带内字段永不序列化（T4b 补充裁定，定死，可判定）**：`ModelTrace.answer` / `ModelTrace.candidate_ids`（§2.2）**不进** `as_dict()` 的键、不进 `from_dict()` 的读取键，因此不进 `model_gap`、不进 `ModelDecision.trace`、不落数据库、不进 span、不进审计 detail、不进客户文本；判据：反问轮的 `model_trace.as_dict()` 键集与 T4b 落地前**逐字相等**，`ModelTrace.from_dict({})` 两字段为 `None`。二者只在同一次进程内回合由 `plan` 新路径写给 `_consult_model` 消费，跨不出序列化边界。
 
 ### 8.4 反问轮模型调用成本的落点（定死：ModelTrace / 用量台账 / trace 属性）
 
@@ -214,6 +221,9 @@
 | 9 | `COUNTER_QUESTION_ENABLED=false` 时 §10.2 回退等价范围成立（对照 diff=0） | 开关对照用例 |
 | 10 | 答非所问 / 拒绝 / 沉默后续轮不死锁、不建任务（§6.3 三场景用例；`clarification_count` 与 `repeated_clarification` 交互照 §5.2） | 新增用例 |
 | 11 | 门禁与文档同步：实现轮必须运行并通过 pytest 全量、ruff、mypy 与三份守卫检查（`docs/fact-baseline.yaml` / `docs/code-anchors.yaml` / `docs/architecture-guard.yaml`）；`--collect-only` 收集数若变化，按 `.qoder/rules/task-order.md` §3 级联（同步三处文档并重生成说明书 docx）；`evals/**` 模型读数（探针 11 句、62 条支持集、replay）由用户侧本机模型复跑，实现轮不运行且在交付物中如实登记「未跑」（§13.5） | 可判定判据：四类门禁命令的通过记录在案；交付物中出现收集数数值或级联登记、出现「evals 读数未跑」字样；缺任一项即不满足 |
+| 12 | consult 出口反问（T4b）：规则 `UNKNOWN` + 合法非退款改道读数（`redirect_rejected` 为真）→ 反问成句（`clarification.reason = COUNTER_QUESTION_REASON`、路由仍 `UNKNOWN`、`resolved=False`）；采纳路径（`REFUND_REQUEST` 被采纳）不反问；`plan.intent` 非 `UNKNOWN` 的 consult 轮不形成（§3.3 守卫）；上限已置位不反问（§3.1 条件 3，顺序回合） | 新回归用例（真实 `IntentBrain` + 记录型假 agent 形状，§14.2 T4b 条），逐条钉住 |
+| 13 | 带内字段不落盘（T4b，§2.2/§8.3）：反问轮 `ModelTrace.as_dict()` 键集与落地前逐字相等（不含 `answer`/`candidate_ids` 形态的键）；`ModelTrace.from_dict({})` 两字段为 `None`；`ModelDecision.trace` 键集不变 | 用例断言键集逐字相等 + mypy/序列化面审查 |
+| 14 | 选项忠实性（T4b，§4.1）：呈现选项的 intent_id 序列逐字等于**同一次调用**传给模型的 `CandidateSet` 的 id 序（受 `max_options` 截断与 `UNKNOWN` 跳过）；`INTENT_CANDIDATES_ENABLED=false` 时 consult 出口零反问（`candidate_ids` 为 `None`，不凭空造候选，§3.1） | 用例以记录型假 agent 捕获真实候选集比对；开关用例断言 consult 轮无草稿 |
 
 ## 13. 代价与取舍登记
 
@@ -258,6 +268,7 @@
 | DoD 第 11 行：门禁与文档同步的可判定判据 | **补充裁定**（第 2 轮返工；级联依据 `.qoder/rules/task-order.md` §3） |
 | 审计样例补 `actor_id`/`tenant_id` 实参、`outcome` 取大写形态 | **修正对齐**（第 2 轮返工；非新裁定——样例改为与真实签名 `app/repositories/audit.py:15-25` 与先例 `app/services/handoff.py:349-354` 逐字一致） |
 | §4.7 缺 label 不反问的适用范围：从「读数意图在 `labels` 中无对应显示名」扩到「读数意图或**本次要呈现的任一选项**在 `labels` 中无对应显示名」 | **补充裁定（T4 实现轮）**（理由同一句：半截反问比不反问更误导——任一呈现项缺名都会发出缺块的问句） |
+| consult 出口数据载体 = `ModelTrace` 两个带内、永不序列化字段（路线 γ，§2.2/§8.3）；触发判据复用 `decide_adoption` 已算好的 `redirect_rejected`（§3.1），对话层不重写等价逻辑；形成侧落点守卫 `plan.intent is SupportIntent.UNKNOWN`（§3.3）；选项经 `candidate_ids` 携带、不重算（§4.1）；`INTENT_CANDIDATES_ENABLED=false` 时 consult 出口不反问为期望行为（§3.1） | **补充裁定（T4b 实现轮）**（原文未及——反问要成句需要「读数 + 候选序」跨 `plan` 返回值边界，而简报四备选均被否决：①拓宽 `plan()` 返回元组（约 30 处解包点，含 `app/services/runtime.py:410`，改动面远超本任务边界）②对话层二次调用模型/候选内核（违反 §4.1「不新建候选集构造器」、双调用双成本违反 §8.4 单本账）③把 `CandidateSet` 对象塞进 `ModelTrace`（trace 会被 `as_dict` 搬运落盘，个人数据越界，违反 §8.3 留痕纪律）④复用 `ModelDecision.reason` / `ModelTrace.candidates`（前者是问句侧拒绝原因词表、后者是**计数不是行**——`app/agent/pydantic_agent.py:177-180` 注释原文「A count, never the rows or their evidence」，装不下 id 序）。路线 γ 以「默认 `None`、不进两个序列化入口、仅 `plan` 新路径一处写入」把泄露面压到零，代价是口径新增两字段登记（本节即登记）） |
 
 ### 14.3 与既有口径文件的交叉（只登记，不动手修订）
 

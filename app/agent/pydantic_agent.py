@@ -187,6 +187,21 @@ class ModelTrace:
     redirect: bool | None = None
     redirect_rejected: bool | None = None
     redirect_kind: str | None = None
+    # In-band, in-round only, **never serialized** (``.qoder/rules/
+    # clarify-counter-question.md`` §2.2/§8.3, route gamma): the *effective*
+    # model reading after the NONE/out-of-candidates rewrite above, and the
+    # candidate ids in the order the model received them. The consult exit
+    # reads both in the same process turn to phrase one counter-question,
+    # because a rejected legal reading must no longer fall to the generic
+    # menu silently. They are deliberately absent from ``as_dict``/``from_dict``
+    # — a raw reading and an evidence-bounded id list belong to this reply
+    # only, and must never reach the disk, a span, an audit detail or the
+    # customer-facing text (the ``candidates`` count above stays the only
+    # candidate fact that leaves the process). Written solely by the new-path
+    # ``replace`` in ``IntentBrain.plan``; the ledger-reuse branch and the
+    # question probe leave them ``None``.
+    answer: str | None = None
+    candidate_ids: tuple[str, ...] | None = None
 
     @property
     def failed(self) -> bool:
@@ -651,6 +666,19 @@ class IntentBrain:
                     redirect=adoption.redirect,
                     redirect_rejected=adoption.redirect_rejected,
                     redirect_kind=adoption.kind,
+                    # The two in-band carriers (see ``ModelTrace``): this is
+                    # the only write site, and neither key appears in
+                    # ``as_dict``, so the counter-question reading and the
+                    # candidate id order cannot leave the turn (the chat
+                    # entry consumes them in ``_consult_model`` or drops them).
+                    answer=answer,
+                    candidate_ids=(
+                        None
+                        if candidate_set is None
+                        else tuple(
+                            candidate.intent_id for candidate in candidate_set.candidates
+                        )
+                    ),
                 )
             ),
         )

@@ -99,7 +99,7 @@ from app.sql.router import asks_for_detail_followup
 from app.sql.service import SqlAnalyticsService
 
 if TYPE_CHECKING:
-    from app.agent.pydantic_agent import ModelTrace, QuestionProbe
+    from app.agent.pydantic_agent import ModelTrace
 
 __all__ = [
     "SupportAgent",
@@ -184,29 +184,37 @@ _QUESTION_GAP: dict[str, Any] = {
 }
 
 
-def _counter_question_draft(probe: QuestionProbe, plan: SupportPlan) -> Draft | None:
+def _counter_question_draft(
+    reading: str | None,
+    candidate_ids: tuple[str, ...] | None,
+    plan: SupportPlan,
+) -> Draft | None:
     """Compose the one counter-question a successful probe buys (§4, §6.1).
 
-    ``None`` whenever the question would come out half-built: a missing
-    display name for the reading or for any option to be shown is refused
-    rather than papered over, because a truncated question misleads more
-    than no question at all (§4.7). Options keep the candidate set's returned
-    order — reordering would silently restate the server's evidence — drop
+    The single renderer shared by the two exits (§4.1): the question gate
+    passes ``probe.intent`` and its ``CandidateSet`` ids, the consult exit
+    passes the in-band ``ModelTrace.answer`` / ``candidate_ids`` carried by
+    the same ``plan`` call (§2.2). ``candidate_ids`` must be the id sequence
+    in the order the model actually received it — reordering would silently
+    restate the server's evidence. ``None`` whenever the question would come
+    out half-built: a missing display name for the reading or for any option
+    to be shown is refused rather than papered over, because a truncated
+    question misleads more than no question at all (§4.7). Options drop
     ``UNKNOWN`` (its customer language is the fallback tail), and stop at the
     data value ``max_options``. No model output text enters any string here.
     """
     spec = get_counter_question()
-    if probe.intent is None or probe.candidate_set is None:
+    if reading is None or candidate_ids is None:
         return None
-    if spec.labels.get(probe.intent) is None:
+    if spec.labels.get(reading) is None:
         return None
     labels: list[str] = []
-    for candidate in probe.candidate_set.candidates:
+    for intent_id in candidate_ids:
         if len(labels) >= spec.max_options:
             break
-        if candidate.intent_id == SupportIntent.UNKNOWN.value:
+        if intent_id == SupportIntent.UNKNOWN.value:
             continue
-        label = spec.labels.get(candidate.intent_id)
+        label = spec.labels.get(intent_id)
         if label is None:
             return None
         labels.append(label)
@@ -1581,10 +1589,14 @@ class SupportAgent:
         third value is the cost record of that call (``None`` when the model
         was not asked); the caller writes it to the usage ledger on the
         turn's own transaction. The fifth value is the one counter-question
-        the question gate may buy (F-1, ``.qoder/rules/clarify-counter-question.md``
-        §3/§6.1): only ever set when a question actually formed, and the
-        question branch never calls ``plan`` — a probe reading must not
-        reach the ledger-reuse branch, which would adopt it de facto.
+        either gate may buy (F-1, ``.qoder/rules/clarify-counter-question.md``
+        §3/§6.1): only ever set when a question actually formed. On the
+        question branch it comes from the read-only probe, which never calls
+        ``plan`` — a probe reading must not reach the ledger-reuse branch,
+        which would adopt it de facto. On the consult branch it forms only
+        for a rejected legal reroute reading (``redirect_rejected``, §3.1) on
+        a ``UNKNOWN`` landing (§3.3), from the same ``plan`` call's in-band
+        trace fields — routing and the gap key set are untouched either way.
 
         Wiring (``.qoder/rules/intent-candidates.md`` §2.2): the candidate
         kernel takes ``context:`` evidence from the ``pending_intent`` /
@@ -1629,7 +1641,15 @@ class SupportAgent:
                 # 成本行照落（§13.3）。``probe.trace is None`` 只在 rules 模式
                 # 探针出现，本分支实际不可达，仍然如实返回 None 不伪造成本行。
                 return plan, dict(_QUESTION_GAP), probe.trace, None, None
-            draft = _counter_question_draft(probe, plan)
+            draft = _counter_question_draft(
+                probe.intent,
+                None
+                if probe.candidate_set is None
+                else tuple(
+                    candidate.intent_id for candidate in probe.candidate_set.candidates
+                ),
+                plan,
+            )
             if draft is None:
                 # 标签表凑不出完整问句：不反问、gap 照旧，但调用已发生，
                 # 成本经既有用量台账照常可见（§4.7 不静默吞）。
@@ -1683,7 +1703,24 @@ class SupportAgent:
                 trace=model_trace.as_dict(),
             )
         if source != "pydantic_ai" or routed.intent not in ADOPTABLE_INTENTS:
-            return plan, gap, model_trace, record, None
+            counter_draft: Draft | None = None
+            # F-1 consult 出口（口径 §3.1 触发判据 / §3.2 表 consult 行）：一个
+            # 被采纳面拒掉的合法改道读数不再回落沉默。触发判据照抄 `decide_adoption`
+            # 已经算好的那一个布尔，对话层不重写等价逻辑；读数与候选 id 序经
+            # `ModelTrace` 的带内字段由同一次 `plan` 调用携带（§2.2），不在这里
+            # 重算候选。`candidate_ids is None`（候选开关关）时 `_counter_question_draft`
+            # 天然返回 None——期望行为，不凭空造候选（§3.1）。形成侧守卫与消费点
+            # 守卫同判据两处并存（§3.3）；上限已置位则不反问（§3.1 条件 3）。
+            if (
+                model_trace is not None
+                and model_trace.redirect_rejected is True
+                and not carried.counter_question_asked
+                and plan.intent is SupportIntent.UNKNOWN
+            ):
+                counter_draft = _counter_question_draft(
+                    model_trace.answer, model_trace.candidate_ids, plan
+                )
+            return plan, gap, model_trace, record, counter_draft
         gap["adopted"] = True
         return (
             SupportPlan(
