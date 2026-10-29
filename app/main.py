@@ -21,6 +21,7 @@ from app.api.v1 import (
     handoffs,
     health,
     memory,
+    monitor,
     outbox,
     security,
     support,
@@ -174,6 +175,7 @@ def create_app(
     app.include_router(handoffs.router)
     app.include_router(analytics.router)
     app.include_router(outbox.router)
+    app.include_router(monitor.router)
 
     console_dir = find_console_dir()
     if console_dir is not None:
