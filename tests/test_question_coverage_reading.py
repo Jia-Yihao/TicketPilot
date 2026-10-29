@@ -7,8 +7,9 @@
     ⟹ 分子 = 带 ``model`` 键（``source`` 已非 ``"rules"``）的 ``question`` gap 数
     ⟹ 分母 − 分子 = 「已付费无读数」两类轮次（support_agent.py:1681 拒答、:1696 缺标签）
 
-分类只依据既有 ``gate``/``model`` 键，**不新增键**（R-2 不解锁）。读数函数是离线
-台账读数，只住本文件，不进生产路径（``app/**`` 零改动）。
+分类只依据既有 ``gate``/``model`` 键，**不新增键**（R-2 不解锁）。读数算术住在
+``evals/question_coverage.py``（T5 算术搬家：本文件与 T5 报告共用同一套算术，
+仓内不得有第二份），不进生产路径（``app/**`` 零改动）。
 
 边界三条（§2 前置裁定）：
 
@@ -40,7 +41,6 @@
 from __future__ import annotations
 
 import inspect
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
@@ -55,6 +55,7 @@ from app.agent.support_agent import _QUESTION_GAP
 from app.models.llm_usage import LlmUsageRecord
 from app.models.observability import TraceSpan
 from app.services.llm_usage import LlmUsageService
+from evals.question_coverage import CoverageReading, coverage_from_ledger
 from tests.conftest import ALICE
 from tests.test_analytics_followup import StubNarrator
 from tests.test_llm_gap import ExplodingAgent, FixedBrain, _app
@@ -63,55 +64,6 @@ from tests.test_llm_gap import ExplodingAgent, FixedBrain, _app
 QUESTION_TEXT = "运费谁出？"
 # 非问句形态、规则读 UNKNOWN —— consult 档入口。
 CONSULT_GAP_TEXT = "我申请退一部分款"
-
-
-# --------------------------------------------------------------- 读数函数（离线）
-@dataclass(frozen=True, slots=True)
-class CoverageReading:
-    """恒等式一次读数的全部可观察量——只有数，没有原文。"""
-
-    chat_rows: int
-    consult_model_gaps: int
-    question_model_gaps: int
-    denominator: int
-    numerator: int
-    paid_no_reading: int
-
-
-def coverage_from_ledger(chat_rows: int, gaps: list[dict[str, Any] | None]) -> CoverageReading:
-    """§2 恒等式的算术本体：只读既有 ``gate`` 与 ``model`` 两个键。
-
-    边界 ③：分母为负或分子超过分母，只能是台账被弄脏，必须当场 ValueError，
-    绝不允许把负数钳成 0 抹平成一个看着合理的读数。
-    """
-    consult_model = sum(
-        1
-        for gap in gaps
-        if gap is not None and gap.get("gate") == "consult" and "model" in gap
-    )
-    question_model = sum(
-        1
-        for gap in gaps
-        if gap is not None and gap.get("gate") == "question" and "model" in gap
-    )
-    denominator = chat_rows - consult_model
-    if denominator < 0:
-        raise ValueError(
-            f"恒等式破裂：consult 带 model 键数({consult_model}) 大于 chat 行数({chat_rows})"
-        )
-    paid_no_reading = denominator - question_model
-    if paid_no_reading < 0:
-        raise ValueError(
-            f"恒等式破裂：分子({question_model}) 大于分母({denominator})"
-        )
-    return CoverageReading(
-        chat_rows=chat_rows,
-        consult_model_gaps=consult_model,
-        question_model_gaps=question_model,
-        denominator=denominator,
-        numerator=question_model,
-        paid_no_reading=paid_no_reading,
-    )
 
 
 def conversation_chat_rows(app: FastAPI, conversation_id: str) -> int:
