@@ -91,6 +91,79 @@ R10 来自 `docs/下一步规划.md` §0.2:73，验收原文：「`model_gate` �
 
 红线：`tests/test_llm_gap.py::test_the_task_api_cannot_reroute_a_read_request_into_a_write`（:457 定义）必须保持绿，且写入 DoD；探针/直取都不得绕开 `decide_adoption` 单点（pydantic_agent.py:580、:637）。
 
+以下为 **T6 口径轮补充（2026-10-29，编排方派单前实地核验）**，把上面「白名单口径」三条与红线扩成可实现、可判定的完整契约。全部为**待实现口径**：本文件只声明，不改任何产品代码；下列裁定（T6-1…T6-12）与其判据（§5 DoD 第 7-13 条）在实现轮落地前，仓库内没有任何直取行为存在（入站渠道 intent 今天既没有载体、也没有消费者，见上「接线前事实」与本轮补测事实 A/B）。
+
+### 4.1 载体（T6-2）
+
+`MessageEnvelope`（`app/channels/base.py:52-63`，frozen dataclass，现无 intent 字段）新增专用字段：
+
+```python
+declared_intent: str | None = None
+```
+
+- **明确不进 `metadata`、不进 `envelope_digest` 的 `material`**（`app/channels/base.py:261-287` 构造的是显式字面字典：channel / tenant_id / user_id / conversation_id / text / locale / metadata / attachments，再 `json.dumps(..., sort_keys=True)` 取 sha256）。因此给 dataclass 加这个新字段**不会**改变任何既有摘要，去重行为不变。
+- **禁止把 intent 塞进 `metadata`**：`metadata` 在 `material` 里（`base.py:270`），塞进去会让 `envelope_digest` 变值、打穿去重（判据：§5 DoD 第 10 条「`envelope_digest` 逐字节不变」）。
+- **代价登记（必须保留）**：`declared_intent` 不进摘要，于是**同一文本、不同 `declared_intent` 的两条重复消息会被判成同一封**，第二条返回第一次的响应（`gateway.py:144-149` 的 `claim` 去重分支）。本轮接受这个代价，理由：摘要覆盖的是「这封消息的意思」的去重键，为一个只有声明、没有真实发送方的可选字段扩大指纹面，换来的是既有去重全部重算。
+
+### 4.2 适配器填充（T6-3）
+
+三处 `MessageEnvelope` 构造点（本轮实测全集：`app/channels/im.py:59`、`app/channels/email.py:62`、`app/channels/web.py:47`）只在入站 payload 的 `intent` 值满足 `isinstance(value, str)` 时填入 `declared_intent`；非字符串（数字、`null`、对象、缺失）一律留 `None`，**不得 `str()` 强转**。形态判据与 `RenderedMessage.intent` property（`base.py:109-112`，非 `str` 即 `None`）逐字同形。现状注：`im.py:52-67` 的 `normalize` 今天连 `metadata` 都不传，入站 `intent` 键被直接丢弃——这正是「今天发送方为 0」的证据之一（T6-10）。
+
+### 4.3 白名单来源与值域（T6-4，定死）
+
+- **唯一来源是 `IntentCatalog` 新增的一个方法**（如 `non_write_declared_intents()`，实现轮定名）：值 = `ordered_specs()`（`app/agent/intent_catalog.py:194`，返回全部目录行）中 `write_path` 为假（`IntentSpec.write_path`，`intent_catalog.py:123`，加载处 `:291`）的行**去掉 `UNKNOWN`**。**不需要给 `intents.yaml` 加任何新键**——`write_path` 已在 `_INTENT_FIELDS`（`intent_catalog.py:62-82`，`:74`）。
+- **本轮实测（venv 解释器现算，命令见收尾复验）**：`ordered_specs()` 共 12 行；`write_path` 为真恰好 3 行——`REFUND_REQUEST`（`intents.yaml:92`）、`TICKET_CREATE`（`:115`）、`DELIVERY_ISSUE`（`:235`）；「非写减 `UNKNOWN`」的白名单恰为 **8 个**，按目录序：`HUMAN_HANDOFF`、`SELF_ANALYTICS`、`REFUND_STATUS`、`REFUND_ELIGIBILITY`、`POLICY_QA`、`LOGISTICS_QUERY`、`PRODUCT_QUERY`、`ORDER_QUERY`。
+- **排除** `REFUND_REQUEST`、`TICKET_CREATE`、`DELIVERY_ISSUE` 三行。第三行虽在规则侧被 `_WRITE_INTENT_EXEMPT`（`app/agent/routing.py:281`）豁免，但它 `write_path: true`，属目录已登记的写行，**不进直取白名单**——白名单判据只认 `write_path`，不读 `_WRITE_INTENT_IDS` / `_WRITE_INTENT_EXEMPT`（那两个集合是规则侧的受检面，与 `routing.py:294-302` 受控循环的两道 `continue` 守门绑定，本口径一字不动）。
+- `intents.yaml` 行增减**自动**改白名单；**不得**另立枚举源、**不得**在 Python 里抄一份字面量集合。若实现确需一份缓存抄本（如 frozenset 常量），它必须 **fail-closed**：与目录推导结果不一致时拒绝放行任何值，且由一条用例逐字钉住两者相等（§5 DoD 第 7 条）。
+- **两条决定性事实（本轮 venv 现测，写死进口径）**：
+  - 事实 A：上述 8 个里有 **2 个不是 `SupportIntent` 的声明成员**——`HUMAN_HANDOFF`、`SELF_ANALYTICS`。`SupportIntent` 声明成员只有 10 个（`app/agent/turns.py:24-33`），这两个经 `SupportIntent(...)` 时走 `_missing_` 凭空造成员那条路（`turns.py:36-48`）。
+  - 事实 B：**今天同一条路已经在跑**——`get_catalog().match("转人工"…)`、`match("找个真人"…)`、`match("人工客服"…)` 都返回 `HUMAN_HANDOFF` 行，`classify_support` 因此今天就会产出这个非声明成员（`app/agent/support_agent.py:281-282` 的 collaboration 短路直接 `SupportIntent(spec.intent_id)`）。
+  - **结论（不得写成别的）**：「白名单包含这两个」不是新扩大枚举面，而是与规则路径**同源**；本口径**不得**把白名单改写成「必须等于 `SupportIntent` 声明成员集」——那会把规则今天就在产出的 `HUMAN_HANDOFF` 排除掉，制造白名单与规则路径的人为分叉。
+
+### 4.4 解析函数与 fail-closed 次序（T6-5）
+
+新增纯函数，与 `classify_support` 同处（`app/agent/support_agent.py`）：
+
+```python
+def resolve_declared_intent(value: object) -> SupportIntent | None: ...
+```
+
+- **白名单校验必须在 `SupportIntent(...)` 构造之前**。理由（代码现实，本轮实读）：`_missing_`（`app/agent/turns.py:36-48`）对**任意非空字符串**用 `str.__new__(cls, value)` 凭空造成员并塞进 `_value2member_map_`/`_member_map_`——先构造后校验等于把校验拆掉，还会把任意垃圾字符串永久注册进枚举。
+- 返回值域封闭：合法白名单成员 → 对应 `SupportIntent`；**非法值（白名单外任意字符串）、写意图（含 `DELIVERY_ISSUE`）、`UNKNOWN`、`None`、非字符串、小写形态（如 `"policy_qa"`）一律返回 `None`**。大小写敏感是刻意的：目录行 id 是大写蛇形，直取不做 normalize。
+
+### 4.5 采纳落点（T6-6，定死）
+
+直取值生效**只在** `classify_support` 现有的 `if spec is None:` 那**一个**分支内（`app/agent/support_agent.py:287-288`，函数体有且只有这一个可作落点的分支），且额外要求 `route.intent is Intent.UNKNOWN`（规则 `classify()` 也没读出来）时，才把 `SupportPlan(SupportIntent.UNKNOWN, …)` 换成 `SupportPlan(resolve_declared_intent(declared_intent), …)`（解析为 `None` 时行为与今天逐字相同，仍落 `UNKNOWN`）。
+
+- **绝不覆盖**：collaboration 短路（`:281-282`）、写意图分支（`:283-286`）、以及任何 `spec is not None` 的规则命中。直取填的是「规则与目录都失明」那一个洞，不是给外部字符串开优先权。
+- `_silent` 的 `classify_support` 调用点（`app/agent/support_agent.py:1174-1179`）**不传**直取值（沿用关键字参数默认 `None`），行为逐字不变。
+- `handle` → `_stage_route_and_plan`（调用点 `:833-839`）→ `classify_support` 之间的形参穿透由实现轮以 keyword-only、默认 `None` 的参数落地；两处既有调用点之外不得新增第三个 `classify_support` 调用点来旁路 `_stage_route_and_plan` 的既有装配。
+
+### 4.6 接线（T6-7）
+
+- `gateway.accept_webhook` 把 `declared_intent=envelope.declared_intent` 传进 `self.agent.handle(...)`（现盘调用点 `app/channels/gateway.py:152-157`，今天没有 intent 实参）。
+- `SupportAgent.handle` 新增关键字参数 `declared_intent: str | None = None`（签名现盘 `app/agent/support_agent.py:377-385`）。docstring「``channel`` is provenance only… never a decision branch」（`:386-387`）不为 `declared_intent` 修改，也不被它削弱：`declared_intent` **是**决策输入，但它只在 T6-6 那一个规则失明分支被消费，且与 `channel` 是两个参数、两条纪律。
+- `accept_web`（`gateway.py:65-102`，两处 `self.agent.handle(...)` 调用 `:68-74`、`:96-102`）**不改**，登记为边界：网页入口不接收外部声明。
+
+### 4.7 不留痕（T6-8）
+
+直取值是一次外部声明，采纳后**只活在本回合的路由读数里**：不进消息 payload、不进 `task.context`（明确**不与** `support_agent.py:828` 的 `context["channel"]` 并列——channel 是 provenance，声明值不是）、不进 span 属性、不进审计、不落库；**不新增任何 trace 键**（与第 2 节 R-2「零新增键」同向）。可观察性只能是间接的：只有最终路由读数变了才可见。这一代价如实登记；排查「这条路由是谁给的」靠渠道侧发送日志，不靠本服务留痕。
+
+### 4.8 边界与不动项
+
+- **`classify()` 不得读 `context["intent"]`（T6-9）**：任务 API 侧不能因为一个声明字符串被改路由。这条是红线用例（§5 第 4 条）的支撑判据——`/api/v1/tasks` 的 `context` 是调用方可控字典，任何把 `context["intent"]` 喂进规则或直取通路的写法都属越界。
+- **不加配置开关（T6-10）**：今天发送方为 0（没有任何适配器携带 intent 入站——`im.py:52-67` 连 `metadata` 都不传；全仓 `app/` 唯一消费点是 `api/v1/channels.py:74` 的响应回显），落地即行为中性；且采纳面不是可调参数（R7 §2.1 同向）。回退方式 = **版本回退**，不留运行时旋钮。
+- **`HUMAN_HANDOFF` 保留在白名单（T6-12），登记代价**：外部字符串可以触发转人工。这不新增能力面：客户自己打「转人工」「找个真人」今天同样触发（事实 B），且直取轮不动钱、HMAC 与身份校验（`base.py:258` 的 `verify` 链、`gateway.py:134`）一行不改。
+- **F-1 交互代价（T6-11，登记）**：被直取填上意图的回合 `plan.intent` 不再是 `UNKNOWN`，因而**不再形成反问草稿**——F-1 口径 `.qoder/rules/clarify-counter-question.md` §3.3 的形成侧守卫要求 `plan.intent is SupportIntent.UNKNOWN` 才消费反问草稿。这是预期代价（外部已声明意图的回合没有「请确认意图」的信息增量），实现轮必须有用例钉住（§5 DoD 第 13 条），不得当成缺陷修掉。
+
+### 4.9 冲突登记与补充裁定（T6-1，含原红线的重读）
+
+- **直取不是模型读数**：渠道声明的 intent 是**调用方给的一个值**，不经模型。因此它**不得**经 `decide_adoption`（`app/agent/pydantic_agent.py:90-112`）、**不得**产出 `ModelDecision` 行、R7 四计数键（`model_adopted`/`model_redirect`/`model_redirect_rejected`/`model_redirect_kind`）对它**保持 `None`（不落盘）**——与 `.qoder/rules/adoption-surface.md` §2.3「没有记录过判定 ≠ 判过且否」同义，与 `.qoder/rules/clarify-counter-question.md` §2.2 对非采纳通路的处理同形。
+- **原文内部张力（显式登记，不静默改写）**：本节上方原红线句「探针/直取都不得绕开 `decide_adoption` 单点」与「直取仅限非写意图」**不能同时按字面成立**——`ADOPTABLE_INTENTS` 唯一成员是 `REFUND_REQUEST`（写意图），任何非写读数在 `decide_adoption` 那里**都不可能**被采纳；「直取非写值」按构造就是「不经过（也无法经过）采纳判定」，若强行让它走 `decide_adoption`，得到的只会是 `adopted=False`，路由照旧，直取落空。
+- **重读（补充裁定）**：该红线句在本口径下读作「**不得为直取开第二个模型采纳口**」——即禁止出现第二处把「外部读数」写进路由的采纳逻辑（`decide_adoption` 或与其等价的判断）。直取通路恰恰因为**不是**模型读数、**不进**采纳判定，才与这条红线相容；它改路由的授权来源是 T6-4…T6-6 的白名单与落点约束，不是采纳面。红线句原文（含 `test_the_task_api_cannot_reroute_a_read_request_into_a_write` 保持绿的判据）**一字不动**，本段只登记其读法。
+- 与上方「白名单口径」三条的关系：第 1 条（子集约束）被 §4.3 具体化为目录推导的封闭八值；第 2 条「读不出落 `UNKNOWN`、不得当作可信输入直接落库」被 §4.4 的返回 `None`（等价于今天不落直取值时的行为）与 §4.7 的不落库承接，不冲突；第 3 条（`bucket` 不参与）不变。
+
+
 ## 5. 验收标准（DoD）
 
 实现轮须逐条给证据：
@@ -101,6 +174,17 @@ R10 来自 `docs/下一步规划.md` §0.2:73，验收原文：「`model_gate` �
 4. `tests/test_llm_gap.py::test_the_task_api_cannot_reroute_a_read_request_into_a_write` 保持绿。
 5. `_WRITE_INTENT_IDS`、`_WRITE_INTENT_EXEMPT` 与受控断言语义不变；采纳面 `ADOPTABLE_INTENTS` 不扩；守卫三清单（fact-baseline / code-anchors / architecture-guard）本轮与实现轮均不触碰，除非编排方另行批准。
 6. 留痕纪律：报告与读数不落客户原文、不落订单号，只落计数。
+
+以下为 **T6-b 新增条目（口径轮 2026-10-29 追加；第 3、4 条原文保留不变，新条目指向它们）**，逐条对应 §4.1-§4.9 的裁定，实现轮须逐条给证据：
+
+7. **白名单精确集合（fail-closed，T6-4）**：`IntentCatalog` 新增方法推导出的白名单**逐字等于** §4.3 那 8 个 id（`HUMAN_HANDOFF`、`SELF_ANALYTICS`、`REFUND_STATUS`、`REFUND_ELIGIBILITY`、`POLICY_QA`、`LOGISTICS_QUERY`、`PRODUCT_QUERY`、`ORDER_QUERY`）；用例钉住「方法结果 == 由 `ordered_specs()` 现算的『非 `write_path` 且非 `UNKNOWN`』集合」，抄本与目录不一致时拒绝放行任何值；`intents.yaml` 增删行时该集合随目录自动变化（用例以目录现算为唯一基准，不写死第二份字面量断言之外的判定）。
+8. **解析函数判定（T6-5）**：`resolve_declared_intent` 对「白名单外任意字符串、`REFUND_REQUEST`、`TICKET_CREATE`、`DELIVERY_ISSUE`、`UNKNOWN`、`None`、非字符串（数字/对象/`null`）、小写形态（`"policy_qa"`）」逐一返回 `None`；且白名单校验发生在 `SupportIntent(...)` 构造之前——用例断言非法值被拒后**没有**凭空长进 `SupportIntent._value2member_map_`。
+9. **采纳落点（T6-6）**：直取只在 `classify_support` 的 `spec is None` 且 `route.intent is Intent.UNKNOWN` 的回合生效；collaboration 短路、写意图分支、任何规则命中均**不被**直取覆盖（各一条用例）；`_silent` 调用点（`support_agent.py:1174`）行为逐字不变；`accept_web` 两调用点不变（T6-7 边界）。
+10. **载体与适配器（T6-2/T6-3）**：三处构造点（`im.py:59`、`email.py:62`、`web.py:47`）各一条用例——payload `intent` 为 `str` 时 `envelope.declared_intent` 携带该值，非字符串（含缺失）时为 `None` 且**未经过 `str()` 强转**；`envelope_digest`（`base.py:261-287`）对加了 `declared_intent` 字段前后的同一信封**逐字节不变**。
+11. **零留痕扫描（T6-8/T6-1）**：一次被直取采纳的回合之后，消息 payload、`task.context`、span 属性、审计 detail 中检索不到该声明值；R7 四计数键保持 `None`（不落盘）、台账无该回合产生的 `ModelDecision` 行；且 `classify()` 不读 `context["intent"]`（T6-9：任务 API 传 `context={"intent": "POLICY_QA"}` 路由读数不变）。
+12. **红线保持绿（指向第 4 条）**：`tests/test_llm_gap.py::test_the_task_api_cannot_reroute_a_read_request_into_a_write` 不改动断言地通过；第 3 条判据（非写意图之外的声明不放行、写意图走既有资格校验/审批）由本批第 8、9 条用例补足可判定形式。
+13. **F-1 交互代价钉测（T6-11）与转人工代价（T6-12）**：被直取填上意图的回合 `plan.intent` 非 `UNKNOWN`，因而**不形成反问草稿**（F-1 口径 §3.3 形成侧守卫，用例钉住）；`HUMAN_HANDOFF` 直取轮只产生转人工既有形态——不动钱、HMAC 与身份校验路径一行不改（用例断言业务表行数增量与该回合转人工记录的既有形状一致）。
+
 
 ## 不做（R10 明确不覆盖，§14.5 四条「不做」逐条落为禁区）
 
