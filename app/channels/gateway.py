@@ -154,6 +154,7 @@ class ChannelGateway:
                 text,
                 conversation_id=envelope.conversation_id,
                 channel=envelope.channel,
+                declared_intent=envelope.declared_intent,
             )
         except Exception:
             self.store.fail(

@@ -44,6 +44,7 @@ class WebChannelAdapter:
         data = json_object(request.body)
         conversation_id = data.get("conversation_id")
         order_id = data.get("order_id")
+        declared = data.get("intent")
         return MessageEnvelope(
             channel=self.channel,
             channel_message_id=self._message_id(request, data),
@@ -55,6 +56,10 @@ class WebChannelAdapter:
             metadata={
                 "order_id": order_id if isinstance(order_id, str) else None,
             },
+            # 与 RenderedMessage.intent 同形的判据：非 str 即 None，不强转（§4.2）。
+            # 边界（T6-7）：``accept_web`` 重建 payload 时从不携带 intent，
+            # 所以网页入口今天没有任何声明值能走到这里。
+            declared_intent=declared if isinstance(declared, str) else None,
         )
 
     def render(

@@ -59,6 +59,7 @@ class EmailChannelAdapter:
         text = self._text(data)
         conversation_id = data.get("conversation_id")
         locale = data.get("locale")
+        declared = data.get("intent")
         return MessageEnvelope(
             channel=self.channel,
             channel_message_id=message_id,
@@ -69,6 +70,8 @@ class EmailChannelAdapter:
             text=text,
             attachments=self._attachments(data),
             locale=locale if isinstance(locale, str) and locale else "zh-CN",
+            # 与 RenderedMessage.intent 同形的判据：非 str 即 None，不强转（§4.2）。
+            declared_intent=declared if isinstance(declared, str) else None,
         )
 
     def render(

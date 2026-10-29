@@ -61,6 +61,11 @@ class MessageEnvelope:
     locale: str = "zh-CN"
     metadata: Mapping[str, Any] = field(default_factory=dict)
     received_at: datetime = field(default_factory=utcnow)
+    # 渠道 payload 的 intent 声明值（R10 §4.1）：只在 ``isinstance(value, str)``
+    # 时由适配器填入，非字符串一律留 ``None``，绝不 ``str()`` 强转。它刻意
+    # *不进* ``metadata``、*不进* ``envelope_digest`` 的 material——所有既有摘要
+    # 逐字节不变。登记的代价：同一文本、不同声明值的重复投递会被判成同一封。
+    declared_intent: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -259,7 +264,11 @@ def verify_hmac(
 
 
 def envelope_digest(envelope: MessageEnvelope) -> str:
-    """Fingerprint the meaning of a delivery, not its transport metadata."""
+    """Fingerprint the meaning of a delivery, not its transport metadata.
+
+    ``material`` is an explicit literal dict: ``declared_intent`` is not in
+    it (R10 §4.1), so adding that field changed no existing digest.
+    """
     material = {
         "channel": envelope.channel.value,
         "tenant_id": envelope.identity.tenant_id,

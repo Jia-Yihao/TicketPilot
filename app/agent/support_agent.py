@@ -109,6 +109,7 @@ __all__ = [
     "Draft",
     "Turn",
     "classify_support",
+    "resolve_declared_intent",
     "model_gate",
 ]
 
@@ -257,6 +258,26 @@ class CounterQuestion:
     reading_intent: str
 
 
+def resolve_declared_intent(value: object) -> SupportIntent | None:
+    """把渠道声明的 intent 字符串解析成一个**非写**路由读数，或拒绝放行。
+
+    R10 §4.4：白名单校验必须发生在 ``SupportIntent(...)`` 构造**之前**——
+    ``SupportIntent._missing_``（``app/agent/turns.py``）对任意非空字符串都会
+    凭空造成员并永久注册进 ``_value2member_map_``，先构造后校验等于把校验
+    拆掉。返回值域封闭：非白名单字符串、写意图（含 ``DELIVERY_ISSUE``）、
+    ``UNKNOWN``、``None``、非字符串、小写形态一律 ``None``。大小写敏感是
+    刻意的：目录行 id 是大写蛇形，直取不做 normalize。
+
+    这不是模型读数（§4.9）：它不经 ``decide_adoption``、不产 ``ModelDecision``、
+    不写 R7 四计数键；它的授权来源只有 §4.3 的目录白名单与 §4.5 的唯一落点。
+    """
+    if not isinstance(value, str):
+        return None
+    if value not in get_catalog().non_write_declared_intents():
+        return None
+    return SupportIntent(value)
+
+
 def classify_support(
     message: str,
     route: RoutePlan,
@@ -264,12 +285,19 @@ def classify_support(
     has_catalog_match: bool,
     message_order_id: str | None = None,
     order_id: str | None = None,
+    declared_intent: str | None = None,
 ) -> SupportPlan:
     """Pick the intent for a read-path message.
 
     The catalog decides: every row carries its own cues, and the rows are
     tried most specific first. A collaboration row (asking for a human) is
     not a write action, so it outranks the ticket path.
+
+    渠道直取（R10 §4.5）只填这一个洞：目录没有命中（``spec is None``）**且**
+    关键词表也没读出来（``route.intent is Intent.UNKNOWN``）时，声明值才被
+    ``resolve_declared_intent`` 采纳；解析为 ``None`` 时行为与今天逐字相同。
+    collaboration 短路、写意图分支与任何目录命中都不被覆盖——外部字符串
+    没有优先权。
     """
     text = message.lower()
     resolved_order = order_id or route.order_id
@@ -285,6 +313,10 @@ def classify_support(
     ):
         return SupportPlan(SupportIntent(route.intent.value), resolved_order)
     if spec is None:
+        if route.intent is Intent.UNKNOWN:
+            declared = resolve_declared_intent(declared_intent)
+            if declared is not None:
+                return SupportPlan(declared, resolved_order)
         return SupportPlan(SupportIntent.UNKNOWN, resolved_order)
     return SupportPlan(SupportIntent(spec.intent_id), resolved_order)
 
@@ -382,6 +414,7 @@ class SupportAgent:
         conversation_id: str | None = None,
         order_id: str | None = None,
         channel: Channel = Channel.WEB,
+        declared_intent: str | None = None,
     ) -> dict[str, Any]:
         """Run one turn. ``channel`` is provenance only: it labels the
         handoff bundle and abandon events, never a decision branch."""
@@ -412,7 +445,11 @@ class SupportAgent:
             # (R9 口径 §2.1.5): support.classify must carry this reading, not
             # the recorder's construction clock.
             classify_started = time.perf_counter()
-            reading = self._stage_read_slots(message, order_id, channel, carried)
+            # ``declared_intent`` 只穿透到 classify_support 的那一个规则失明分支
+            # （R10 §4.6）；它不是 provenance，也绝不进本回合任何留痕（§4.7）。
+            reading = self._stage_read_slots(
+                message, order_id, channel, carried, declared_intent=declared_intent
+            )
             # --- 阶段三：决定最终读法（沿用追问 / 展开统计 / 问一次模型）---
             consult = self._stage_consult_model(
                 session, identity, message, reading, carried, turn
@@ -784,6 +821,8 @@ class SupportAgent:
         order_id: str | None,
         channel: Channel,
         carried: ConversationSlots,
+        *,
+        declared_intent: str | None = None,
     ) -> _SlotReading:
         """把这一句客户输入读成槽位，再让关键词表与意图目录各读一次意图。
 
@@ -836,6 +875,7 @@ class SupportAgent:
             has_catalog_match=matched_product is not None,
             message_order_id=message_order,
             order_id=resolved_order,
+            declared_intent=declared_intent,
         )
         return _SlotReading(
             message_order=message_order,

@@ -205,6 +205,23 @@ class IntentCatalog:
             if "order_id" in spec.required_slots
         )
 
+    def non_write_declared_intents(self) -> tuple[str, ...]:
+        """The channel declared-intent whitelist, derived from this catalog only.
+
+        R10 §4.3: exactly the rows whose ``write_path`` is falsy, minus
+        ``UNKNOWN``, in catalog order. The judgment reads ``write_path`` and
+        nothing else — the rule-side ``_WRITE_INTENT_IDS`` /
+        ``_WRITE_INTENT_EXEMPT`` registration surfaces are not consulted, so
+        ``DELIVERY_ISSUE`` (``write_path: true``) stays out. Adding or
+        removing a YAML row changes this set automatically; there is no
+        second enumeration source and no literal copy to fall out of sync.
+        """
+        return tuple(
+            spec.intent_id
+            for spec in self.ordered_specs()
+            if not spec.write_path and spec.intent_id != "UNKNOWN"
+        )
+
     def match(
         self,
         text: str,

@@ -56,6 +56,7 @@ class ImChannelAdapter:
         identity = resolve_identity(self.identity_map, sender, channel=self.channel)
         text = self._first(data, ("text", "content", "Content"), 2000)
         conversation_id = data.get("conversation_id")
+        declared = data.get("intent")
         return MessageEnvelope(
             channel=self.channel,
             channel_message_id=message_id,
@@ -64,6 +65,8 @@ class ImChannelAdapter:
             ),
             identity=identity,
             text=text,
+            # 与 RenderedMessage.intent 同形的判据：非 str 即 None，不强转（§4.2）。
+            declared_intent=declared if isinstance(declared, str) else None,
         )
 
     def render(
