@@ -65,6 +65,7 @@ from app.models.security_event import SecurityEvent
 from app.observability import tracing
 from app.observability.redaction import digest
 from app.observability.tracing import TraceRecorder, reply_digest
+from app.repositories.audit import AuditRepository
 from app.repositories.commerce import CommerceRepository
 from app.repositories.traces import TraceRepository
 from app.retrieval.build import build_policy_search
@@ -239,6 +240,23 @@ def _counter_question_draft(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class CounterQuestion:
+    """一次反问草稿连同它的审计元数据（口径 §8.2）。
+
+    ``gate`` 是哪个门谈成的（``"question"`` / ``"consult"``），``reading_intent``
+    是被确认的那一个模型读法（目录行 id，英文枚举名，不是客户原文）。两个字段
+    只活在回合内存里：绝不写进 ``Draft`` 的任何字段、任何 span 属性或
+    ``ModelTrace``（§8.3 零新键），唯一的落地点是消费处的
+    ``counter_question.asked`` 审计 detail。包装发生在两个形成处，渲染器
+    ``_counter_question_draft`` 仍然只产 ``Draft | None``（§4.1 共用一个渲染器）。
+    """
+
+    draft: Draft
+    gate: str
+    reading_intent: str
+
+
 def classify_support(
     message: str,
     route: RoutePlan,
@@ -299,8 +317,9 @@ class _Consultation:
     model_gap: dict[str, Any] | None
     model_trace: ModelTrace | None
     model_decision: ModelDecision | None
-    # 问句门谈成的一次反问草稿（口径 §6.1）；其余出口恒为 ``None``。
-    counter_draft: Draft | None
+    # 两道门（问句门 / consult 出口）任一处谈成的一次反问，连同它的审计元数据
+    # （口径 §8.2）；其余出口恒为 ``None``。
+    counter_draft: CounterQuestion | None
     resealed_keys: list[str]
 
 
@@ -545,8 +564,23 @@ class SupportAgent:
                 if counter_draft is not None and plan.intent is SupportIntent.UNKNOWN:
                     # The counter-question replaces only the UNKNOWN fallback
                     # menu (§3.3); every other landing keeps its own answer.
-                    draft = counter_draft
+                    # §8.2：反问文本在这一刻成为本回合的回复——审计唯一的写入点
+                    # 就在这里，形成但被拦的轮次一行都不写。
+                    draft = counter_draft.draft
                     counter_asked = True
+                    AuditRepository(session).record(
+                        actor_id=identity.user_id,
+                        tenant_id=identity.tenant_id,
+                        action="counter_question.asked",
+                        resource_type="conversation",
+                        resource_id=turn.conversation.id,
+                        outcome="SUCCESS",
+                        detail={
+                            "gate": counter_draft.gate,
+                            "reading_intent": counter_draft.reading_intent,
+                            "option_count": len(counter_draft.draft.suggestions),
+                        },
+                    )
                 else:
                     contexts = self._contexts(session)
                     draft = self._dispatch(
@@ -855,7 +889,7 @@ class SupportAgent:
             }
             model_trace = None
             model_decision = None
-            counter_draft: Draft | None = None
+            counter_draft: CounterQuestion | None = None
         else:
             # The candidate kernel never queries the database (口径 §2.2): the
             # caller resolves the order status here, under the same scope as
@@ -1553,7 +1587,7 @@ class SupportAgent:
         dict[str, Any] | None,
         ModelTrace | None,
         ModelDecision | None,
-        Draft | None,
+        CounterQuestion | None,
     ]:
         """The one place a chat turn may reach the model, and what it may buy.
 
@@ -1626,6 +1660,10 @@ class SupportAgent:
                 # 上限已用：不调模型，今天的 gap 逐字返回。顺序回合内尽力
                 # （best-effort），并发不设上界（口径 §5.1）。
                 return plan, dict(_QUESTION_GAP), None, None, None
+            if not self.settings.counter_question_enabled:
+                # §10.2 回退等价：开关关闭连探针的钱都不付（「问句门不问模型」），
+                # 返回值与上限已用分支逐字相同。
+                return plan, dict(_QUESTION_GAP), None, None, None
             if plan.intent is not SupportIntent.UNKNOWN:
                 # 入口守卫：反问只替代 UNKNOWN 兜底菜单（§3.3），规则读数非
                 # UNKNOWN 的这一轮（例如带订单号被读成 ORDER_QUERY、却因第二门
@@ -1650,9 +1688,11 @@ class SupportAgent:
                 ),
                 plan,
             )
-            if draft is None:
+            if draft is None or probe.intent is None:
                 # 标签表凑不出完整问句：不反问、gap 照旧，但调用已发生，
                 # 成本经既有用量台账照常可见（§4.7 不静默吞）。
+                # ``probe.asks`` 为真时 ``probe.intent`` 恒非 None，第二个判据
+                # 只为类型收窄（口径 §8.2 的元数据要一个确定的读法 id），行为不变。
                 return plan, dict(_QUESTION_GAP), probe.trace, None, None
             question_gap = dict(_QUESTION_GAP)
             # The only two changes §2.2 allows when a question formed: the
@@ -1660,7 +1700,19 @@ class SupportAgent:
             # recomputed — onto the existing ``understand`` span.
             question_gap["source"] = probe.source
             question_gap["model"] = probe.trace.as_dict()
-            return plan, question_gap, probe.trace, None, draft
+            return (
+                plan,
+                question_gap,
+                probe.trace,
+                None,
+                # 包装发生在形成处（§4.1 渲染器共用且只产 Draft）：门与读法
+                # 带内流到消费处，供 §8.2 的审计 detail 使用，永不落 span。
+                CounterQuestion(
+                    draft=draft,
+                    gate="question",
+                    reading_intent=probe.intent,
+                ),
+            )
         routed, source, model_trace = self.runtime.brain.plan(
             message, model_context, order_state=order_state
         )
@@ -1703,23 +1755,35 @@ class SupportAgent:
                 trace=model_trace.as_dict(),
             )
         if source != "pydantic_ai" or routed.intent not in ADOPTABLE_INTENTS:
-            counter_draft: Draft | None = None
+            counter_draft: CounterQuestion | None = None
             # F-1 consult 出口（口径 §3.1 触发判据 / §3.2 表 consult 行）：一个
             # 被采纳面拒掉的合法改道读数不再回落沉默。触发判据照抄 `decide_adoption`
             # 已经算好的那一个布尔，对话层不重写等价逻辑；读数与候选 id 序经
             # `ModelTrace` 的带内字段由同一次 `plan` 调用携带（§2.2），不在这里
             # 重算候选。`candidate_ids is None`（候选开关关）时 `_counter_question_draft`
             # 天然返回 None——期望行为，不凭空造候选（§3.1）。形成侧守卫与消费点
-            # 守卫同判据两处并存（§3.3）；上限已置位则不反问（§3.1 条件 3）。
+            # 守卫同判据两处并存（§3.3）；上限已置位则不反问（§3.1 条件 3）；
+            # 开关关闭则触发条件之一不成立（§3.1 条件 2 / §10），`plan` 调用本身
+            # 不受影响——回退的是反问，不是整个 consult 门。
             if (
-                model_trace is not None
+                self.settings.counter_question_enabled
+                and model_trace is not None
                 and model_trace.redirect_rejected is True
+                and model_trace.answer is not None
                 and not carried.counter_question_asked
                 and plan.intent is SupportIntent.UNKNOWN
             ):
-                counter_draft = _counter_question_draft(
+                # ``answer is None`` 时渲染器本就返回 None；这一判据只为类型
+                # 收窄——§8.2 的 detail 要一个确定的读法 id，不写「None」装成读数。
+                draft = _counter_question_draft(
                     model_trace.answer, model_trace.candidate_ids, plan
                 )
+                if draft is not None:
+                    counter_draft = CounterQuestion(
+                        draft=draft,
+                        gate="consult",
+                        reading_intent=model_trace.answer,
+                    )
             return plan, gap, model_trace, record, counter_draft
         gap["adopted"] = True
         return (

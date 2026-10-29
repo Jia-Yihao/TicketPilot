@@ -113,6 +113,14 @@ class Settings(BaseSettings):
     intent_candidates_enabled: bool = True
     intent_candidates_max: int = 6
 
+    # F-1 counter-question (``.qoder/rules/clarify-counter-question.md`` §10):
+    # one legal-but-unadopted model reading buys at most one intent-confirming
+    # question per conversation. Set false and both model gates go back to the
+    # pre-F-1 behavior byte for byte: the question gate never pays the probe,
+    # a rejected reroute reading falls back to the generic UNKNOWN menu, and
+    # no ``counter_question.asked`` audit event is recorded.
+    counter_question_enabled: bool = True
+
     agent_mode: Literal["rules", "pydantic_ai"] = "rules"
     agent_model: str = "anthropic:claude-sonnet-4-5"
     agent_request_limit: int = 2
