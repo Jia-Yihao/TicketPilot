@@ -1,0 +1,35 @@
+version: 1
+signals:
+  - signal_id: no_evidence_rate        # A
+    threshold: 0.20                    # 未经基线校准的占位初值（裁定 9）
+    calibrated: false
+    realert_minutes: 15
+    baseline:
+      source_file: "none"              # calibrated: false ⇒ 定死字面 "none"
+      reading_key: "none"              # calibrated: false ⇒ 定死字面 "none"
+      copied_value: null               # calibrated: false ⇒ 定死 null
+      copied_at: "2026-11"
+      note: "未经基线校准的占位初值"   # calibrated: false ⇒ note 必含「未经基线校准」
+    action_suggestion: "查检索与证据判定：核对 policy.search 的空因分布与 no_evidence 判定线，确认知识库版本。"
+  - signal_id: handoff_rate            # B
+    threshold: 0.55
+    calibrated: true
+    realert_minutes: 15
+    baseline:
+      source_file: "evals/baseline/business.json"
+      reading_key: "handoff_metrics.handoff_rate"
+      copied_value: 0.3654
+      copied_at: "2026-11"
+      note: "阈值 0.55 高于基线 0.3654，属判断值，不是基线值；基线读数为时点快照（源文件 _meta.recorded_at=2026-10-28T12:53:08）。"
+    action_suggestion: "查澄清与门：核对 clarification_rounds 与 escalation 触发分布，确认是否有单信号风暴。"
+  - signal_id: tool_failure_rate       # C
+    threshold: 0.10
+    calibrated: false
+    realert_minutes: 15
+    baseline:
+      source_file: "none"
+      reading_key: "none"
+      copied_value: null
+      copied_at: "2026-11"
+      note: "未经基线校准的占位初值"
+    action_suggestion: "查熔断与上游：按 tool_name 拆失败分布，核对 timeout 与上游服务健康。"
