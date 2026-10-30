@@ -26,8 +26,8 @@ uvicorn app.asgi:app --reload --port 8000
 
 ```bash
 ruff check app tests scripts evals alembic
-python -m mypy app                        # strict 模式，零错误（148 个文件）
-python -m pytest                          # 收集 1080 条、74 个测试文件（2026-10-28 实测 1074 passed / 6 skipped / 0 failed；当前读数见 `docs/spec/项目规格.md` §19.1；跳过的 6 条需要 PostgreSQL 或 Redis）
+python -m mypy app                        # strict 模式，零错误（153 个文件）
+python -m pytest                          # 收集 1343 条、88 个测试文件（2026-10-28 实测 1074 passed / 6 skipped / 0 failed；当前读数见 `docs/spec/项目规格.md` §19.1；跳过的 6 条需要 PostgreSQL 或 Redis）
 python evals/run.py                       # 40/40 任务路径 Golden Set
 python evals/support_run.py               # 62/62 只读路径（含多轮澄清）
 python evals/clarification_candidates.py  # 澄清降级前后对比（同一批 5 段剧本跑旧预算=2 / 新预算=3）
@@ -66,8 +66,8 @@ TICKETPILOT_TEST_POSTGRES_URL=postgresql+psycopg://... TICKETPILOT_TEST_REDIS_UR
 > 全量 **517 passed / 2 skipped**，跳过的 2 条是 Redis 用例（把 `TICKETPILOT_TEST_REDIS_URL` 也指上后是 **519 passed / 0 skipped**，137.23 s），
 > 当时是 13 条迁移（head `b4e8d2f6a1c9`）；第 14 条 `a1c7e9d4b820`（P4）没在那次手工全量里，
 > 但已在运行中的 PostgreSQL 16 容器上单独验过 `upgrade head` + `check`（见 `docs/guide/证据索引.md` 的 P4 一节）与 CI 的 `postgres-migration` 作业。
-> 当前迁移链 **15 条**（head `d9e4c7a15b82`），本地 `alembic check` → `No new upgrade operations detected.`；
-> 默认 `pytest` 当前收集 1080 条（2026-10-28 实测：1074 passed / 6 skipped / 0 failed；当前读数见 `docs/spec/项目规格.md` §19.1），它与 PG 历史读数不要混写；
+> 当前迁移链 **16 条**（head `ea6c2b48d701`），本地 `alembic check` → `No new upgrade operations detected.`；
+> 默认 `pytest` 当前收集 1343 条（2026-10-28 实测：1074 passed / 6 skipped / 0 failed；当前读数见 `docs/spec/项目规格.md` §19.1），它与 PG 历史读数不要混写；
 > **查询改写、分层检索集、意图语料评测、意图缺口闭环、P2/P3/P6、预取式统计、P4 规则治理、P11 澄清候选降级与 P8 意图候选化新增的 347 条，加渠道可用性轮 19 条，再加 B-1/B-3 落地与后续各轮（收尾返工轮、R1/R3 端到端能力、R4 指标基线、R5 答案层、R7 采纳面收口）新增的 194 条（未逐轮拆分归因），共 560 条目前只有 SQLite 证据**，尚未在 PG 上复跑。
 > **检索指标脚本本身也在 PG 上跑过**（`retrieval_metrics.py --channels bm25,dense,hybrid,gated,rerank`
 > 在 `tp_eval` 库上跑出五行读数，与 SQLite 逐位一致）。
@@ -167,7 +167,7 @@ evals/             Golden Set、只读评测集、检索指标与回放脚本
 请在 `docs/adr/` 追加一条 ADR（编号递增，含背景/决策/后果/被否决方案），
 并在 PR 描述里链接它。纯文案、样式与测试补充不需要。
 
-编号规则：`docs/adr/` 当前 **37 篇**（ADR-001…ADR-011、ADR-013…ADR-038），
+编号规则：`docs/adr/` 当前 **38 篇**（ADR-001…ADR-011、ADR-013…ADR-039），
 **ADR-012 是预留号位**（策略外置与阈值灰度），**不回收、不重排**。
 即使中间号位空着，新 ADR 也要接在当前最大号之后；`docs/records/智能体平台设想.md` 的
 §9.4 ADR 索引、编号说明与文件计数要同步改。

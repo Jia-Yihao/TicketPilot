@@ -10,7 +10,7 @@
 [![Support Set](https://img.shields.io/badge/Support%20Set-62%2F62-146b5c)](#怎么验证这些说法)
 [![License](https://img.shields.io/badge/License-MIT-0e1b2c)](LICENSE)
 
-**40/40 Golden · 62/62 Support · 收集 1080 条用例 · 48 条 API 路径 · 37 篇 ADR · 模型改变写路径路由 0/16**
+**40/40 Golden · 62/62 Support · 收集 1343 条用例 · 49 条 API 路径 · 38 篇 ADR · 模型改变写路径路由 0/16**
 
 覆盖商品咨询、政策问答、订单与物流查询、工单创建、退款申请与按金额分层的审批（未达阈值走自动执行，
 仍过同一套资格、台账与对账），外加一类受控的 Text-to-SQL 自助统计。主链路在本机就能跑完，不需要任何云 API。
@@ -68,7 +68,7 @@ seed complete: {'orders': 4, 'policies_created': 5, 'rules': 3}
 | 问题 | 我的答案 | 最小证据 |
 |---|---|---|
 | 模型到底被允许做什么？ | 读语言、抽槽位；资格、金额、审批、幂等、对账全部归服务端 | 16 个写路径轮，模型改变路由 **0** 个；规则读不懂的 11 句，它捞回 6 句，但最多只能把退款送进待审队列 |
-| "我很诚实"能被检查吗？ | 把说法变成断言：评测走产品接口，事实由代码现算，守卫自己也要被负验证 | 收集 1080 条、实测 1074 passed / 6 skipped / 0 failed；14 项事实基线；6 种故意破坏全部被守卫抓到 |
+| "我很诚实"能被检查吗？ | 把说法变成断言：评测走产品接口，事实由代码现算，守卫自己也要被负验证 | 收集 1343 条、2026-10-28 实测 1074 passed / 6 skipped / 0 failed；14 项事实基线；6 种故意破坏全部被守卫抓到 |
 | 什么时候不该回答？ | 没有依据就拒：无计划不查询，读不懂就追问，有风险就转人工 | 拒绝矩阵 10 条；写不出计划即转人工；模拟流量里转人工率 19/52 |
 
 完整读数、反例与代价在 [docs/guide/证据索引.md](docs/guide/证据索引.md)。这份 README 只放论点、最小证据，
@@ -192,10 +192,10 @@ BM25 同分行的次序与重排候选集都会跟着变。修法只是按块 ID
   架构守卫只看 `app/` 内部的导入，看不到运行时的依赖方向。
 - **数字不是结论。** `hybrid(hashing)` 那行用的是本机哈希替身，只证明多通道编排不破契约，
   不作为召回结论；17 个块的语料证明不了"切块策略优于固定窗口"；SQLite-only 的新增用例已经
-  累计到 **561 条**（PG 那次全量停在 519 条时代，现收集 1080 − 519 = 561；上一轮记的 347 条是 866 收集时代的
+  累计到 **561 条**（PG 那次全量停在 519 条时代，2026-10-28 时点收集 1080 − 519 = 561；上一轮记的 347 条是 866 收集时代的
   读数——`项目规格.md` 开头那 9 个来源的合计，519 + 347 = 866，同工作区的渠道可用性轮随后补了
   19 条 = 885，查询改写那轮的 81 条是它的子集；885 → 1080 的 195 条含已落地的 B-1/B-3、返工轮、
-  AUTO 对账回落轮、R1/R3 与 R7 新增，未逐轮拆分归因），截至本轮仍尚未在 PostgreSQL 复跑。
+  AUTO 对账回落轮、R1/R3 与 R7 新增，未逐轮拆分归因），截至 2026-10-28 该轮仍尚未在 PostgreSQL 复跑。
 - **更好的指标也会变差。** 重排把 recall@1 从 0.794 抬到 0.912，却把 recall@3 从 0.971 压到 0.912，
   代价还是 2.3 秒一次、p95 2602 ms，对 300 ms 的交互预算判 OVER BUDGET——所以它默认关闭，
   这两条都留在表里。
@@ -361,7 +361,7 @@ POST /api/v1/support/messages  ← 两条 web 入口共用同一道幂等闸
 
 ## API
 
-完整契约见 [docs/guide/接口说明.md](docs/guide/接口说明.md)。共 51 个操作（48 条路径，含 2 个健康检查）：
+完整契约见 [docs/guide/接口说明.md](docs/guide/接口说明.md)。共 52 个操作（49 条路径，含 2 个健康检查）：
 
 | 方法 | 路径 | 用途 |
 |---|---|---|
@@ -390,9 +390,9 @@ POST /api/v1/support/messages  ← 两条 web 入口共用同一道幂等闸
 ## 怎么验证这些说法
 
 ```bash
-python -m pytest                        # 收集 1080 条、74 个测试文件；本机实测 1074 passed / 6 skipped / 0 failed
+python -m pytest                        # 收集 1343 条、88 个测试文件；2026-10-28 本机实测 1074 passed / 6 skipped / 0 failed
 ruff check app tests scripts evals alembic   # 零告警（与 CI 同一套目标）
-python -m mypy app                      # strict，148 个文件，零错误
+python -m mypy app                      # strict，153 个文件，零错误
 python evals/run.py                     # Golden Set 40/40（任务路径 + 轨迹断言）
 python evals/support_run.py             # 支持集 62/62（12 意图：正常 34 / 边界 21 / 失败 7）
 python evals/clarification_candidates.py  # 澄清降级前后对比：同一批 5 段剧本跑旧预算=2 / 新预算=3
@@ -444,7 +444,7 @@ python scripts/guard_negative_check.py  # 守卫的反向验证：6 处破坏全
 | 接口契约与错误码 | [docs/guide/接口说明.md](docs/guide/接口说明.md) |
 | 评测集、指标口径与基线 | [docs/guide/评测说明.md](docs/guide/评测说明.md) |
 | 威胁模型与 fail-closed 配置 | [docs/guide/安全说明.md](docs/guide/安全说明.md) |
-| 关键取舍（37 篇，含反例） | [docs/adr/](docs/adr/) |
+| 关键取舍（38 篇，含反例） | [docs/adr/](docs/adr/) |
 
 ## 项目结构
 
@@ -456,10 +456,10 @@ app/
   retrieval/        BM25 / 稠密 / RRF / 门控 / 重排 / 查询改写
   sql/              确定性 planner、AST 构造、SELECT 子集守卫、只读执行
   api/              FastAPI 路由与依赖
-alembic/          15 条迁移，head 为 d9e4c7a15b82
+alembic/          16 条迁移，head 为 ea6c2b48d701
 evals/             Golden 40、Support 62、分层检索集、澄清降级剧本、意图候选集证据、模型分布与安全交叉、检索指标
 scripts/           seed、demo、退款剧本、缺口探针、稠密索引、守卫负验证
-tests/             74 个测试文件；含架构依赖守卫与文档一致性守卫
+tests/             88 个测试文件；含架构依赖守卫与文档一致性守卫
 web/               React 19 + Vite 控制台（10 个业务页面）
 docs/              规格、ADR、评测口径、证据与说明书
 ```

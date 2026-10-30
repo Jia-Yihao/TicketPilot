@@ -552,6 +552,26 @@ def test_uncalibrated_rows_are_flagged_in_the_yaml() -> None:
 
 
 # ---------------------------------------------------------------------------
+# T2 复查登记 一般-4：handoff_rate 行 baseline.note 的判断值说明
+# ---------------------------------------------------------------------------
+
+
+def test_the_committed_handoff_rate_note_marks_the_threshold_as_a_judgment_value() -> None:
+    """现读 committed YAML：`handoff_rate` 行 `baseline.note` 必须含判断值说明。
+
+    只断言子串「阈值 0.55 高于基线 0.3654，属判断值，不是基线值」，
+    不钉整句——note 后半句是时点快照信息（`_meta.recorded_at`），不在本条范围。
+    """
+    from app.core.online_signals import load_online_signals
+
+    table = load_online_signals(REPO_ROOT / "app" / "core" / "online_signals.yaml")
+    note = table.by_id("handoff_rate").baseline.note
+    assert "阈值 0.55 高于基线 0.3654，属判断值，不是基线值" in note, (
+        f"handoff_rate baseline.note 缺少判断值说明；got {note!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
 # §9-3 YAML 侧：escalation.yaml 的 `no_evidence` 块 intents
 # 注：T2 只钉 YAML 侧，生产侧消费（信号 A 分子/分母与意图集合的实际关联）在 T3。
 # ---------------------------------------------------------------------------
