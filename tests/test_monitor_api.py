@@ -1,18 +1,25 @@
-"""R11 T4：只读通知出口 `GET /api/v1/monitor/signals` 的行为与红线用例。
+"""R11 T4/T5-a：通知出口 `GET /api/v1/monitor/signals` 的行为与红线用例。
 
 口径来源：`.qoder/rules/online-signals-and-notification.md` §4-1/§4-2/§4-3/§4-4、
-§2 通用规则、§2-B 裁定 11（零分母在**出口层**映射为 `null`）、§6 红线、
-§9 第 7/10/11/13/14 条。断言一律对着口径的字面契约，不对着实现自证。
+§2 通用规则、§2-B 裁定 11（零分母在**出口层**映射为 `null`）、§5（触警留痕与
+误报率）、§6 红线、§9 第 7/8/9/10/11/13/14 条。断言一律对着口径的字面契约，
+不对着实现自证。
 
-本文件同时钉住 T4 的边界：误报率恒 `null`（生产者属 T5）、不读审计台账、
-零模型调用、`app/main.py` 恰 13 行 `include_router`、不新建 `router.py`。
+本文件同时钉住出口层边界：出口层**不直接**读审计台账（审计逻辑在服务层
+`app/services/signal_audit.py`，由 `inspect.getsource` 用例钉住）、零模型调用、
+`app/main.py` 恰 13 行 `include_router`、不新建 `router.py`。
+reviewed 行的写入端点 `POST /api/v1/monitor/reviews` 与其服务层生产者已随 T5-b
+落地：本文件既端到端走真实复核端点写 reviewed 行、也保留直接种审计行的消费侧
+用例，双重验证误报率三态与行契约。
 """
 
 from __future__ import annotations
 
 import ast
 import inspect
+import json
 import uuid
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +27,7 @@ import pytest
 import yaml
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy import func, select
 
 from app.core.errors import ForbiddenError
 from app.core.security import Identity
@@ -36,6 +44,7 @@ from tests.conftest import ALICE
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 SIGNALS_URL = "/api/v1/monitor/signals"
+REVIEW_URL = "/api/v1/monitor/reviews"
 
 # 口径 §2 通用规则：窗口参数 `ge=1, le=60*24*90`。字面写在测试里，
 # 不从实现取常量——否则实现把边界写错时测试会跟着一起错。
@@ -354,43 +363,272 @@ def test_threshold_calibrated_and_action_suggestion_are_taken_from_the_yaml(
     assert _row(rows, TOOL_FAILURE)["calibrated"] is False
 
 
-# ------------------------ 8. 误报率恒 null，且出口不读审计台账
+# ------------------- 8. 误报率三态按审计行变化（口径 §5/§9-8；T5-a 重写）
 
 
-def test_false_positive_rate_is_null_and_audit_rows_do_not_move_it(
+def _seed_reviewed(
+    session: Any, tenant: str, outcomes: tuple[str, ...], *, age_minutes: int = 0
+) -> None:
+    """种 reviewed 审计行——字面照口径 §5，不 import 实现的常量来自证。"""
+    moment = utcnow() - timedelta(minutes=age_minutes)
+    for index, outcome in enumerate(outcomes):
+        session.add(
+            AuditEvent(
+                id=f"aud_{uuid.uuid4().hex[:12]}_{index}",
+                actor_id="op-1",
+                tenant_id=tenant,
+                action="monitor.signal.reviewed",
+                resource_type="monitor_signal",
+                resource_id=HANDOFF,
+                outcome=outcome,
+                detail={},
+                created_at=moment,
+            )
+        )
+
+
+def test_false_positive_rate_follows_reviewed_audit_rows(
     app: FastAPI, client: TestClient
 ) -> None:
     tenant = "iso-mon-fpr"
     with app.state.session_factory() as session:
-        for index, outcome in enumerate(("FALSE_POSITIVE", "CONFIRMED", "FALSE_POSITIVE")):
-            session.add(
-                AuditEvent(
-                    id=f"aud_{uuid.uuid4().hex[:12]}_{index}",
-                    actor_id="op-1",
-                    tenant_id=tenant,
-                    action="monitor.signal.reviewed",
-                    resource_type="monitor_signal",
-                    resource_id=HANDOFF,
-                    outcome=outcome,
-                    detail={},
-                    created_at=utcnow(),
-                )
-            )
+        _seed_reviewed(session, tenant, ("FALSE_POSITIVE", "CONFIRMED", "FALSE_POSITIVE"))
         session.commit()
 
     headers = _staff(tenant)
     first = client.get(SIGNALS_URL, headers=headers).json()
-    assert first["false_positive_rate"] is None
-    # 复核行（T5 的生产者）存在与否不得影响 T4 的读数。
+    # 口径 §5 公式：误报数 ÷ 已复核数 = 2/3 → round(x, 4)。
+    assert first["false_positive_rate"] == 0.6667
+    # 同一种子数据两次读取逐字相等：现算、无随机、不漂。
     second = client.get(SIGNALS_URL, headers=headers).json()
     assert second == first
-    assert second["false_positive_rate"] is None
 
     import app.api.v1.monitor as monitor_module
 
     source = inspect.getsource(monitor_module)
     for forbidden in ("AuditRepository", "app.models.audit", "app.repositories"):
         assert forbidden not in source, f"出口层不得触碰审计台账：{forbidden!r}"
+
+
+def test_false_positive_rate_has_three_distinguishable_states(
+    app: FastAPI, client: TestClient
+) -> None:
+    # §9-8：null（零复核）与 0.0（全对）必须都出现且可分；false 行出 round(x,4)。
+    none_tenant = "iso-mon-tri-none"
+    zero_tenant = "iso-mon-tri-zero"
+    part_tenant = "iso-mon-tri-part"
+    with app.state.session_factory() as session:
+        _seed_reviewed(session, zero_tenant, ("CONFIRMED", "CONFIRMED"))
+        _seed_reviewed(session, part_tenant, ("FALSE_POSITIVE", "CONFIRMED", "CONFIRMED"))
+        session.commit()
+
+    null_read = client.get(SIGNALS_URL, headers=_staff(none_tenant)).json()
+    assert null_read["false_positive_rate"] is None
+
+    zero_read = client.get(SIGNALS_URL, headers=_staff(zero_tenant)).json()
+    assert zero_read["false_positive_rate"] == 0.0
+    assert zero_read["false_positive_rate"] is not None  # 与 null 可分
+
+    part_read = client.get(SIGNALS_URL, headers=_staff(part_tenant)).json()
+    assert part_read["false_positive_rate"] == 0.3333
+
+
+def test_false_positive_rate_is_scoped_to_its_own_tenant(
+    app: FastAPI, client: TestClient
+) -> None:
+    # §9-13 相关：A 租户的 reviewed 行不得影响 B 租户的误报率。
+    mine = "iso-mon-fpr-mine"
+    theirs = "iso-mon-fpr-theirs"
+    with app.state.session_factory() as session:
+        _seed_reviewed(session, theirs, ("FALSE_POSITIVE", "CONFIRMED"))
+        session.commit()
+
+    mine_read = client.get(SIGNALS_URL, headers=_staff(mine)).json()
+    assert mine_read["false_positive_rate"] is None
+
+    theirs_read = client.get(SIGNALS_URL, headers=_staff(theirs)).json()
+    assert theirs_read["false_positive_rate"] == 0.5
+
+
+# ---------------- 9. breached 幂等去重与复警间隔（口径 §5/§9-9，断言行数）
+
+
+def _breach_count(app: FastAPI, tenant: str, signal_id: str) -> int:
+    with app.state.session_factory() as session:
+        return int(
+            session.scalar(
+                select(func.count())
+                .select_from(AuditEvent)
+                .where(
+                    AuditEvent.tenant_id == tenant,
+                    AuditEvent.action == "monitor.signal.breached",
+                    AuditEvent.resource_type == "monitor_signal",
+                    AuditEvent.resource_id == signal_id,
+                )
+            )
+            or 0
+        )
+
+
+def _seed_breached(
+    session: Any,
+    tenant: str,
+    signal_id: str,
+    *,
+    age_minutes: int,
+    window_minutes: int,
+) -> None:
+    session.add(
+        AuditEvent(
+            id=f"aud_{uuid.uuid4().hex[:12]}_brk",
+            actor_id="op-1",
+            tenant_id=tenant,
+            action="monitor.signal.breached",
+            resource_type="monitor_signal",
+            resource_id=signal_id,
+            outcome="SUCCESS",
+            detail={
+                "signal_id": signal_id,
+                "window_minutes": window_minutes,
+                "metric_value": 0.25,
+                "threshold": 0.2,
+            },
+            created_at=utcnow() - timedelta(minutes=age_minutes),
+        )
+    )
+
+
+def test_repeated_reads_in_one_window_write_at_most_one_breach_row(
+    app: FastAPI, client: TestClient
+) -> None:
+    tenant = "iso-mon-dedup"
+    with app.state.session_factory() as session:
+        _conv(session, tenant, "c1")
+        for _ in range(4):  # A = 1/4 = 0.25 > 0.20 → 触警
+            _msg(session, "c1")
+        _handoff(session, tenant, "c1")  # B = 1/1 = 1.0 > 0.55 → 触警
+        session.commit()
+
+    headers = _staff(tenant)
+    for _ in range(3):
+        response = client.get(
+            SIGNALS_URL, headers=headers, params={"window_minutes": 60}
+        )
+        assert response.status_code == 200
+
+    # 负对照：不去重的实现会留下 3×2 行——这里断言恰 1+1。
+    assert _breach_count(app, tenant, NO_EVIDENCE) == 1
+    assert _breach_count(app, tenant, HANDOFF) == 1
+    assert _breach_count(app, tenant, TOOL_FAILURE) == 0  # C 零分母不触警不写行
+
+
+def test_breach_within_realert_interval_does_not_rewrite(
+    app: FastAPI, client: TestClient
+) -> None:
+    # 既有行 10 分钟前：在 realert_minutes=15 之内、在 window_minutes=5 之外——
+    # 只有「距最近一条不足 realert」这一支能拦住重写（钉住去重的第二条件）。
+    tenant = "iso-mon-realert-suppress"
+    with app.state.session_factory() as session:
+        _conv(session, tenant, "c1")
+        for _ in range(4):
+            _msg(session, "c1")
+        _handoff(session, tenant, "c1")
+        _seed_breached(
+            session, tenant, NO_EVIDENCE, age_minutes=10, window_minutes=60
+        )
+        session.commit()
+
+    client.get(SIGNALS_URL, headers=_staff(tenant), params={"window_minutes": 5})
+    assert _breach_count(app, tenant, NO_EVIDENCE) == 1
+
+
+def test_breach_after_realert_interval_writes_a_new_row(
+    app: FastAPI, client: TestClient
+) -> None:
+    # 既有行 20 分钟前：既超出 realert_minutes=15，也落在 window_minutes=5 之外——
+    # 两个条件都不拦，必须写新行（§9-9「跨过再 breach 有新行」）。
+    tenant = "iso-mon-realert-renew"
+    with app.state.session_factory() as session:
+        _conv(session, tenant, "c1")
+        for _ in range(4):
+            _msg(session, "c1")
+        _handoff(session, tenant, "c1")
+        _seed_breached(
+            session, tenant, NO_EVIDENCE, age_minutes=20, window_minutes=60
+        )
+        session.commit()
+
+    client.get(SIGNALS_URL, headers=_staff(tenant), params={"window_minutes": 5})
+    assert _breach_count(app, tenant, NO_EVIDENCE) == 2
+
+
+# --------- 10. breached 行契约：封闭键集，detail 不落客户文案与单号（§5/§9-10）
+
+
+def test_breach_row_carries_only_the_closed_detail_keys(
+    app: FastAPI, client: TestClient
+) -> None:
+    tenant = "iso-mon-detail"
+    with app.state.session_factory() as session:
+        _conv(session, tenant, "c1")
+        for _ in range(4):
+            _msg(session, "c1")
+        _handoff(session, tenant, "c1")
+        # 混入客户文案与订单号形态的会话消息（intent 不在 A 分母集合，不改读数）。
+        moment = utcnow()
+        session.add(
+            ConversationMessage(
+                id=f"cm_{uuid.uuid4().hex[:16]}",
+                conversation_id="c1",
+                role="user",
+                intent="CHIT_CHAT",
+                content="我的订单 ORD-77881234 还没退款，太气人了",
+                created_at=moment,
+            )
+        )
+        session.commit()
+
+    response = client.get(
+        SIGNALS_URL, headers=_staff(tenant), params={"window_minutes": 60}
+    )
+    assert response.status_code == 200
+
+    with app.state.session_factory() as session:
+        events = session.scalars(
+            select(AuditEvent)
+            .where(
+                AuditEvent.tenant_id == tenant,
+                AuditEvent.action == "monitor.signal.breached",
+            )
+            .order_by(AuditEvent.id)
+        ).all()
+        assert len(events) == 2  # A 与 B 各一条；恰 0 条会让下面的扫描变成空断言
+        for event in events:
+            assert event.actor_id == "op-1"
+            assert event.outcome == "SUCCESS"
+            assert event.resource_type == "monitor_signal"
+            assert set(event.detail) == {
+                "signal_id",
+                "window_minutes",
+                "metric_value",
+                "threshold",
+            }
+            text = json.dumps(event.detail, ensure_ascii=False)
+            assert "ORD-" not in text
+            assert "还没退款" not in text
+        by_id = {event.resource_id: event for event in events}
+        assert by_id[NO_EVIDENCE].detail == {
+            "signal_id": NO_EVIDENCE,
+            "window_minutes": 60,
+            "metric_value": 0.25,
+            "threshold": 0.2,
+        }
+        assert by_id[HANDOFF].detail == {
+            "signal_id": HANDOFF,
+            "window_minutes": 60,
+            "metric_value": 1.0,
+            "threshold": 0.55,
+        }
 
 
 # ---------------------------------------------- 9. 零模型调用（§9-11）
@@ -545,3 +783,250 @@ def test_app_source_has_no_yaml_write_paths_and_no_evals_import() -> None:
     assert sorted(set(dump_offenders)) == []
     assert sorted(set(write_offenders)) == []
     assert sorted(set(evals_offenders)) == []
+
+
+# ---------- 14. 复核端点形态与鉴权（§9-7：POST /api/v1/monitor/reviews）
+
+
+def _review_body(
+    signal_id: str = HANDOFF, conclusion: str = "CONFIRMED", **extra: Any
+) -> dict[str, Any]:
+    body: dict[str, Any] = {"signal_id": signal_id, "conclusion": conclusion}
+    body.update(extra)
+    return body
+
+
+def _reviewed_count(app: FastAPI, tenant: str, signal_id: str) -> int:
+    with app.state.session_factory() as session:
+        return int(
+            session.scalar(
+                select(func.count())
+                .select_from(AuditEvent)
+                .where(
+                    AuditEvent.tenant_id == tenant,
+                    AuditEvent.action == "monitor.signal.reviewed",
+                    AuditEvent.resource_type == "monitor_signal",
+                    AuditEvent.resource_id == signal_id,
+                )
+            )
+            or 0
+        )
+
+
+def test_review_endpoint_writes_row_for_staff_and_rejects_non_staff(
+    app: FastAPI, client: TestClient
+) -> None:
+    # 端点存在且可调用：staff 三种角色各写一行并回显受理回执；非 staff 一律 403 且不写行。
+    for role in ("admin", "approver", "support"):
+        tenant = f"iso-mon-rev-staff-{role}"
+        response = client.post(
+            REVIEW_URL, headers=_staff(tenant, role), json=_review_body()
+        )
+        assert response.status_code == 200, role
+        assert response.json() == {
+            "signal_id": HANDOFF,
+            "conclusion": "CONFIRMED",
+            "window_minutes": None,
+        }
+        assert _reviewed_count(app, tenant, HANDOFF) == 1, role
+
+    forbidden = client.post(REVIEW_URL, headers=ALICE, json=_review_body())
+    assert forbidden.status_code == 403
+    error = forbidden.json()["error"]
+    assert error["code"] == "FORBIDDEN"
+    assert error["message"] == "Staff role required."
+    # ALICE 属 demo 租户：403 分支不写任何行。
+    assert _reviewed_count(app, "demo", HANDOFF) == 0
+
+
+def test_review_endpoint_window_minutes_bounds_enforced(
+    app: FastAPI, client: TestClient
+) -> None:
+    # 请求体 window_minutes 越界 → 422（pydantic Field ge=1/le=MAX），且不写行。
+    tenant = "iso-mon-rev-window"
+    too_small = client.post(
+        REVIEW_URL, headers=_staff(tenant), json=_review_body(window_minutes=0)
+    )
+    assert too_small.status_code == 422
+    too_big = client.post(
+        REVIEW_URL,
+        headers=_staff(tenant),
+        json=_review_body(window_minutes=WINDOW_MAX + 1),
+    )
+    assert too_big.status_code == 422
+    assert _reviewed_count(app, tenant, HANDOFF) == 0
+
+    # 边界内可写：最小 1、最大 WINDOW_MAX。
+    smallest = client.post(
+        REVIEW_URL, headers=_staff(tenant), json=_review_body(window_minutes=WINDOW_MIN)
+    )
+    assert smallest.status_code == 200
+    assert smallest.json()["window_minutes"] == WINDOW_MIN
+    largest = client.post(
+        REVIEW_URL,
+        headers=_staff(tenant),
+        json=_review_body(window_minutes=WINDOW_MAX),
+    )
+    assert largest.status_code == 200
+    assert _reviewed_count(app, tenant, HANDOFF) == 2
+
+
+def test_review_endpoint_rejects_bad_conclusion_and_unknown_signal(
+    app: FastAPI, client: TestClient
+) -> None:
+    # 结论越出封闭词表 / signal_id 不在阈值表：4xx 且绝不写行（§4-7 封闭词表校验，
+    # 绝不静默落库）。
+    tenant = "iso-mon-rev-bad"
+    bad_conclusion = client.post(
+        REVIEW_URL, headers=_staff(tenant), json=_review_body(conclusion="MAYBE")
+    )
+    assert 400 <= bad_conclusion.status_code < 500
+    assert bad_conclusion.json()["error"]["code"] == "VALIDATION_ERROR"
+    assert _reviewed_count(app, tenant, HANDOFF) == 0
+
+    bad_signal = client.post(
+        REVIEW_URL, headers=_staff(tenant), json=_review_body(signal_id="ghost_rate")
+    )
+    assert 400 <= bad_signal.status_code < 500
+    assert bad_signal.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_review_endpoint_row_carries_only_the_closed_detail_keys(
+    app: FastAPI, client: TestClient
+) -> None:
+    # reviewed 行契约（§5）：动作/资源/outcome 逐字对，detail 恰两键；混入含 ORD 与
+    # 客户文案的会话消息也不得进入复核行的 detail 文本。
+    tenant = "iso-mon-rev-detail"
+    with app.state.session_factory() as session:
+        _conv(session, tenant, "c1")
+        session.add(
+            ConversationMessage(
+                id=f"cm_{uuid.uuid4().hex[:16]}",
+                conversation_id="c1",
+                role="user",
+                intent="CHIT_CHAT",
+                content="我的订单 ORD-77881234 还没退款，太气人了",
+                created_at=utcnow(),
+            )
+        )
+        session.commit()
+
+    response = client.post(
+        REVIEW_URL,
+        headers=_staff(tenant),
+        json=_review_body(
+            signal_id=HANDOFF, conclusion="FALSE_POSITIVE", window_minutes=30
+        ),
+    )
+    assert response.status_code == 200
+
+    with app.state.session_factory() as session:
+        event = session.scalars(
+            select(AuditEvent).where(
+                AuditEvent.tenant_id == tenant,
+                AuditEvent.action == "monitor.signal.reviewed",
+            )
+        ).one()
+        assert event.actor_id == "op-1"
+        assert event.resource_type == "monitor_signal"
+        assert event.resource_id == HANDOFF
+        assert event.outcome == "FALSE_POSITIVE"
+        assert set(event.detail) == {"signal_id", "window_minutes"}
+        assert event.detail == {"signal_id": HANDOFF, "window_minutes": 30}
+        text = json.dumps(event.detail, ensure_ascii=False)
+        assert "ORD-" not in text
+        assert "还没退款" not in text
+
+
+def test_false_positive_rate_three_states_through_the_real_review_endpoint(
+    app: FastAPI, client: TestClient
+) -> None:
+    # §9-8 用真实复核端点产生 reviewed 行（而非直接种审计行）：0 复核 ⇒ null；
+    # 全 CONFIRMED ⇒ 0.0；含 FALSE_POSITIVE ⇒ round(f,4)——三态互异且可观察。
+    none_tenant = "iso-mon-rev-tri-none"
+    zero_tenant = "iso-mon-rev-tri-zero"
+    part_tenant = "iso-mon-rev-tri-part"
+
+    assert (
+        client.get(SIGNALS_URL, headers=_staff(none_tenant)).json()["false_positive_rate"]
+        is None
+    )
+
+    for _ in range(2):
+        assert (
+            client.post(
+                REVIEW_URL,
+                headers=_staff(zero_tenant),
+                json=_review_body(conclusion="CONFIRMED"),
+            ).status_code
+            == 200
+        )
+    zero_read = client.get(SIGNALS_URL, headers=_staff(zero_tenant)).json()[
+        "false_positive_rate"
+    ]
+    assert zero_read == 0.0
+    assert zero_read is not None  # 与 null 可分
+
+    assert (
+        client.post(
+            REVIEW_URL,
+            headers=_staff(part_tenant),
+            json=_review_body(conclusion="FALSE_POSITIVE"),
+        ).status_code
+        == 200
+    )
+    assert (
+        client.post(
+            REVIEW_URL,
+            headers=_staff(part_tenant),
+            json=_review_body(conclusion="CONFIRMED"),
+        ).status_code
+        == 200
+    )
+    part_read = client.get(SIGNALS_URL, headers=_staff(part_tenant)).json()[
+        "false_positive_rate"
+    ]
+    assert part_read == 0.5
+
+
+def test_review_endpoint_is_scoped_to_its_own_tenant(
+    app: FastAPI, client: TestClient
+) -> None:
+    # 租户边界：走真实端点，A 租户的复核不改 B 租户的误报率（§9-13 相关）。
+    mine = "iso-mon-rev-boundary-mine"
+    theirs = "iso-mon-rev-boundary-theirs"
+    assert (
+        client.post(
+            REVIEW_URL,
+            headers=_staff(mine),
+            json=_review_body(conclusion="FALSE_POSITIVE"),
+        ).status_code
+        == 200
+    )
+    assert (
+        client.get(SIGNALS_URL, headers=_staff(theirs)).json()["false_positive_rate"]
+        is None
+    )
+    assert (
+        client.get(SIGNALS_URL, headers=_staff(mine)).json()["false_positive_rate"] == 1.0
+    )
+
+
+# ---------- 15. 两个出口函数都不得直接触碰审计内部（§9 纪律，扩展到双路由函数）
+
+
+def test_both_monitor_route_functions_do_not_touch_audit_internals() -> None:
+    import app.api.v1.monitor as monitor_module
+
+    # 不弱化既有整模块断言：这里逐函数钉，覆盖读端点与复核端点两个路由。
+    for route in (monitor_module.list_signals, monitor_module.review_signal):
+        source = inspect.getsource(route)
+        for forbidden in (
+            "AuditRepository",
+            "AuditEvent",
+            "app.models.audit",
+            "app.repositories",
+        ):
+            assert forbidden not in source, (
+                f"出口层路由函数 {route.__name__} 不得触碰审计内部：{forbidden!r}"
+            )

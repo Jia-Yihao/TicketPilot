@@ -361,7 +361,7 @@ POST /api/v1/support/messages  ← 两条 web 入口共用同一道幂等闸
 
 ## API
 
-完整契约见 [docs/guide/接口说明.md](docs/guide/接口说明.md)。共 52 个操作（49 条路径，含 2 个健康检查）：
+完整契约见 [docs/guide/接口说明.md](docs/guide/接口说明.md)。共 53 个操作（50 条路径，含 2 个健康检查）：
 
 | 方法 | 路径 | 用途 |
 |---|---|---|

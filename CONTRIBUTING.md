@@ -26,7 +26,7 @@ uvicorn app.asgi:app --reload --port 8000
 
 ```bash
 ruff check app tests scripts evals alembic
-python -m mypy app                        # strict 模式，零错误（153 个文件）
+python -m mypy app                        # strict 模式，零错误（154 个文件）
 python -m pytest                          # 收集 1343 条、88 个测试文件（2026-10-28 实测 1074 passed / 6 skipped / 0 failed；当前读数见 `docs/spec/项目规格.md` §19.1；跳过的 6 条需要 PostgreSQL 或 Redis）
 python evals/run.py                       # 40/40 任务路径 Golden Set
 python evals/support_run.py               # 62/62 只读路径（含多轮澄清）

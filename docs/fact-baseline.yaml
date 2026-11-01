@@ -223,3 +223,47 @@ facts:
       - file: docs/records/智能体平台设想.md
         anchor: "**新能力的控制台页面"
         pattern: '(\d+) 个业务页面'
+
+  settings_field_count:
+    label: Settings 字段数
+    claims:
+      - file: docs/spec/项目规格.md
+        anchor: "环境变量对账"
+        pattern: '`Settings` \*\*(\d+)\*\* 个字段'
+        in_manual: true
+      - file: docs/records/智能体平台设想.md
+        anchor: "环境变量对账"
+        pattern: '`Settings` (\d+) 个字段'
+
+  env_example_assignment_count:
+    label: .env.example 有效赋值条数
+    claims:
+      - file: docs/spec/项目规格.md
+        anchor: "环境变量对账"
+        pattern: '`\.env\.example` \*\*(\d+)\*\* 条有效赋值'
+        in_manual: true
+      - file: docs/records/智能体平台设想.md
+        anchor: "环境变量对账"
+        pattern: '`\.env\.example` (\d+) 条有效赋值'
+
+  env_reverse_violation_count:
+    label: 环境变量反向违规条数
+    claims:
+      - file: docs/spec/项目规格.md
+        anchor: "环境变量对账"
+        pattern: '反向违规（赋值找不到字段）\*\*(\d+)\*\* 条'
+        in_manual: true
+      - file: docs/records/智能体平台设想.md
+        anchor: "环境变量对账"
+        pattern: '反向违规 (\d+) 条'
+
+  env_fields_without_assignment_count:
+    label: 无赋值的 Settings 字段数
+    claims:
+      - file: docs/spec/项目规格.md
+        anchor: "环境变量对账"
+        pattern: '正向缺口（字段无赋值）\*\*(\d+)\*\* 条'
+        in_manual: true
+      - file: docs/records/智能体平台设想.md
+        anchor: "环境变量对账"
+        pattern: '正向缺口 (\d+) 条'

@@ -47,7 +47,7 @@ DOC_GUARD = "tests/test_docs_consistency.py"
 
 # 副本要带的东西：守卫自己 + 它们现算事实时要读的子树。
 COPY_TREES = ("app", "tests", "docs", "evals", "alembic", "scripts")
-COPY_FILES = ("pyproject.toml", "README.md", "CONTRIBUTING.md")
+COPY_FILES = ("pyproject.toml", "README.md", "CONTRIBUTING.md", ".env.example")
 
 PROBE_LAYER = "guard_probe_layer"
 OBSERVABILITY_IMPORT = "from app.observability.redaction import digest, redact\n"
