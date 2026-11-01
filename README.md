@@ -10,7 +10,7 @@
 [![Support Set](https://img.shields.io/badge/Support%20Set-62%2F62-146b5c)](#怎么验证这些说法)
 [![License](https://img.shields.io/badge/License-MIT-0e1b2c)](LICENSE)
 
-**40/40 Golden · 62/62 Support · 收集 1343 条用例 · 49 条 API 路径 · 38 篇 ADR · 模型改变写路径路由 0/16**
+**40/40 Golden · 62/62 Support · 收集 1343 条用例 · 49 条 API 路径 · 39 篇 ADR · 模型改变写路径路由 0/16**
 
 覆盖商品咨询、政策问答、订单与物流查询、工单创建、退款申请与按金额分层的审批（未达阈值走自动执行，
 仍过同一套资格、台账与对账），外加一类受控的 Text-to-SQL 自助统计。主链路在本机就能跑完，不需要任何云 API。
@@ -373,6 +373,8 @@ POST /api/v1/support/messages  ← 两条 web 入口共用同一道幂等闸
 | `GET` | `/api/v1/handoffs` | 转人工待办队列（坐席） |
 | `POST` | `/api/v1/channels/{channel}/webhook` | 邮件 / 微信 / 企业微信入站回调（先验签） |
 | `GET` | `/api/v1/approvals` | 审批队列（按状态过滤、分页） |
+| `GET` | `/api/v1/monitor/signals` | 三类在线信号阈值读数（只读，含误报率） |
+| `POST` | `/api/v1/monitor/reviews` | 复核结论写入，供误报率读数 |
 
 错误统一使用信封结构，所有响应带 `X-Request-ID`；不返回堆栈、连接串、密钥或内部 Prompt：
 
