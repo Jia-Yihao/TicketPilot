@@ -33,7 +33,6 @@ REWRITE_MARKERS = ("已优化", "延迟可接受")
 # phrase must keep carrying it — a per-line check, not an existence check.
 DOC_QUALITATIVE_FILES = (
     "README.md",
-    "docs/下一步规划.md",
     "docs/guide/范围与边界.md",
     "docs/文档地图.md",
 )
@@ -44,7 +43,6 @@ DOC_QUALITATIVE_FILES = (
 # guard would stay green.
 DOC_CO_OCCURRENCE_BASELINE = {
     "README.md": 2,
-    "docs/下一步规划.md": 1,
     "docs/guide/范围与边界.md": 1,
     "docs/文档地图.md": 1,
 }

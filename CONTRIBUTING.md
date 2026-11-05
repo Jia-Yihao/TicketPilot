@@ -111,10 +111,10 @@ python -m pytest tests/test_architecture_guard.py tests/test_docs_consistency.py
   改了 `app/` 的分层依赖方向（新增一层目录、让下层反过来依赖上层、引入循环导入），
   **先改 `docs/architecture-guard.yaml` 并走 ADR**，再改代码；直接改代码会被守卫挡下。
   每条例外都必须写 `why`，守卫会检查「登记过的例外是否还在用」——删了违规代码却不清理例外，同样会红。
-- **文档一致性守卫**：`tests/test_docs_consistency.py`，清单源是 `docs/fact-baseline.yaml`。
-  清单里**不写数字**，只写「在哪个文件的哪一行」与「用哪个正则把数字抠出来」；
-  数字由代码现算。所以改完代码后，**改文档里的数字**就行，不需要碰清单。
-  改完 `docs/spec/项目规格.md` 还要跑 `make manual` 重生成说明书，否则说明书同步那条会红。
+- **文档一致性守卫**：`tests/test_docs_consistency.py`。
+  它核对两件事：OpenAPI 的每个 `(方法, 路径)` 在 `docs/guide/接口说明.md` 里都有落点；
+  `.env.example` 的每个赋值都能映射到一个 `Settings` 字段。
+  加了端点不写文档、或加了配置项不登记，守卫直接红。
 
 失败信息都带 `文件:行`，直接改那一行。
 
@@ -145,12 +145,10 @@ app/observability/ 链路追踪与脱敏
 app/resources/     随包分发的演示数据（政策 md、商品 catalog.json）
 web/src/           React 控制台；设计令牌集中在 styles.css 的 :root
 docs/guide/        使用与实现：架构、接口、边界、评测怎么跑
-docs/spec/         契约：项目规格与它渲染出的说明书
-docs/records/      历史记录：逐轮交付、时间点读数、平台化设想
-docs/下一步规划.md 唯一的规划文档：待办登记处（§0.2）+ 为什么这么排（§15）
-docs/文档地图.md    文档入口：四卷职责、每份文档读法、唯一事实源表
+docs/spec/         契约：项目规格
+docs/文档地图.md    文档入口：每份文档读法、唯一事实源表
 docs/adr/          架构决策记录
-docs/*.yaml        三份守卫清单：事实基线、代码锚点、架构依赖
+docs/architecture-guard.yaml  架构依赖守卫的规则源
 tests/             单元 / 集成 / 端到端 / 安全用例
 evals/             Golden Set、只读评测集、检索指标与回放脚本
 ```
@@ -188,18 +186,12 @@ evals/             Golden Set、只读评测集、检索指标与回放脚本
 
 编号规则：`docs/adr/` 当前 **39 篇**（ADR-001…ADR-011、ADR-013…ADR-040），
 **ADR-012 是预留号位**（策略外置与阈值灰度），**不回收、不重排**。
-即使中间号位空着，新 ADR 也要接在当前最大号之后；`docs/records/智能体平台设想.md` 的
-§9.4 ADR 索引、编号说明与文件计数要同步改。
+即使中间号位空着，新 ADR 也要接在当前最大号之后。
 
 ## 截图与文档
 
 控制台视觉有变化时请重拍受影响截图（`docs/assets/screenshots/`），
 README 只引用该目录下的图片。文档里的测试数量、端点数量必须与实际命令输出一致。
-
-`docs/spec/TicketPilot项目说明书.docx` 是 `docs/spec/项目规格.md` 的 Pandoc 渲染，**不要手工编辑**。
-改完 spec 后跑 `python scripts/build_manual.py`（或 `make manual`）：它渲染到临时文件、校验
-`U+FFFD` 计数 0、段落数与表格数非零、体积不低于 50 KB，全部通过才替换旧 docx，
-失败时旧文件原样保留并打印是哪一项没过。
 
 改动**会影响回复文本的生成路径**（个性化效果、输出护栏、模板措辞）时，除了
 `docs/guide/接口说明.md` 的响应示例，还要同步 `README.md` 的对照段、`docs/spec/项目规格.md` §6.7
@@ -216,8 +208,7 @@ README 只引用该目录下的图片。文档里的测试数量、端点数量�
 4. `docs/spec/项目规格.md`——§12.9 的写面块、§9.1 的接口表与 §19.1/§19.2 的实测读数、漂移表。
 5. `docs/guide/范围与边界.md` 的「不做」侧与 `docs/guide/评测说明.md` 的「诚实边界」侧——写路径进不了评测集，
    要写清楚原因，不要让读数看起来覆盖了它。
-6. `README.md`、`docs/records/智能体平台设想.md`（规模事实、Phase 表、ADR 索引、交付表）
-   与本文件的门禁读数。
+6. `README.md` 与本文件的门禁读数。
 7. 前端 `web/src/pages/ProactiveRules.tsx` + `web/src/api.ts` + `web/src/types.ts`，
    以及 `web/src/App.tsx` 的路由与角色门禁（`/rules` 只对 `support` / `admin` 可见；
    批准 / 驳回按钮只对 `approver` 且非提交人显示）。

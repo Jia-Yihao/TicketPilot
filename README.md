@@ -158,7 +158,7 @@ seed complete: {'orders': 4, 'policies_created': 5, 'rules': 3}
 - **候选集的生产接线（P8）**：问模型之前，服务端先由 `SupportAgent._scoped_order_state` 取订单状态，
   租户与用户双重过滤，查不到返回 `None`——不造假证据；`build_candidates` 据此收窄答案空间。
 
-以上三项的 ADR 正文与规格、说明书同步由收尾轮统一登记，本节只落当前写路径的事实。
+以上三项的 ADR 正文与规格同步由收尾轮统一登记，本节只落当前写路径的事实。
 
 ---
 
@@ -182,13 +182,13 @@ BM25 同分行的次序与重排候选集都会跟着变。修法只是按块 ID
 
 | 守卫 | 钉住什么 | 读数 |
 |---|---|---|
-| 文档一致性（`tests/test_docs_consistency.py` + `docs/fact-baseline.yaml`） | 14 项事实：OpenAPI 路径与操作数、迁移条数与 head、表数、文件数、用例数、ADR 篇数、评测集规模、控制台页面数；清单只写"去哪核对"，不写数字本身 | 9 条测试；失败时指出文件与行；说明书与规格的同步也在这里守 |
+| 文档一致性（`tests/test_docs_consistency.py`） | OpenAPI 的每个 `(方法, 路径)` 在 `docs/guide/接口说明.md` 里有落点，例外逐条登记；`.env.example` 的每个赋值都映射到 `Settings` 字段 | 5 条测试，失败时报出缺口与路径 |
 | 架构依赖（`tests/test_architecture_guard.py` + `docs/architecture-guard.yaml`） | `app/` 各层严格向下，越层必须登记理由，禁止边、模块级环、过期例外统统失败 | 8 条测试，报 `file:line` |
-| 负验证（`scripts/guard_negative_check.py`） | 守卫会不会失灵：在临时副本上造六处破坏（未声明层、反向依赖、禁止边、模块级环、登记腐化、文档数字漂移） | 六处全红，还原后全绿；约 33 秒 |
+| 负验证（`scripts/guard_negative_check.py`） | 守卫会不会失灵：在临时副本上造六处破坏（未声明层、反向依赖、禁止边、模块级环、登记腐化、配置项无对应字段） | 六处全红，还原后全绿；约 33 秒 |
 
 ### 反例
 
-- **守卫只守它认识的东西。** 文档守卫守 14 项数字与说明书的逐段同步，守不住散文里的过度声明；
+- **守卫只守它认识的东西。** 文档守卫守端点落点与配置项映射，守不住散文里的过度声明；
   架构守卫只看 `app/` 内部的导入，看不到运行时的依赖方向。
 - **数字不是结论。** `hybrid(hashing)` 那行用的是本机哈希替身，只证明多通道编排不破契约，
   不作为召回结论；17 个块的语料证明不了"切块策略优于固定窗口"；SQLite-only 的新增用例已经
@@ -446,8 +446,6 @@ python scripts/guard_negative_check.py  # 守卫的反向验证：6 处破坏全
 | 接口契约与错误码 | [docs/guide/接口说明.md](docs/guide/接口说明.md) |
 | 评测集、指标口径与基线 | [docs/guide/评测说明.md](docs/guide/评测说明.md) |
 | 威胁模型与 fail-closed 配置 | [docs/guide/安全说明.md](docs/guide/安全说明.md) |
-| 还剩什么没做、按什么顺序做 | [docs/下一步规划.md](docs/下一步规划.md) §0.2 |
-| 优化阶段的裁定与意图改造落地方案 | [docs/下一步规划.md](docs/下一步规划.md) §15 · [实施包](openspec/changes/add-intent-routing-data-driven-2026-10/proposal.md) |
 | 关键取舍（39 篇，含反例） | [docs/adr/](docs/adr/) |
 
 ## 项目结构
@@ -465,7 +463,7 @@ evals/             Golden 40、Support 62、分层检索集、澄清降级剧本
 scripts/           seed、demo、退款剧本、缺口探针、稠密索引、守卫负验证
 tests/             90 个测试文件；含架构依赖守卫与文档一致性守卫
 web/               React 19 + Vite 控制台（10 个业务页面）
-docs/              规格、ADR、评测口径、证据与说明书
+docs/              规格、ADR、评测口径与证据
 ```
 
 ## 参与贡献

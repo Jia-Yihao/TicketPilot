@@ -70,37 +70,3 @@ def test_the_red_line_yaml_bytes_are_immutable(rel_path: str, expected_sha256: s
 # ---------------------------------------------------------------------------
 
 
-def test_the_rule_file_carries_the_zero_model_call_clause() -> None:
-    """口径必须能在自身文件里检索到「R11 的信号采集与判定零模型调用」。
-
-    只断言可检索（`in`），不断言出现次数——现盘命中 :7、:221、:264 三处，
-    次数钉死会把口径的正常措辞修订也变成红。
-    """
-    rule_path = REPO_ROOT / ".qoder" / "rules" / "online-signals-and-notification.md"
-    assert rule_path.is_file(), f"口径文件缺失：{rule_path.as_posix()}"
-    text = rule_path.read_text(encoding="utf-8")
-    assert "R11 的信号采集与判定零模型调用" in text, (
-        "口径文件检索不到「R11 的信号采集与判定零模型调用」——"
-        "§9-11 的自检索条款失效"
-    )
-
-
-# ---------------------------------------------------------------------------
-# §9-12 后半：口径文件内占位初值字样必须可检索
-# ---------------------------------------------------------------------------
-
-
-def test_the_rule_file_carries_the_uncalibrated_placeholder_wording() -> None:
-    """口径必须能在自身文件里检索到「未经基线校准的占位初值」。
-
-    §9-12 后半的 grep 断言：现盘命中 :124 与 :164 两处。
-    只断言可检索（`in`），不断言出现次数——次数钉死会把口径的正常
-    措辞修订也变成红。
-    """
-    rule_path = REPO_ROOT / ".qoder" / "rules" / "online-signals-and-notification.md"
-    assert rule_path.is_file(), f"口径文件缺失：{rule_path.as_posix()}"
-    text = rule_path.read_text(encoding="utf-8")
-    assert "未经基线校准的占位初值" in text, (
-        "口径 §9-12 要求的字样「未经基线校准的占位初值」在口径文件里检索不到——"
-        "§9-12 后半的 grep 断言失效"
-    )

@@ -23,7 +23,7 @@
 明确禁止的依赖（api -> tools）                   test_forbidden_edges_do_not_exist
 模块级 import 环                               test_no_module_level_import_cycles
 登记腐化（代码里那条边没了，登记还在）             test_registered_exceptions_are_still_used
-文档数字漂移（README 的路径数改错）                test_documented_numbers_match_the_code
+配置项无对应字段（.env.example 加一行）  test_every_env_example_assignment_maps_to_a_settings_field
 ==========================================  ==========================================
 
 退出码 0 表示每一处破坏都被抓到、还原后全部恢复绿色。
@@ -174,17 +174,15 @@ def _break_stale_exception(workspace: pathlib.Path) -> None:
     )
 
 
-def _break_documented_number(workspace: pathlib.Path) -> None:
-    """把 README 里的路径数改错一个。"""
+def _break_env_assignment(workspace: pathlib.Path) -> None:
+    """在 .env.example 末尾加一行没有对应 Settings 字段的赋值。"""
 
-    readme = workspace / "README.md"
-    original = readme.read_text(encoding="utf-8")
-    match = re.search(r"共 \d+ 个操作（(\d+) 条路径", original)
-    if match is None:
-        raise SystemExit("README 里那句 OpenAPI 规模没找到，反向验证脚本需要跟着改")
-    wrong = str(int(match.group(1)) + 1)
-    readme.write_text(
-        original[: match.start(1)] + wrong + original[match.end(1) :],
+    env_file = workspace / ".env.example"
+    original = env_file.read_text(encoding="utf-8")
+    if not original.endswith("\n"):
+        original += "\n"
+    env_file.write_text(
+        original + "GUARD_NEGATIVE_CHECK_NOT_A_SETTING=1\n",
         encoding="utf-8",
         newline="",
     )
@@ -222,10 +220,10 @@ CASES = (
         break_code=_break_stale_exception,
     ),
     Case(
-        name="文档数字漂移（README 的路径数改错）",
+        name="配置项无对应 Settings 字段（.env.example 加一行）",
         guard=DOC_GUARD,
-        expected="test_documented_numbers_match_the_code",
-        break_code=_break_documented_number,
+        expected="test_every_env_example_assignment_maps_to_a_settings_field",
+        break_code=_break_env_assignment,
     ),
 )
 
