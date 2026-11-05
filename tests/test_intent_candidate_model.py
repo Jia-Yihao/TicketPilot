@@ -247,7 +247,7 @@ def test_the_switch_off_offers_no_candidates_and_still_refuses_a_ticket_reading(
 def test_the_switch_off_still_refuses_an_intent_outside_the_old_literals() -> None:
     """输出类型放宽到 str 之后，字面量之外的读数在开关关闭时也进不了路由。
 
-    本轮唯一承认的差异：旧行为里这句话会让 pydantic 输出校验失败，落成
+    本次唯一承认的差异：旧行为里这句话会让 pydantic 输出校验失败，落成
     ``rules_fallback``；现在模型确实答了，只是服务端不采纳，路由结果同为规则读数。
     """
     agent = RecordingAgent(intent="PRODUCT_QUERY")

@@ -1,7 +1,7 @@
 """Inbound availability of every channel: four values, one source of truth.
 
-Spec: openspec/changes/add-channel-availability-reason/specs/channel-inbound/spec.md
-Plan: openspec/changes/add-channel-availability-reason/plan.md (tasks 1-4)
+Each inbound channel declares one of four availability values, and the reason enum
+must stay in step with it: a channel that cannot be reached has to say why.
 """
 
 from __future__ import annotations

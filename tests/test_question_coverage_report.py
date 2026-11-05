@@ -1,7 +1,6 @@
 """R10 T5：把 ``evals/question_coverage.py`` 的关键判据钉住的测试侧用例。
 
-口径 `app/agent/counter_question.yaml`（T5 契约）与
-``docs/下一步规划.md`` :73 的「T5 前置裁定」：
+口径是 `app/agent/counter_question.yaml` 与前置裁定：
 
 * 算术本体与 ``coverage_from_ledger`` 逐字同一（本文件只 import，不留第二套真相）；
 * 纯离线、零模型调用、零写库——「无机器守护」的只读边界在这里机械化（判据 4）；

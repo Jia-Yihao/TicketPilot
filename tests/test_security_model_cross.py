@@ -80,7 +80,7 @@ def test_injection_gap_reaches_a_human_approval_not_money(tmp_path: Path) -> Non
 
 def test_question_with_a_guard_hit_moves_no_money(tmp_path: Path) -> None:
     # 成本断言按 `app/agent/counter_question.yaml` 登记的代价更新：
-    # 问句门新增模型调用（F-1 后满足触发条件的问句轮 1 次调用，本轮实测
+    # 问句门新增模型调用（F-1 后满足触发条件的问句轮 1 次调用，本次实测
     # injection-question 与 clean-question 的 model_calls 均为 1）。
     # 本用例守护的是护栏命中不动钱（task_status/categories），不是零调用。
     result, _agent = _cross(tmp_path)

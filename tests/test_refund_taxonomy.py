@@ -999,7 +999,7 @@ def test_a_topic_change_turn_clears_the_carried_reason_for_the_next_refund(
     assert second.status_code == 200, second.text
     second_body = second.json()
     assert second_body["clarification"] is None
-    # 不变量本体（口径 §5.6.1.1 本轮订正）：插问非退款回合即清。
+    # 不变量本体（口径 §5.6.1.1 订正）：插问非退款回合即清。
     assert second_body["slots"]["refund_reason"] is None
     assert second_body["slots"]["pending_intent"] is None
 

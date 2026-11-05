@@ -12,9 +12,10 @@ command with its own post-checks:
   silently truncated render fails loudly.
 
 It also writes a build record (``docs/spec/manual-build.json``) holding the source
-digest and the Pandoc version.  ``tests/test_docs_consistency.py`` uses that
-record to tell "the manual is stale" apart from "a different Pandoc renders
-slightly differently" -- without the record the two cases look identical.
+digest and the Pandoc version, so a later run can tell "the manual is stale" apart
+from "a different Pandoc renders slightly differently" -- without the record the
+two cases look identical.  Both the manual and the record are local build
+artifacts and are not tracked.
 
 It prints the measurements it checked.  Exit code 0 means all checks passed;
 anything else means the output was not replaced.

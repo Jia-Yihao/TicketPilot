@@ -12,7 +12,7 @@
 - §4.1 审批人除既有 ``has_role("approver")`` 外，还须持有该档 ``roles`` 中至少一个；
   默认档位（roles == ["approver"]）下与今天等价。
 
-本轮**不做**阈值生效与自动执行路径（B3-ii）。
+本次**不做**阈值生效与自动执行路径（B3-ii）。
 """
 
 from __future__ import annotations
@@ -336,7 +336,7 @@ def test_the_same_role_set_written_in_another_order_keeps_the_digest(
 ) -> None:
     """YAML 里同一组角色换书写顺序：装载期按字典序规范化，摘要必须不变（§2.3 校验 5）。
 
-    本轮加载期只允许 approver（§2.3 校验 5），单元素集合无「书写顺序」可言；
+    本次加载期只允许 approver（§2.3 校验 5），单元素集合无「书写顺序」可言；
     规范化机制用两元素集合钉住：临时放开允许角色，两份表只差角色顺序。
     """
 
@@ -470,7 +470,7 @@ def test_an_amount_above_every_tier_falls_back_to_the_last_tier_and_records_it(
 def test_default_tier_keeps_the_approver_gate_equivalent_to_today(
     client: TestClient,
 ) -> None:
-    """默认档位 roles == ["approver"]：角色判定与本轮之前逐字等价。"""
+    """默认档位 roles == ["approver"]：角色判定与改动前逐字等价。"""
 
     created = _request_refund(client)
     denied = _approve(

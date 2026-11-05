@@ -1,58 +1,34 @@
-"""文档一致性守卫：文档里写的数字，必须等于代码现算出来的数字。
+"""文档一致性守卫：文档与代码的对应关系必须成立。
 
-TicketPilot 的叙事是「诚实标注」——每个数字都要能跑出来。
-但只要数字是手抄进 Markdown 的，它迟早会和代码分家：
-接口加了、迁移加了、表加了，文档里的「45 个操作 / 13 条迁移 / 24 张表」不会自己变。
+TicketPilot 的叙事是「诚实标注」——每个对外承诺都要能在仓库里找到落点。
+手抄的清单迟早会和代码分家，所以这里的判据只看**对应关系**，不保管数字：
 
-这个守卫把那件事变成测试：
+* 每个 OpenAPI 操作在接口说明里都有自己那一行，例外必须逐条写明理由；
+* `.env.example` 的每条赋值都能落到一个 `Settings` 字段，写错就说明配置静默失效；
+* 解析口径本身也被钉住：注释行里的 `NAME=` 不算赋值，坏行必须显式失败。
 
-* `docs/fact-baseline.yaml` 只写「哪个文件的哪一行有个数字」和「用哪个正则把它抠出来」，
-  **不写数字本身**——数字的唯一定义在代码里。
-* 守卫现算代码里的事实（OpenAPI 规模、迁移链、表数、文件数、收集到的用例数……），
-  再和文档里写的值逐条比。
-* 对不上就失败，并指出是哪个文件的哪一行。
-
-另外还守两件和数字相关的事：
-
-* 说明书（docx）是 `docs/spec/项目规格.md` 的渲染结果，两者必须同步；
-* 说明书本身要干净：没有 U+FFFD、没有私有区字符、没有退化成 `<w:sym>` 的符号。
+配对与归一都是纯函数，可以单独测；真实文档与真实 schema 的比对在下面各自的用例里。
 """
 
 from __future__ import annotations
 
-import ast
 import hashlib
-import json
 import pathlib
 import re
-import shutil
-import subprocess
-import sys
 import tempfile
-import xml.etree.ElementTree as ET
-import zipfile
-from collections.abc import Callable
-from dataclasses import dataclass
 from typing import Any
 
 import pytest
-import yaml
 
 from scripts.build_manual import source_digest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-MANIFEST_FILE = ROOT / "docs" / "fact-baseline.yaml"
-SPEC_FILE = ROOT / "docs" / "spec" / "项目规格.md"
-MANUAL_FILE = ROOT / "docs" / "spec" / "TicketPilot项目说明书.docx"
-RECORD_FILE = ROOT / "docs" / "spec" / "manual-build.json"
 
-WORD_NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
-PRIVATE_USE = re.compile(r"[\ue000-\uf8ff\U000f0000-\U0010ffff]")
 HTTP_VERBS = {"get", "post", "put", "patch", "delete", "head", "options", "trace"}
 
 
 # --------------------------------------------------------------------------
-# 事实的现算实现。数字只在这里出现一次。
+# 从代码里现算的事实。文档只引用结论，数字不手抄。
 # --------------------------------------------------------------------------
 
 
@@ -68,140 +44,9 @@ def _openapi_schema() -> dict[str, Any]:
     return application.openapi()
 
 
-def _fact_openapi_paths() -> int:
-    return len(_openapi_schema().get("paths", {}))
-
-
-def _fact_openapi_operations() -> int:
-    schema = _openapi_schema()
-    operations = 0
-    for methods in schema.get("paths", {}).values():
-        operations += sum(1 for verb in methods if verb.lower() in HTTP_VERBS)
-    return operations
-
-
-def _alembic_revisions() -> tuple[list[str], set[str]]:
-    revisions: list[str] = []
-    parents: set[str] = set()
-    for path in sorted((ROOT / "alembic" / "versions").glob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in tree.body:
-            targets: list[ast.expr] = []
-            value: ast.expr | None = None
-            if isinstance(node, ast.Assign):
-                targets = list(node.targets)
-                value = node.value
-            elif isinstance(node, ast.AnnAssign) and node.value is not None:
-                targets = [node.target]
-                value = node.value
-            for target in targets:
-                if not isinstance(target, ast.Name):
-                    continue
-                if target.id not in {"revision", "down_revision"}:
-                    continue
-                if not isinstance(value, ast.Constant) or not isinstance(value.value, str):
-                    continue
-                if target.id == "revision":
-                    revisions.append(value.value)
-                else:
-                    parents.add(value.value)
-    return revisions, parents
-
-
-def _fact_alembic_revisions() -> int:
-    revisions, _ = _alembic_revisions()
-    return len(revisions)
-
-
-def _fact_alembic_head() -> str:
-    revisions, parents = _alembic_revisions()
-    heads = [revision for revision in revisions if revision not in parents]
-    assert len(heads) == 1, f"迁移链的 head 不唯一：{heads}"
-    return heads[0]
-
-
-def _fact_sql_tables() -> int:
-    import app.models  # noqa: F401  (注册 SQLAlchemy metadata)
-    from app.db.base import Base
-
-    return len(Base.metadata.tables)
-
-
-def _python_files(directory: pathlib.Path) -> int:
-    return sum(1 for path in directory.rglob("*.py") if "__pycache__" not in path.parts)
-
-
-def _fact_app_py_files() -> int:
-    return _python_files(ROOT / "app")
-
-
-def _fact_mypy_files() -> int:
-    # `python -m mypy app` 检查的就是 app/ 下的这些文件。
-    return _python_files(ROOT / "app")
-
-
-def _fact_test_py_files() -> int:
-    return _python_files(ROOT / "tests")
-
-
-def _fact_test_collected() -> int:
-    completed = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "pytest",
-            "--collect-only",
-            "-q",
-            "-o",
-            "addopts=",
-            "-p",
-            "no:cacheprovider",
-        ],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
-    if completed.returncode != 0:
-        raise AssertionError(
-            "pytest --collect-only 失败，无法现算收集到的用例数：\n"
-            + completed.stdout[-2000:]
-            + completed.stderr[-2000:]
-        )
-    match = re.search(r"(\d+) tests? collected", completed.stdout)
-    assert match, f"没能从 pytest 输出里读出收集到的用例数：\n{completed.stdout[-2000:]}"
-    return int(match.group(1))
-
-
-def _fact_adr_count() -> int:
-    return len(list((ROOT / "docs" / "adr").glob("ADR-*.md")))
-
-
-def _dataset_cases(name: str) -> int:
-    payload = json.loads((ROOT / "evals" / name).read_text(encoding="utf-8"))
-    return len(payload["cases"])
-
-
-def _fact_golden_cases() -> int:
-    return _dataset_cases("golden_set.json")
-
-
-def _fact_support_cases() -> int:
-    return _dataset_cases("support_set.json")
-
-
-def _fact_offline_cases() -> int:
-    return _fact_golden_cases() + _fact_support_cases()
-
-
-def _fact_console_pages() -> int:
-    return len(list((ROOT / "web" / "src" / "pages").glob("*.tsx")))
-
-
 ENV_EXAMPLE_FILE = ROOT / ".env.example"
 
-# 环境变量对账的口径（本轮把它从手抄数字变成现算数字）：
+# 环境变量对账的口径（把原先的手抄数字换成现算）：
 # - 「有效赋值」= 去掉缩进后非空、不以 `#` 开头、且形如 `NAME=` 的行；
 #   注释行里出现的 `NAME=`（如 `# RATE_LIMIT_STORE=redis`、`#   AGENT_MODEL=...`）
 #   一律不计入——它们是示例，不是模板里的实际赋值。
@@ -249,191 +94,6 @@ def _env_reverse_violations() -> set[str]:
     """`.env.example` 里赋了值却没有对应 `Settings` 字段的名单（必须为空）。"""
 
     return _env_example_assignments() - _settings_field_names()
-
-
-def _fact_settings_field_count() -> int:
-    return len(_settings_field_names())
-
-
-def _fact_env_example_assignment_count() -> int:
-    return len(_env_example_assignments())
-
-
-def _fact_env_reverse_violation_count() -> int:
-    return len(_env_reverse_violations())
-
-
-def _fact_env_fields_without_assignment_count() -> int:
-    # 正向缺口：字段存在但模板没给赋值。这是既有状态读数，不做门禁。
-    return len(_settings_field_names() - _env_example_assignments())
-
-
-COMPUTERS: dict[str, Callable[[], object]] = {
-    "openapi_paths": _fact_openapi_paths,
-    "openapi_operations": _fact_openapi_operations,
-    "alembic_revisions": _fact_alembic_revisions,
-    "alembic_head": _fact_alembic_head,
-    "sql_tables": _fact_sql_tables,
-    "app_py_files": _fact_app_py_files,
-    "mypy_files": _fact_mypy_files,
-    "test_py_files": _fact_test_py_files,
-    "test_collected": _fact_test_collected,
-    "adr_count": _fact_adr_count,
-    "golden_cases": _fact_golden_cases,
-    "support_cases": _fact_support_cases,
-    "offline_cases": _fact_offline_cases,
-    "console_pages": _fact_console_pages,
-    "settings_field_count": _fact_settings_field_count,
-    "env_example_assignment_count": _fact_env_example_assignment_count,
-    "env_reverse_violation_count": _fact_env_reverse_violation_count,
-    "env_fields_without_assignment_count": _fact_env_fields_without_assignment_count,
-}
-
-
-# --------------------------------------------------------------------------
-# 清单
-# --------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class Claim:
-    file: str
-    anchor: str
-    pattern: str
-    group: int
-    in_manual: bool
-
-
-@dataclass(frozen=True)
-class Fact:
-    name: str
-    label: str
-    claims: tuple[Claim, ...]
-
-
-def _load_manifest() -> dict[str, Fact]:
-    raw = yaml.safe_load(MANIFEST_FILE.read_text(encoding="utf-8"))
-    assert isinstance(raw, dict), "事实清单必须是一份映射"
-    facts: dict[str, Fact] = {}
-    for name, body in raw["facts"].items():
-        claims = tuple(
-            Claim(
-                file=str(item["file"]),
-                anchor=str(item["anchor"]),
-                pattern=str(item["pattern"]),
-                group=int(item.get("group", 1)),
-                in_manual=bool(item.get("in_manual", False)),
-            )
-            for item in body["claims"]
-        )
-        facts[str(name)] = Fact(
-            name=str(name),
-            label=str(body.get("label", name)),
-            claims=claims,
-        )
-    return facts
-
-
-# --------------------------------------------------------------------------
-# 取出文档里的数字
-# --------------------------------------------------------------------------
-
-
-def _claim_line(claim: Claim) -> tuple[int, str]:
-    path = ROOT / claim.file
-    assert path.is_file(), f"事实清单指向的文件不存在：{claim.file}"
-    lines = path.read_text(encoding="utf-8").splitlines()
-    hits = [(index + 1, line) for index, line in enumerate(lines) if claim.anchor in line]
-    assert len(hits) == 1, (
-        f"{claim.file} 里的锚点 {claim.anchor!r} 命中 {len(hits)} 行，"
-        "必须恰好命中一行（锚点要能唯一定位这句话）"
-    )
-    return hits[0]
-
-
-def _claim_value(claim: Claim) -> str:
-    number, line = _claim_line(claim)
-    match = re.search(claim.pattern, line)
-    assert match, (
-        f"{claim.file}:{number} 上找不到 {claim.pattern!r} 对应的数字：{line.strip()!r}"
-    )
-    assert claim.group <= len(match.groups()), (
-        f"{claim.file}:{number} 的正则只有 {len(match.groups())} 个捕获组，"
-        f"但清单里写的是第 {claim.group} 组"
-    )
-    return match.group(claim.group)
-
-
-def _strip_markdown(text: str) -> str:
-    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
-    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
-    text = re.sub(r"`([^`]*)`", r"\1", text)
-    text = text.replace("**", "").replace("`", "")
-    return text.strip()
-
-
-def _rendered_pieces(line: str) -> list[str]:
-    """一行 markdown 在说明书里应该出现的文本片段。"""
-
-    text = line.strip()
-    if text.startswith("|"):
-        cells = [cell.strip() for cell in text.strip("|").split("|")]
-        return [piece for piece in (_strip_markdown(cell) for cell in cells) if piece]
-    text = re.sub(r"^>\s*", "", text)
-    text = re.sub(r"^[-*+]\s+", "", text)
-    text = re.sub(r"^\d+\.\s+", "", text)
-    piece = _strip_markdown(text)
-    return [piece] if piece else []
-
-
-# --------------------------------------------------------------------------
-# 说明书（docx）
-# --------------------------------------------------------------------------
-
-
-def _docx_paragraphs(path: pathlib.Path) -> list[str]:
-    with zipfile.ZipFile(path) as archive:
-        document = archive.read("word/document.xml")
-    root = ET.fromstring(document)
-    paragraphs: list[str] = []
-    for paragraph in root.iter(f"{WORD_NS}p"):
-        text = "".join(node.text or "" for node in paragraph.iter(f"{WORD_NS}t"))
-        paragraphs.append(text)
-    return paragraphs
-
-
-def _docx_xml_parts(path: pathlib.Path) -> dict[str, str]:
-    parts: dict[str, str] = {}
-    with zipfile.ZipFile(path) as archive:
-        for name in archive.namelist():
-            if name.endswith(".xml"):
-                parts[name] = archive.read(name).decode("utf-8")
-    return parts
-
-
-def _pandoc() -> str | None:
-    return shutil.which("pandoc")
-
-
-def _pandoc_version(pandoc: str) -> str:
-    completed = subprocess.run(
-        [pandoc, "--version"], capture_output=True, text=True, check=False
-    )
-    first = (completed.stdout or completed.stderr).splitlines()
-    if not first:
-        return "unknown"
-    parts = first[0].split()
-    return parts[1] if len(parts) > 1 else first[0].strip()
-
-
-def _build_record() -> dict[str, Any]:
-    assert RECORD_FILE.is_file(), (
-        f"缺少 {RECORD_FILE.relative_to(ROOT)}——"
-        "说明书构建记录不在库里。跑 python scripts/build_manual.py（或 make manual）生成。"
-    )
-    payload = json.loads(RECORD_FILE.read_text(encoding="utf-8"))
-    assert isinstance(payload, dict), "说明书构建记录必须是一份 JSON 映射"
-    return payload
 
 
 # --------------------------------------------------------------------------

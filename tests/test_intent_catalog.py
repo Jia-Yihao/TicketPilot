@@ -263,7 +263,7 @@ def test_the_catalog_row_replaces_the_agent_branch(
 
     # F-9 阶段 B（验收 A3）：判定源在 YAML，不在代码。注入一行 `write_path: true`
     # 的假意图，catalog 立刻读到它；同一句话在生产目录里读不出来。跑完即弃，
-    # 不进 intents.yaml（本轮不扩目录，用户已裁定）。
+    # 不进 intents.yaml（本次不扩目录，已裁定）。
     faked = tmp_path / "intents_fake.yaml"
     faked.write_text(
         _catalog_yaml(

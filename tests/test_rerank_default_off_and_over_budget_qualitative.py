@@ -5,9 +5,8 @@ Two facts that used to be prose-only are now assertions:
 1. Rerank stays opt-in: the declared *class* default in ``Settings`` and the
    shipped environment template both say "off".
 2. The offline verdict literal ``OVER BUDGET`` and the documented qualitative
-   statement "OVER BUDGET + 默认关闭" (the closed four-file list of
-   `evals/`: README.md / docs/下一步规划.md /
-   docs/guide/范围与边界.md / docs/文档地图.md) are still there line by line,
+   statement "OVER BUDGET + 默认关闭" (the closed three-file list of
+   README.md / docs/guide/范围与边界.md / docs/文档地图.md) are still there line by line,
    and no line that mentions ``OVER BUDGET`` was rewritten into
    "已优化" / "延迟可接受".
 

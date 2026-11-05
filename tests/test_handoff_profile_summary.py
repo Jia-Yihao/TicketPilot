@@ -45,7 +45,7 @@ SUMMARY = "上周问过发票抬头"
 SOURCE = "customer_profiles.history_summary"
 LIMIT = PolicyEngine.from_settings(Settings(environment="test")).escalation.digest_max_chars
 
-# 移交包本轮之前就有的键：一个都不许动。
+# 移交包改动前就有的键：一个都不许动。
 EXISTING_BUNDLE_KEYS = frozenset(
     {
         "conversation_id",

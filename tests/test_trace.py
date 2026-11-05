@@ -412,7 +412,7 @@ def _span_forest(spans: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for root in roots:
         assert root["parent_span_id"] is None
         assert root["name"] in ROOT_NAMES
-        # §2.3.8：根的属性本轮恒为空字典（仍需走脱敏路径，由 _record 保证）。
+        # §2.3.8：根的属性恒为空字典（仍需走脱敏路径，由 _record 保证）。
         assert root["attributes"] == {}
     for span in spans:
         if span["kind"] == "root":

@@ -80,21 +80,21 @@ CI 会跑 ruff、mypy、后端测试、Golden Set、Alembic 迁移与 `alembic c
 
 ### 门禁口径对照（命令 × 出现在哪几处）
 
-口径的权威定义是仓库根 `agents.md` 的「提交前必须跑」三条；本地 Makefile、CI 与本文件三处只向它对齐
+口径的权威定义是本文件「提交前必须跑」三条；本地 Makefile 与 CI 只向它对齐
 「说法」，不合并命令。三处之间的差异全部点名：**本地必跑 = 三条 / CI 额外 = evals 家族 /
 显式命令 = `lint-bench`、双库 diff**——不存在第四套说法。
 
 | 命令 | 本地 Makefile | CI（`.github/workflows/ci.yml` 主 job） | 文档（本文件） | 差异与一句话理由 |
 |---|---|---|---|---|
-| `python -m pytest -q` | `make test` | `- run: python -m pytest -q` | 「提交前必须通过」清单 | 本轮把 CI 与本文件原先的裸 `python -m pytest` 对齐到权威串：`-q` 只改输出详略，不改通过/失败判定，也不改收集/passed 读数 |
+| `python -m pytest -q` | `make test` | `- run: python -m pytest -q` | 「提交前必须通过」清单 | 本次把 CI 与本文件原先的裸 `python -m pytest` 对齐到权威串：`-q` 只改输出详略，不改通过/失败判定，也不改收集/passed 读数 |
 | `ruff check app tests scripts evals alembic` | `make lint` | 同串步骤 | 同串清单行 | 三处原本就逐字相同、保持不动；`bench` 面的 lint 走下方显式命令 `lint-bench`，不改这串主命令行（`evals/`） |
-| `python -m mypy app` | `make mypy`（本轮补上的等价目标） | 同串步骤 | 同串清单行 | 原先三处缺 Makefile 一环，本轮补目标使三处逐字相同；范围仍只覆盖 `app`、不扩面（同规则 §2.3） |
-| evals 家族：`python evals/run.py`、`python evals/support_run.py`（含 analytics/memory 两个 `--dataset … --partial` 变体）、`python evals/retrieval_metrics.py --channels bm25,hybrid`、`python scripts/build_intent_set.py --check`、`python evals/intent_metrics.py --enforce`、`python evals/replay.py --self-check`、`python evals/answer_metrics.py --enforce` | 拆在 `eval`、`eval-support`、`eval-dimension`、`eval-memory`、`eval-intent`、`eval-retrieval`、`eval-replay`、`eval-answer` 各目标，按需单跑 | 主 job 在三条之外额外执行这几步 | 上方门禁清单内逐条列出（本地附加检查） | **CI 额外**：权威三条不含 evals；CI 多跑这几步是额外门禁，本轮既不并入三条、也不从 CI 删除 |
-| `lint-bench`（`ruff check bench`） | **缺目标——缺口登记**，本轮不自行新增 | 不跑 | 不列 | **显式命令**：`bench/` 建立时按 `evals/` 走独立 Makefile 目标 + CI 独立步骤；三处目前都没有这条命令的说法，属已登记待落地项 |
+| `python -m mypy app` | `make mypy`（本次补上的等价目标） | 同串步骤 | 同串清单行 | 原先三处缺 Makefile 一环，本次补目标使三处逐字相同；范围仍只覆盖 `app`、不扩面（同规则 §2.3） |
+| evals 家族：`python evals/run.py`、`python evals/support_run.py`（含 analytics/memory 两个 `--dataset … --partial` 变体）、`python evals/retrieval_metrics.py --channels bm25,hybrid`、`python scripts/build_intent_set.py --check`、`python evals/intent_metrics.py --enforce`、`python evals/replay.py --self-check`、`python evals/answer_metrics.py --enforce` | 拆在 `eval`、`eval-support`、`eval-dimension`、`eval-memory`、`eval-intent`、`eval-retrieval`、`eval-replay`、`eval-answer` 各目标，按需单跑 | 主 job 在三条之外额外执行这几步 | 上方门禁清单内逐条列出（本地附加检查） | **CI 额外**：权威三条不含 evals；CI 多跑这几步是额外门禁，本次既不并入三条、也不从 CI 删除 |
+| `lint-bench`（`ruff check bench`） | **缺目标——缺口登记**，本次不自行新增 | 不跑 | 不列 | **显式命令**：`bench/` 建立时按 `evals/` 走独立 Makefile 目标 + CI 独立步骤；三处目前都没有这条命令的说法，属已登记待落地项 |
 | 双库 diff 与回放自检：`python evals/retrieval_metrics.py --database-url <PG>` 与默认 SQLite 各跑一遍对照同读数；`python evals/replay.py --self-check`（通过读数 `REPLAY DIFF EMPTY`） | `make eval-replay` 覆盖回放自检；双库对照无目标（手工显式命令） | 主 job 只跑 `python evals/replay.py --self-check`，不跑双库对照 | 上方清单含 `python evals/replay.py --self-check` 一行 | **显式命令**：这是 `evals/` 点名的两条回归判据，不是提交前必跑的第四条常驻命令，故不并入三条 |
 | 涉及迁移时：`python -m alembic check` | `make migrate`（只 `alembic upgrade head`，不含 `check`） | 主 job 收尾两步 `upgrade head` + `check`（SQLite），另有 `postgres-migration` job 只验 PG 迁移 | 清单含 `python -m alembic check` 一行 | 权威口径写的是「涉及迁移时加」，属条件性附加而非三条常驻，差异点名保留、不强行拉平 |
 
-> 说明：表内「本轮」指门禁口径归一这一轮；除标注「本轮补/对齐」的两行外，各命令串此前已逐字一致。
+> 说明：表内「本次」指门禁口径归一这一次；除标注「本次补/对齐」的两行外，各命令串此前已逐字一致。
 
 ## 两个守卫：架构与文档
 
@@ -119,7 +119,7 @@ python -m pytest tests/test_architecture_guard.py tests/test_docs_consistency.py
 失败信息都带 `文件:行`，直接改那一行。
 
 守卫自己也有反例：`scripts/guard_negative_check.py` 在临时副本上造六处破坏（未声明的层、
-反向依赖、`forbidden` 边、模块级环、登记腐化、文档数字漂移），逐处断言对应的用例会红，
+反向依赖、`forbidden` 边、模块级环、登记腐化、配置项无对应字段），逐处断言对应的用例会红，
 还原后断言会绿——它不碰仓库里的任何文件。改完守卫本身（规则或用例）之后跑一遍：
 
 ```bash
