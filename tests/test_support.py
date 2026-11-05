@@ -292,8 +292,7 @@ def test_the_two_kinds_of_empty_retrieval_get_different_replies(
     """The action layer keeps "no such clause" and "not this phrasing" apart.
 
     Customer-visible text is not where this shows: the ``no_evidence`` signal
-    replaces the draft (registered cost, ``.qoder/rules/score-kinds-and-scales.md``
-    §2.4). The draft and the trace are.
+    replaces the draft (registered cost, `docs/guide/评测说明.md`). The draft and the trace are.
     """
     with _contexts(app) as contexts:
         library = policy_question(

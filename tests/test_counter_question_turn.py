@@ -1,6 +1,6 @@
 """F-1 T4 钉桩：问句门的「可以问，但只换来一次反问」。
 
-口径 ``.qoder/rules/clarify-counter-question.md``：§3 触发、§4 选项契约、
+口径 `app/agent/counter_question.yaml`：§3 触发、§4 选项契约、
 §5.1 单轮上限、§6.1 反问 Draft 形态、§2.2 四计数键不落盘。完整矩阵属 T6
 （任务单 #29），这里只钉 T4 改动面必须成立的六条最小事实：
 

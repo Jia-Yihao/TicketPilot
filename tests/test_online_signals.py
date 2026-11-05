@@ -1,6 +1,6 @@
 """在线信号阈值基线 YAML 与 loader 的加载、校验与抄本一致性测试。
 
-口径来源：`.qoder/rules/online-signals-and-notification.md`
+口径来源：`app/core/online_signals.yaml`
 - §3 键结构与约束 1–4（加载期封闭键校验，违反即 `ValueError`，不静默跳过）
 - §3-7 抄本一致性（现读 `evals/baseline/business.json`，文件缺失 / 键缺失 /
   值不符一律失败）
@@ -397,7 +397,7 @@ def test_calibrated_false_with_a_note_missing_the_marker_is_rejected(tmp_path: P
 
 
 # ---------------------------------------------------------------------------
-# §9-2 真 YAML 逐键断言（字面对象是 `.qoder/rules/online-signals-and-notification.md` §3）
+# §9-2 真 YAML 逐键断言（字面对象是 `app/core/online_signals.yaml`）
 # ---------------------------------------------------------------------------
 
 _EXPECTED_ACTION_SUGGESTIONS: dict[str, str] = {

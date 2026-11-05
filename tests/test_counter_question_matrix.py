@@ -1,6 +1,6 @@
 """F1-T6 完整矩阵：把 F-1 验收口径 §12 的三处矩阵缺口钉成用例。
 
-口径 ``.qoder/rules/clarify-counter-question.md`` §12。T1–T5 各步已钉住
+口径 `app/agent/counter_question.yaml`。T1–T5 各步已钉住
 本步改动面必须成立的最小事实（收集数与归属见各文件 docstring），本文件
 只补矩阵里此前没有实物钉住的三格：
 

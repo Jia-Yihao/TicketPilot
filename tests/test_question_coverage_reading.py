@@ -1,6 +1,6 @@
 """R10 T4：把口径 §2「T4 前置裁定」的恒等式钉成可执行断言。
 
-口径 ``.qoder/rules/question-gate-coverage-and-channel-intent.md`` §2「T4 前置裁定」：
+口径 `app/agent/counter_question.yaml`「T4 前置裁定」：
 
     同一会话的 ``chat`` 行数 = 成反问数 + 付费未成句数 + consult 带 ``model`` 键数
     ⟹ 分母 = chat 行数 − consult 带 ``model`` 键数

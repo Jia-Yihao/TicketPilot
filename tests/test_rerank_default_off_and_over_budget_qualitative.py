@@ -1,4 +1,4 @@
-"""Guard pinned for `.qoder/rules/benchmark-harness.md` §5.1 (禁区 1) and §7 第 8 条.
+"""Guard pinned for `evals/` (禁区 1) and §7 第 8 条.
 
 Two facts that used to be prose-only are now assertions:
 
@@ -6,7 +6,7 @@ Two facts that used to be prose-only are now assertions:
    shipped environment template both say "off".
 2. The offline verdict literal ``OVER BUDGET`` and the documented qualitative
    statement "OVER BUDGET + 默认关闭" (the closed four-file list of
-   `.qoder/rules/benchmark-harness.md` §5.1: README.md / docs/下一步规划.md /
+   `evals/`: README.md / docs/下一步规划.md /
    docs/guide/范围与边界.md / docs/文档地图.md) are still there line by line,
    and no line that mentions ``OVER BUDGET`` was rewritten into
    "已优化" / "延迟可接受".
@@ -28,7 +28,7 @@ VERDICT_LITERAL = "OVER BUDGET"
 DEFAULT_OFF_PHRASE = "默认关闭"
 REWRITE_MARKERS = ("已优化", "延迟可接受")
 
-# The closed list from `.qoder/rules/benchmark-harness.md` §5.1 (禁区 1): every
+# The closed list from `evals/` (禁区 1): every
 # line in these four files that names both the verdict and the default-off
 # phrase must keep carrying it — a per-line check, not an existence check.
 DOC_QUALITATIVE_FILES = (
@@ -77,7 +77,7 @@ def test_rerank_latency_verdict_literal_still_present() -> None:
 def test_docs_keep_the_over_budget_default_off_qualitative() -> None:
     """Assertion 4: the protected qualitative sentences survive, line by line.
 
-    Positive half (per `.qoder/rules/benchmark-harness.md` §5.1, the closed
+    Positive half (per `evals/`, the closed
     four-file list): every line in those files that names both the verdict and
     the default-off phrase must keep carrying it — a per-line check, not an
     existence check — and each file's co-occurrence count stays pinned to the

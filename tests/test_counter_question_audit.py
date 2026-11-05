@@ -1,6 +1,6 @@
 """F1-T5 钉桩：反问审计事件 ``counter_question.asked`` 与回退开关。
 
-口径 ``.qoder/rules/clarify-counter-question.md``：§8.2（审计恰一条、三个
+口径 `app/agent/counter_question.yaml`：§8.2（审计恰一条、三个
 detail 键、被拦不产）、§10（``counter_question_enabled`` 默认 true 的回退
 等价）、§3.1 条件 2（开关关闭 = 触发条件不满足）、§9（rules 模式三不变式）。
 

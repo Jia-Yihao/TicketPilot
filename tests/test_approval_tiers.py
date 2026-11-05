@@ -1,6 +1,6 @@
 """审批档位表与 loader 的加载、校验与解析测试。
 
-口径来源：`.qoder/rules/approval-tiering.md`
+口径来源：`app/core/approval_tiers.yaml`
 - §2.1 表的位置与形状（独立 YAML，不并入 `config.py`）
 - §2.2 默认语义（单层表：一份 `approver` 审批）
 - §2.3 加载期校验 7 条（违反即报错，不静默跳过、不降级）

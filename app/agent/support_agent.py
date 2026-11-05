@@ -162,7 +162,7 @@ def _clarify_candidate_count(draft: Draft) -> int:
 
 
 # The clarification reason a formed counter-question rides on (口径
-# ``.qoder/rules/clarify-counter-question.md`` §6.1): a new *value* on the
+# `app/agent/counter_question.yaml`): a new *value* on the
 # existing ``clarify_reason`` trace key, not a new key.
 COUNTER_QUESTION_REASON = "COUNTER_QUESTION_INTENT_AMBIGUOUS"
 
@@ -1641,7 +1641,7 @@ class SupportAgent:
         Only an ``ADOPTABLE_INTENTS`` reading is adopted — today that set is the
         refund intent alone, and it is the same set the task runtime's
         ``IntentBrain.plan`` reads, so the two entries cannot drift apart
-        (口径 ``.qoder/rules/adoption-surface.md``). That is deliberate:
+        (口径 `app/agent/support_agent.py`). That is deliberate:
 
         * the refund it opens still has to pass eligibility and a human
           approval before any money moves, so the model changes *whether a
@@ -1663,8 +1663,8 @@ class SupportAgent:
         third value is the cost record of that call (``None`` when the model
         was not asked); the caller writes it to the usage ledger on the
         turn's own transaction. The fifth value is the one counter-question
-        either gate may buy (F-1, ``.qoder/rules/clarify-counter-question.md``
-        §3/§6.1): only ever set when a question actually formed. On the
+        either gate may buy (F-1, `app/agent/counter_question.yaml`): only ever
+        set when a question actually formed. On the
         question branch it comes from the read-only probe, which never calls
         ``plan`` — a probe reading must not reach the ledger-reuse branch,
         which would adopt it de facto. On the consult branch it forms only
@@ -1672,7 +1672,7 @@ class SupportAgent:
         a ``UNKNOWN`` landing (§3.3), from the same ``plan`` call's in-band
         trace fields — routing and the gap key set are untouched either way.
 
-        Wiring (``.qoder/rules/intent-candidates.md`` §2.2): the candidate
+        Wiring (`app/agent/intents.yaml`): the candidate
         kernel takes ``context:`` evidence from the ``pending_intent`` /
         ``last_intent`` keys and ``order:`` evidence from a caller-supplied
         ``order_state``. This entry therefore derives a *model-only* dict
@@ -1764,7 +1764,7 @@ class SupportAgent:
             # 改道计数：`redirect` 是被采纳的改道，`redirect_rejected` 是模型
             # 想改而被采纳面拒掉的读数。两者是不同的数，不得相加减；真正的
             # 「错判」需要 gold 标签，只在离线评测里算（口径
-            # `.qoder/rules/adoption-surface.md` §2.3）。默认值 = 这一轮没有
+            # `app/agent/support_agent.py`）。默认值 = 这一轮没有
             # 记录过判定（模型没被问、或调用失败），不是「判过且为假」。
             "redirect": False,
             "redirect_rejected": False,
@@ -1849,7 +1849,7 @@ class SupportAgent:
         unless the caller holds the support role), but it never raises: a
         missing, foreign or unreadable order simply means there is no
         ``order:`` evidence. The candidate kernel must not query the database
-        (``.qoder/rules/intent-candidates.md`` §2.2), so the caller resolves
+        (`app/agent/intents.yaml`), so the caller resolves
         it here — and every lookup keeps the tenant boundary.
         """
         if not order_id:

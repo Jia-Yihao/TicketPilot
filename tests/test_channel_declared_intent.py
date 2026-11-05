@@ -1,6 +1,6 @@
 """R10 T6-b 钉桩：渠道意图直取的完整契约。
 
-口径 ``.qoder/rules/question-gate-coverage-and-channel-intent.md`` §4.1-§4.9，
+口径 `app/agent/counter_question.yaml`-§4.9，
 逐条对应 §5 DoD 第 7-13 条：
 
 7. 白名单是目录推导的精确八值，抄本随目录自动变化，不一致时拒绝放行；

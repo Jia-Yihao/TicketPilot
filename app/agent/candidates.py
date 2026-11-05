@@ -9,7 +9,7 @@ evidence for, and the model picks among those or says ``NONE``.
 Every string in ``Candidate.evidence`` is something the server computed from
 the message, the conversation slots, the rule reading or a supplied order
 state. Nothing here reads the model's own claim about itself; ``confidence``
-is deliberately not an input (see ``.qoder/rules/intent-candidates.md`` §2.4).
+is deliberately not an input (see `app/agent/intents.yaml`).
 
 The kernel is pure: no clock, no randomness, no database, no model. Same
 input, byte-identical output, in a fixed order.

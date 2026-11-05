@@ -5,7 +5,7 @@
 `app/services/signal_audit`。不重算比率、不另立分子分母、不调模型；写入仅限
 触警留痕（审计行），其去重与形状逻辑全部在服务层，本层不碰审计表。
 
-口径要点（`.qoder/rules/online-signals-and-notification.md`）：
+口径要点（`app/core/online_signals.yaml`）：
 
 - §2 通用规则：比率已在采集层 `round(..., 4)`，出口只搬运（裁定：不重算、
   不二次 round）；租户边界由采集层承担，本层不放宽任何鉴权。

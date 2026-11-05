@@ -1,6 +1,6 @@
 """R10 T5：把 ``evals/question_coverage.py`` 的关键判据钉住的测试侧用例。
 
-口径 ``.qoder/rules/question-gate-coverage-and-channel-intent.md`` §3（T5 契约）与
+口径 `app/agent/counter_question.yaml`（T5 契约）与
 ``docs/下一步规划.md`` :73 的「T5 前置裁定」：
 
 * 算术本体与 ``coverage_from_ledger`` 逐字同一（本文件只 import，不留第二套真相）；

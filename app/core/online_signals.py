@@ -4,7 +4,7 @@
 `tool_failure_rate`）的阈值、`baseline` 抄本与动作建议；本模块只做「读 + 校验 +
 缓存一份」——不写文件、不读时钟、不用随机、不调模型、不查数据库。
 
-口径来源：`.qoder/rules/online-signals-and-notification.md` §3。
+口径来源：`app/core/online_signals.yaml`。
 
 - §3 约束 1：顶层键封闭 `{version, signals}`；`signals` 恰三行，`signal_id`
   取封闭词表 `{no_evidence_rate, handoff_rate, tool_failure_rate}` 且互不重复。

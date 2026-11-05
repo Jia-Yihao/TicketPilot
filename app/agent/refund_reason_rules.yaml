@@ -7,7 +7,7 @@
 # 说不清」是最强的分类信号，不该被顺带命中的关键词改写成系统的猜测。
 # OTHER 只来自 other_cues 与调用方显式提交，不是 rules 的一行。
 #
-# 口径来源：.qoder/rules/refund-reason-taxonomy.md §5.6.1-§5.6.1.1、§5.6.2
+# 口径来源：docs/adr/ADR-035-退款原因与类型分类.md
 
 version: "2026-10-26"
 slot: refund_reason

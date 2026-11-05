@@ -1,6 +1,6 @@
 """R11 T5-a：服务层触警留痕、幂等去重与误报率三态的用例。
 
-口径来源：`.qoder/rules/online-signals-and-notification.md` §5（动作名、
+口径来源：`app/core/online_signals.yaml`（动作名、
 `resource_type`、breached 行契约、幂等去重两条件、detail 封闭键集、误报率公式
 与三态）。断言对字面口径，不对实现自证：动作名与结论值一律用字面量写死，
 从实现导入的符号只用于「词表封闭且不得改名」这一条钉桩。

@@ -53,7 +53,7 @@ class SupportClarification(BaseModel):
     reason: str
     prompt: str
     # 反问轮缺的是意图不是槽位，续跑也不携带未确认的读数
-    # （``.qoder/rules/clarify-counter-question.md`` §6.1），两者都会以 null 出现。
+    # （`app/agent/counter_question.yaml`），两者都会以 null 出现。
     expected_slot: str | None
     resumable_intent: str | None
 

@@ -360,7 +360,7 @@ def test_the_catalog_object_is_a_typed_view(tmp_path: Path) -> None:
     assert not catalog.get("ORDER_QUERY").requires("amount_cents")
 
 
-# --- 退款原因槽位（.qoder/rules/refund-reason-taxonomy.md §5.6.1、§5.6.3）-----
+# --- 退款原因槽位（`app/agent/refund_reason_rules.yaml`、§5.6.3）-----
 
 
 def test_the_refund_reason_slot_offers_the_other_exit() -> None:

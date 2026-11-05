@@ -1,6 +1,6 @@
 """F-1 T4b 钉桩：consult 出口的「被采纳面拒掉的合法改道读数换来一次反问」。
 
-口径 ``.qoder/rules/clarify-counter-question.md``：§3.1 触发判据（唯一合法
+口径 `app/agent/counter_question.yaml`：§3.1 触发判据（唯一合法
 实现 = 照抄 `decide_adoption` 已算好的 `redirect_rejected`）、§3.3 形成侧
 落点守卫、§4.1 consult 选项经 `ModelTrace` 带内字段携带且不重算、§2.2/§8.3
 两字段永不序列化。钉住的最小事实：

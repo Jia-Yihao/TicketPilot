@@ -1,6 +1,6 @@
 """R11 T4/T5-a：通知出口 `GET /api/v1/monitor/signals` 的行为与红线用例。
 
-口径来源：`.qoder/rules/online-signals-and-notification.md` §4-1/§4-2/§4-3/§4-4、
+口径来源：`app/core/online_signals.yaml`/§4-2/§4-3/§4-4、
 §2 通用规则、§2-B 裁定 11（零分母在**出口层**映射为 `null`）、§5（触警留痕与
 误报率）、§6 红线、§9 第 7/8/9/10/11/13/14 条。断言一律对着口径的字面契约，
 不对着实现自证。

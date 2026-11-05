@@ -105,7 +105,7 @@ def test_the_model_still_fills_an_order_id_but_not_a_read_intent() -> None:
 
     收口之前六个意图都在采纳面内，``ORDER_QUERY`` 也能改道；现在只有
     ``ADOPTABLE_INTENTS``（退款）能改，订单号补位这条既有通路不受影响
-    （``.qoder/rules/adoption-surface.md`` §2.2）。
+    （`app/agent/support_agent.py`）。
     """
     brain = IntentBrain(
         mode="pydantic_ai",
@@ -178,7 +178,7 @@ def test_model_failure_falls_back_to_rules() -> None:
 
 
 def test_a_trace_without_a_decision_keeps_the_pre_r7_key_set() -> None:
-    """`.qoder/rules/adoption-surface.md` §4 DoD 5：没做过判定的 trace 不长出四个新键。
+    """`app/agent/support_agent.py` DoD 5：没做过判定的 trace 不长出四个新键。
 
     键集要与 R7 之前逐字一致（四个字段全为 `None` 时不落盘），而反解一个空字典
     得到的是四个 `None`（「没有记录过判定」），不是四个 `False`（「判过且否」）。

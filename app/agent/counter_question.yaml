@@ -1,7 +1,7 @@
-# F-1 单轮反问的数据载体。口径：.qoder/rules/clarify-counter-question.md §4.6。
+# F-1 单轮反问的数据载体。口径见 docs/adr/ADR-039-单轮反问.md。
 # 顶层键是封闭集合：version / prompt_template / labels / max_options。
 # loader 在 app/agent/counter_question.py，拒绝任何未知键。
-# 这是数据不是提示词：兜底句「你也可以直接说…」复用 _clarify 尾句（§4.5），
+# 这是数据不是提示词：兜底句「你也可以直接说…」复用 _clarify 尾句，
 # 故不写进本文件。
 version: "2026-10-29"
 prompt_template: "为了更快帮到您，请确认您想咨询的是下面哪一类："

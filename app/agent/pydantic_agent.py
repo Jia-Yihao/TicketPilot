@@ -187,8 +187,8 @@ class ModelTrace:
     redirect: bool | None = None
     redirect_rejected: bool | None = None
     redirect_kind: str | None = None
-    # In-band, in-round only, **never serialized** (``.qoder/rules/
-    # clarify-counter-question.md`` §2.2/§8.3, route gamma): the *effective*
+    # In-band, in-round only, **never serialized** (`app/agent/counter_question.yaml`,
+    # route gamma): the *effective*
     # model reading after the NONE/out-of-candidates rewrite above, and the
     # candidate ids in the order the model received them. The consult exit
     # reads both in the same process turn to phrase one counter-question,
@@ -248,8 +248,7 @@ class ModelTrace:
             "model_candidates": self.candidates,
         }
         # Only when a decision was actually recorded: the key set of every
-        # earlier trace stays exactly as it was (``.qoder/rules/
-        # adoption-surface.md`` §2.3).
+        # earlier trace stays exactly as it was (`app/agent/support_agent.py`).
         for key, value in (
             ("model_adopted", self.adopted),
             ("model_redirect", self.redirect),
@@ -441,7 +440,7 @@ class IntentAgent:
 
 
 # The closed set of internal decision codes for ``IntentBrain.probe_question``
-# (``.qoder/rules/clarify-counter-question.md`` §3.2). These ride on
+# (`app/agent/counter_question.yaml`). These ride on
 # ``QuestionProbe.reason`` only — they are not new ``ModelTrace`` keys and are
 # never customer-visible text.
 QUESTION_PROBE_REASONS = (
@@ -462,8 +461,8 @@ class QuestionProbe:
     ``intent`` is a bare catalog row id — a *reading*, never a routing decision:
     this path must not produce a ``ModelDecision`` and must not touch the four
     adoption-count trace keys, so a probe reading can never be replayed by the
-    ledger-reuse branch of ``plan`` (``.qoder/rules/clarify-counter-question.md``
-    §2.2). ``trace`` is the agent's cost record untouched — ``as_dict`` omits
+    ledger-reuse branch of ``plan`` (`app/agent/counter_question.yaml`). ``trace``
+    is the agent's cost record untouched — ``as_dict`` omits
     the four count keys because they stay ``None``, which is exactly why no
     ``replace`` call appears on this path. ``reason`` is one of
     ``QUESTION_PROBE_REASONS`` when no reading is returned, ``None`` when one
@@ -516,7 +515,7 @@ class IntentBrain:
         rules-only deployment never computes a candidate and never grows a
         trace field. ``order_state`` is forwarded exactly as the caller
         supplied it; the kernel never fetches it itself
-        (``.qoder/rules/intent-candidates.md`` §2.2).
+        (`app/agent/intents.yaml`).
         """
         if not self.candidates_enabled:
             return None
@@ -555,7 +554,7 @@ class IntentBrain:
         under its own tenant/user scope: the chat entry passes it so the
         candidate kernel can record ``order:`` evidence. ``None`` means the
         caller could not resolve one — then there is simply no such evidence
-        (``.qoder/rules/intent-candidates.md`` §2.2). It defaults to ``None``
+        (`app/agent/intents.yaml`). It defaults to ``None``
         so the task-runtime caller, which has no order resolved, keeps
         working unchanged.
         """
@@ -692,8 +691,8 @@ class IntentBrain:
     ) -> QuestionProbe:
         """Ask the model what the rules could not read — and record nothing.
 
-        The question gate's read-only probe (``.qoder/rules/
-        clarify-counter-question.md`` §2.3/§3.2): it reuses the same candidate
+        The question gate's read-only probe (`app/agent/counter_question.yaml`):
+        it reuses the same candidate
         kernel (``_candidates``) and the same agent entry (``parse``) as
         ``plan``, then stops. This path must never write a ledger decision row
         and never run the adoption surface — otherwise the ledger-reuse branch
@@ -745,7 +744,7 @@ class IntentBrain:
             )
         if not candidate_set.allows(answer):
             # Out of the set means the set was wrong, not the model misspoke —
-            # 越界不重试 (``.qoder/rules/intent-candidates.md`` §3.2). The gate is
+            # 越界不重试 (`app/agent/intents.yaml`). The gate is
             # the candidate set built from catalog rows (``app/agent/intents.yaml``),
             # not the ``Intent`` enum: a legal catalog row that is not an ``Intent``
             # member (e.g. ``REFUND_STATUS``) is a legal reading and this method

@@ -1,6 +1,6 @@
 """P8 接线：`context:` 与 `order:` 证据必须在生产链路里真的出现。
 
-口径：`.qoder/rules/intent-candidates.md` §2.2「生产接线口径」——调用方把会话
+口径：`app/agent/intents.yaml`「生产接线口径」——调用方把会话
 上下文（`pending_intent` / `last_intent`，值取 `ConversationSlots` 同名字段，缺任一
 传 `None`）与订单状态（缺则 `None`）**真实传入** `build_candidates`；内核不查库、
 不补取，也不得用默认值冒充「有证据」。本文件只钉接线：内核 (`candidates.py`) 已

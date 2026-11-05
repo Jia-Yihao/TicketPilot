@@ -1,6 +1,6 @@
 """B-3 第一轮（B3-i）：档位快照进摘要、档位变化使旧审批失效。
 
-口径来源：`.qoder/rules/approval-tiering.md`
+口径来源：`app/core/approval_tiers.yaml`
 - §5.1 新增第九键 ``approval_tier``，值是**整个档位快照**
   ``{"tier_id","max_cents","roles","required_approvals"}``。
 - §5.2 摘要键清单由八项修订为九项；存量审批不 retro-fit。

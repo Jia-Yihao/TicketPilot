@@ -1,6 +1,6 @@
 """退款原因 / 退款类型口径的落地测试。
 
-口径来源：`.qoder/rules/refund-reason-taxonomy.md` §1.1、§1.2、§2、§4.1、§5.1-§5.3、
+口径来源：`app/agent/refund_reason_rules.yaml`、§1.2、§2、§4.1、§5.1-§5.3、
 §5.6。本文件随任务逐段追加断言。
 """
 

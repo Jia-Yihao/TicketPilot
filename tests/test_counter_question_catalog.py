@@ -1,6 +1,6 @@
 """F-1 单轮反问数据载体的契约测试（口径 §4.6）。
 
-口径来源：``.qoder/rules/clarify-counter-question.md`` §4.5（问句形状）、
+口径来源：`app/agent/counter_question.yaml`（问句形状）、
 §4.6（数据落点：``app/agent/counter_question.yaml`` 顶层键封闭集合
 ``version`` / ``prompt_template`` / ``labels`` / ``max_options``，
 ``labels`` 必须覆盖 ``intents.yaml`` 当前 12 行）、§4.3（``max_options``

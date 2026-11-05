@@ -3,7 +3,7 @@
 全部离线：与 ``tests/test_intent_candidate_model.py`` 同款驱动——pydantic-ai 自带的
 ``TestModel`` 假模型加本地 stub agent，不发网络请求、不读数据库。
 
-本文件只钉只读契约（``.qoder/rules/clarify-counter-question.md`` §2.2/§2.3/§3.2/§9）：
+本文件只钉只读契约（`app/agent/counter_question.yaml`/§2.3/§3.2/§9）：
 不产生采纳决定、trace 不长出四个计数键、rules 模式零模型调用零候选计算、失败不静默。
 """
 

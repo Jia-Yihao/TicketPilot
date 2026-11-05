@@ -1,6 +1,6 @@
 """退款原因关键词规则表的加载与匹配测试。
 
-口径来源：`.qoder/rules/refund-reason-taxonomy.md` §5.6.1（表结构与加载期校验）、
+口径来源：`app/agent/refund_reason_rules.yaml`（表结构与加载期校验）、
 §5.6.2（命中即填槽、未命中不填）。
 """
 

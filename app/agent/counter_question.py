@@ -1,7 +1,7 @@
 """The counter-question data carrier: what the one-round clarification asks.
 
 The wording and the labels live in ``counter_question.yaml`` (口径
-``.qoder/rules/clarify-counter-question.md`` §4.6) so they can be reviewed
+`app/agent/counter_question.yaml`) so they can be reviewed
 without touching code. This module loads that file, validates it, and gives
 the F-1 wiring (a later task) three read-only values:
 

@@ -1,6 +1,6 @@
 """在线信号的出口层请求与响应模型（口径 §4-2/§4-7，tier 1）。
 
-字段名与顺序逐字照 `.qoder/rules/online-signals-and-notification.md` §4-1：
+字段名与顺序逐字照 `app/core/online_signals.yaml`：
 三行信号各九字段，外加顶层 `false_positive_rate`。本模块只放形状，不放判定、
 不放读数来源——判定与读数由 `app/api/v1/monitor.py` 从采集层、阈值表与服务层
 `app/services/signal_audit` 搬运。§4-7 的复核请求形状（`MonitorReviewRequest`）

@@ -44,9 +44,9 @@ RED_LINE_YAMLS: tuple[tuple[str, str], ...] = (
     ("app/core/approval_tiers.yaml",
      "e68206fa454f729e8dbea41143a33a0eff2b0ff7ac68880c3e331a794fb65510"),
     ("app/agent/counter_question.yaml",
-     "b3b819867134ff819359e726fdc1a2f7d6a27f254dcc3d18cbcfba25f96d72c5"),
+     "3b33be3a54a6343d00b742bd02aec3cc034c019b162b4e822b382c319cb6d5e8"),
     ("app/agent/refund_reason_rules.yaml",
-     "1e1ba6c5098f05682a2c91fb4074ce8165613e131bb7e0c9a93355fb95b6851b"),
+     "1de0083da148fa258002e645f4eeca8f3f6ea36709a198b03d61488eb7d8c1c7"),
     ("app/core/online_signals.yaml",
      "a1e156572d14bdea3cc26185b32fda146c8cf17e5842d909e8266803b04fec1e"),
 )

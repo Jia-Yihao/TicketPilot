@@ -1,6 +1,6 @@
 """B-3 第二轮（B3-ii）：阈值在写路径生效、自动执行路径与审批路径同强度。
 
-口径来源：`.qoder/rules/approval-tiering.md`
+口径来源：`app/core/approval_tiers.yaml`
 - §4.2 自动执行路径八条：不起审批行、不进 WAITING_APPROVAL、仍写幂等台账、
   调同一个权威执行体、result 顶层 ``approval_path`` 封闭取值、任务事件
   ``refund.auto_executed``、审计、回执措辞不复用「已审批通过」。
@@ -606,7 +606,7 @@ def test_default_threshold_eligibility_receipt_is_unchanged_verbatim(
 def test_auto_reconcile_reads_reason_from_ledger_payload(
     app_factory: Callable[..., FastAPI]
 ) -> None:
-    # 口径锚点：`.qoder/rules/approval-tiering.md` §4.2 第 6 条（绑定校验等价：
+    # 口径锚点：`app/core/approval_tiers.yaml` 第 6 条（绑定校验等价：
     # AUTO 路径没有审批行，台账 request_payload 与审批载荷由同一次
     # refund_payload 产生，是同一份被摘要钉死的快照；对账不重新推断）。
     app = app_factory(
