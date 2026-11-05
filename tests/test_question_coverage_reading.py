@@ -1,6 +1,6 @@
 """R10 T4：把口径 §2「T4 前置裁定」的恒等式钉成可执行断言。
 
-口径 ``.qoder/rules/question-gate-coverage-and-channel-intent.md`` §2（7348e14 已入库）：
+口径 ``.qoder/rules/question-gate-coverage-and-channel-intent.md`` §2「T4 前置裁定」：
 
     同一会话的 ``chat`` 行数 = 成反问数 + 付费未成句数 + consult 带 ``model`` 键数
     ⟹ 分母 = chat 行数 − consult 带 ``model`` 键数
@@ -466,8 +466,10 @@ def test_reused_consult_round_never_inflates_the_numerator() -> None:
     chat 行 +1、consult 带 model 键 +1，恰好对消，分子恒不沾。
 
     读数只依据既有 gate/model 键，**从不读** ``model_reused``（源码自证）。
-    reused 在 chat 侧是否重复计费的一般项（support_agent.py:911 vs
-    runtime.py:433）属 R12，本任务不裁定。
+    reused 在 chat 侧是否重复计费的一般项（对话侧 `LlmUsageService.record` 的
+    ``source="chat"`` 落账点无复用闸，本轮时点读数在 ``support_agent.py:959``，
+    ``record`` 调用在 `:955`；对照任务侧 ``runtime.py:433`` 的 ``if not
+    model_trace.reused:``）属 R12，本任务不裁定。行号为时点读数，可能漂移。
     """
     gaps = [
         _consult_gap(reused=True),

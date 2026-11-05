@@ -54,3 +54,19 @@
   `app/services/handoff.py` 读不到时的 `UNKNOWN` 是读取侧兜底，不入枚举、不属产出点，见 §0.2 的 R13）。
 - 同理适用于任何「审计、报表或下游会按它分组」的字段：值域没有枚举时，新增一个值不会报错，
   只会让报表静默多出一行。这类改动要先补枚举与断言，再谈新增。
+
+## 6. 优化阶段定稿与实施交接
+
+- 优化阶段的裁定与三阶段顺序在 `docs/下一步规划.md` §15.7；任务状态一律以 §0.2 为准，
+  本文件不复制状态表与事实数。
+- 意图改造的施工说明、准则与等价性证据在 `openspec/changes/add-intent-routing-data-driven-2026-10/`；
+  F-1 单轮反问的项目级口径在 `.qoder/rules/clarify-counter-question.md`。两者冲突时先停下、
+  说明冲突、改口径文件，再改代码。
+- `.review/` 的评审产物是基准树时点论证；行号重引用的触发条件、逐文件条数与复算命令在
+  `.review/重引用清单.md`。基准树未变、工作树脏项未收口时不重钉行号。
+- 不可破的约束：不为让门禁变绿而改 `docs/fact-baseline.yaml`、`docs/code-anchors.yaml`、
+  `docs/architecture-guard.yaml`；阶段收尾的规模数字按磁盘与 `pytest --collect-only` 现算
+  统一 re-cite 一次，改了 `docs/spec/项目规格.md` 必须同批重生成说明书；带日期的历史读数原样保留。
+- 评测扩量与模型读数复跑不在本阶段范围，由用户侧本机模型执行；`evals/**` 的自述读数不作为验收证据。
+- 收口批 T-B（任务 6-9）的状态真源在 `openspec/changes/close-rerank-guard-and-route-latency-debt-2026-11/plan.md` 状态表，
+  2.1–2.4 的实现与取证已在盘、仅待送审；`tasks.md` 的 2.1–2.5 未经 reviewer 通过不得勾选，也不要按旧状态重复派工。

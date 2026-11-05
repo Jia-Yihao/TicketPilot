@@ -13,10 +13,11 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - run: pip install -e ".[dev]"
+      - run: pip install --no-cache-dir -r requirements.lock
+      - run: pip install --no-deps .
       - run: ruff check app tests scripts evals alembic
       - run: python -m mypy app
-      - run: python -m pytest
+      - run: python -m pytest -q
       - run: python evals/run.py
       - run: python evals/support_run.py
       - run: python evals/support_run.py --dataset evals/analytics_dimension_set.json --partial
@@ -65,7 +66,8 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - run: pip install -e ".[dev]"
+      - run: pip install --no-cache-dir -r requirements.lock
+      - run: pip install --no-deps .
       - run: >-
           alembic
           -x db_url=postgresql+psycopg://ticketpilot:ticketpilot-ci-only@localhost:5432/ticketpilot

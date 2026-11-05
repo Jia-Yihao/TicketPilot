@@ -10,7 +10,7 @@
 [![Support Set](https://img.shields.io/badge/Support%20Set-62%2F62-146b5c)](#怎么验证这些说法)
 [![License](https://img.shields.io/badge/License-MIT-0e1b2c)](LICENSE)
 
-**40/40 Golden · 62/62 Support · 收集 1343 条用例 · 49 条 API 路径 · 39 篇 ADR · 模型改变写路径路由 0/16**
+**40/40 Golden · 62/62 Support · 收集 1382 条用例 · 50 条 API 路径 · 39 篇 ADR · 模型改变写路径路由 0/16**
 
 覆盖商品咨询、政策问答、订单与物流查询、工单创建、退款申请与按金额分层的审批（未达阈值走自动执行，
 仍过同一套资格、台账与对账），外加一类受控的 Text-to-SQL 自助统计。主链路在本机就能跑完，不需要任何云 API。
@@ -68,7 +68,7 @@ seed complete: {'orders': 4, 'policies_created': 5, 'rules': 3}
 | 问题 | 我的答案 | 最小证据 |
 |---|---|---|
 | 模型到底被允许做什么？ | 读语言、抽槽位；资格、金额、审批、幂等、对账全部归服务端 | 16 个写路径轮，模型改变路由 **0** 个；规则读不懂的 11 句，它捞回 6 句，但最多只能把退款送进待审队列 |
-| "我很诚实"能被检查吗？ | 把说法变成断言：评测走产品接口，事实由代码现算，守卫自己也要被负验证 | 收集 1343 条、2026-10-28 实测 1074 passed / 6 skipped / 0 failed；14 项事实基线；6 种故意破坏全部被守卫抓到 |
+| "我很诚实"能被检查吗？ | 把说法变成断言：评测走产品接口，事实由代码现算，守卫自己也要被负验证 | 收集 1382 条、2026-10-28 实测 1074 passed / 6 skipped / 0 failed；18 项事实基线；6 种故意破坏全部被守卫抓到 |
 | 什么时候不该回答？ | 没有依据就拒：无计划不查询，读不懂就追问，有风险就转人工 | 拒绝矩阵 10 条；写不出计划即转人工；模拟流量里转人工率 19/52 |
 
 完整读数、反例与代价在 [docs/guide/证据索引.md](docs/guide/证据索引.md)。这份 README 只放论点、最小证据，
@@ -311,7 +311,7 @@ L3 明细永不进 prompt，只按 `query_id` 在追问时展开。取舍与边�
 
 **如果重来，我会先建双库 CI 和负验证，再写功能。** 现在的守卫是补上的，虽然补得值：`ORDER BY` 那种缺陷
 如果没有双库对照，会一直藏在"本机跑得通"里。下一步是把 `docs/guide/评测说明.md` 里每个数字绑定到
-脚本输出——现在这份文档仍有一部分靠人工同步，事实基线只覆盖了 14 项。
+脚本输出——现在这份文档仍有一部分靠人工同步，事实基线只覆盖了 18 项。
 
 **如果重来，我会先做"该不该回答"的评测，再做"答得好不好"的评测。** 现在 Golden 与 Support 主要测
 意图与动作正确，误答率靠人工看 bad case。2026-10-25 补了一层 held-out 意图语料：外部 201 条
@@ -392,9 +392,9 @@ POST /api/v1/support/messages  ← 两条 web 入口共用同一道幂等闸
 ## 怎么验证这些说法
 
 ```bash
-python -m pytest                        # 收集 1343 条、88 个测试文件；2026-10-28 本机实测 1074 passed / 6 skipped / 0 failed
+python -m pytest                        # 收集 1382 条、90 个测试文件；2026-10-28 本机实测 1074 passed / 6 skipped / 0 failed
 ruff check app tests scripts evals alembic   # 零告警（与 CI 同一套目标）
-python -m mypy app                      # strict，153 个文件，零错误
+python -m mypy app                      # strict，154 个文件，零错误
 python evals/run.py                     # Golden Set 40/40（任务路径 + 轨迹断言）
 python evals/support_run.py             # 支持集 62/62（12 意图：正常 34 / 边界 21 / 失败 7）
 python evals/clarification_candidates.py  # 澄清降级前后对比：同一批 5 段剧本跑旧预算=2 / 新预算=3
@@ -446,7 +446,9 @@ python scripts/guard_negative_check.py  # 守卫的反向验证：6 处破坏全
 | 接口契约与错误码 | [docs/guide/接口说明.md](docs/guide/接口说明.md) |
 | 评测集、指标口径与基线 | [docs/guide/评测说明.md](docs/guide/评测说明.md) |
 | 威胁模型与 fail-closed 配置 | [docs/guide/安全说明.md](docs/guide/安全说明.md) |
-| 关键取舍（38 篇，含反例） | [docs/adr/](docs/adr/) |
+| 还剩什么没做、按什么顺序做 | [docs/下一步规划.md](docs/下一步规划.md) §0.2 |
+| 优化阶段的裁定与意图改造落地方案 | [docs/下一步规划.md](docs/下一步规划.md) §15 · [实施包](openspec/changes/add-intent-routing-data-driven-2026-10/proposal.md) |
+| 关键取舍（39 篇，含反例） | [docs/adr/](docs/adr/) |
 
 ## 项目结构
 
@@ -461,7 +463,7 @@ app/
 alembic/          16 条迁移，head 为 ea6c2b48d701
 evals/             Golden 40、Support 62、分层检索集、澄清降级剧本、意图候选集证据、模型分布与安全交叉、检索指标
 scripts/           seed、demo、退款剧本、缺口探针、稠密索引、守卫负验证
-tests/             88 个测试文件；含架构依赖守卫与文档一致性守卫
+tests/             90 个测试文件；含架构依赖守卫与文档一致性守卫
 web/               React 19 + Vite 控制台（10 个业务页面）
 docs/              规格、ADR、评测口径、证据与说明书
 ```

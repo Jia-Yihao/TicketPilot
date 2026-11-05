@@ -35,7 +35,8 @@ web/           控制台
 tests/         单元、集成、e2e、架构守卫
 evals/         Golden Set、检索指标、回放与业务指标
 docs/          四卷：guide/（使用与实现）、spec/（契约）、records/（历史记录）、adr/（决策），
-               另有 下一步规划.md（唯一执行计划）与三份守卫清单（fact-baseline / code-anchors / architecture-guard）
+               另有 文档地图.md（入口与唯一事实源表）、下一步规划.md（唯一执行计划）
+               与三份守卫清单（fact-baseline / code-anchors / architecture-guard）
 ```
 
 ## 验证命令

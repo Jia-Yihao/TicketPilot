@@ -1,4 +1,4 @@
-.PHONY: install run seed test guard guard-negative lint eval eval-support eval-dimension eval-intent eval-retrieval eval-replay eval-business eval-baseline eval-answer sample-bad-cases migrate compose-up compose-down manual
+.PHONY: install run seed test guard guard-negative lint eval eval-support eval-dimension eval-intent eval-retrieval eval-replay eval-business eval-baseline eval-answer sample-bad-cases migrate compose-up compose-down manual mypy
 
 install:
 	python -m pip install -e ".[dev]"
@@ -66,3 +66,6 @@ compose-down:
 
 manual:
 	python scripts/build_manual.py
+
+mypy:
+	python -m mypy app

@@ -296,20 +296,47 @@ docx 同步（`docs/fact-baseline.yaml:163-175`：`智能体平台设想.md` 的
 - 任何 bench 驱动的行为改动必须由配置开关承载，**默认值 = 改动前的行为**；
   要么默认关闭，要么默认等价（等价的可判据 = §4.1 两个守卫 + 既有 Golden / support 读数逐字不变）。
 - **不得为了让基准好看**而把已判「超预算、默认关闭」的行为（**重排**）悄悄写成「已优化」。
-  该读数必须**原样保留**其「**OVER BUDGET 默认关闭**」的定性。可核对的现状事实：
-  `app/core/config.py:70` `retrieval_rerank_enabled: bool = False`（`:66-68` 的注释写明
-  dense 与 rerank 是 opt-in 且 fail open）；`.env.example:59` `RETRIEVAL_RERANK_ENABLED=false`；
-  判定产生点 `evals/rerank_latency.py:249`；判定依据读数 `docs/spec/项目规格.md:3647`
-  （mean 2300 / p50 2281 / **p95 2602** / max 2689 对 300 ms 交互预算）；
-  既有的定性表述见 `README.md:199`、`README.md:423`、`docs/下一步规划.md:290`
-  （「判 **OVER BUDGET**……默认关闭，理由从『没测』变成『测了，超预算』」这一类句子是
-  结论本体，不得在回填时被改成「已优化」或「延迟可接受」）。
-- **可钉住的形状（给实现轮）**：默认配置下断言 `retrieval_rerank_enabled` 为假，
-  且 `evals/rerank_latency.py` 的 `verdict` 仍产出 `OVER BUDGET`；文档里凡出现被本条保护的定性，
-  必须能在 `README.md` / `docs/guide/评测说明.md` 检索到同一串。
-  **当前缺口**：仓库内**没有**一条专门钉「rerank 默认关闭 + OVER BUDGET 定性未被改写」的守卫
-  （`docs/fact-baseline.yaml` 里没有 OVER BUDGET 相关事实，`tests/` 里也没有断言该串的用例）。
-  如实登记为缺口，是否补钉由实现轮按最小范围决定。
+  该读数必须**原样保留**其「**OVER BUDGET 默认关闭**」的定性。可核对的现状事实
+  （下列 `文件:行` 均为**撰写时点读数**，2026-11-03 复核已有漂移，引用以符号名与字面串为准）：
+  `Settings.retrieval_rerank_enabled: bool = False`（`app/core/config.py:70`，2026-11-03 现读 `:76`；
+  `:66-68` 的注释写明 dense 与 rerank 是 opt-in 且 fail open）；环境变量整行
+  `RETRIEVAL_RERANK_ENABLED=false`（`.env.example:59`）；判定字面 `OVER BUDGET` 在
+  `evals/rerank_latency.py` 的 verdict 打印行（`:249`）产出；判定依据读数
+  `docs/spec/项目规格.md:3647`（mean 2300 / p50 2281 / **p95 2602** / max 2689 对 300 ms 交互预算）；
+  既有的定性表述（2026-11-03 实测共现行：`README.md:200`、`README.md:428`、
+  `docs/下一步规划.md:2529`）（撰写时点写作 `README.md:199` / `README.md:423` /
+  `docs/下一步规划.md:290`）——「判 **OVER BUDGET**……默认关闭，理由从『没测』变成『测了，超预算』」
+  这一类句子是结论本体，不得在回填时被改成「已优化」或「延迟可接受」。
+- **可钉住的形状（给实现轮，2026-11-03 裁定）**：默认配置下断言
+  `Settings.model_fields["retrieval_rerank_enabled"].default` 为假——**不得**断言
+  `Settings().retrieval_rerank_enabled`：`app/core/config.py` 带 `env_file=".env"`，
+  pydantic-settings 里 dotenv 值优先于类默认值，仓根存在本地 `.env` 时实例读数不是「默认值」
+  （现算类默认值的形状先例：`tests/test_docs_consistency.py:245`）；且
+  `evals/rerank_latency.py` 源码仍含 `OVER BUDGET` 字面。文档侧保护面**定死为一个封闭清单**：
+  `README.md`、`docs/下一步规划.md`、`docs/guide/范围与边界.md`、`docs/文档地图.md` 四份文件，
+  判据**逐行**而非存在性——这四份文件里**每一行**同时含 `OVER BUDGET` 与「默认关闭」的行
+  都必须继续含「默认关闭」（删掉任一处即红，**不接受**「至少还剩一行」这种存在性判据），
+  且这四份文件里凡含 `OVER BUDGET` 的行都不得出现「已优化」「延迟可接受」。
+  原句「必须能在 `README.md` / `docs/guide/评测说明.md` 检索到同一串」**按文档现实作废**：
+  `docs/guide/评测说明.md` 的两行 `OVER BUDGET`（2026-11-03 现读 `:501`、`:504`）逐字不含「默认关闭」。
+- **未钉住的面（如实登记，不假装已覆盖）**：2026-11-03 以
+  `grep -rn "OVER BUDGET" README.md docs/` 实测，扫描面为 `README.md` 与 `docs/**` 的
+  Markdown，共 **24 行**命中、分布在 **8 份**文件；上条封闭清单只覆盖其中「共现行」所在的 4 份文件。
+  以下各处以**变体措辞**表达同一结论、字面不含「默认关闭」，逐行判据抓不到，本轮不扩面去抓：
+  `docs/guide/证据索引.md:871`（「所以 `RETRIEVAL_RERANK_ENABLED` 默认仍是 `false`，端点挂了也
+  fail-open」）、`docs/spec/项目规格.md:4222`（「重排**不能进请求路径**，默认仍关闭」）、
+  `docs/records/历史记录.md:44`。清单外的 `OVER BUDGET` 行只受「不得改写定性」这条纪律约束，
+  **无机器核对**。
+  ——**部分补钉（2026-11；2026-11-03 独立审查后由「已补钉」收窄）**：
+  `tests/test_rerank_default_off_and_over_budget_qualitative.py` 四条用例分别钉住配置默认值
+  （`test_rerank_default_is_off_in_settings`）、`.env.example` 整行
+  （`test_env_example_pins_rerank_disabled`）、`evals/rerank_latency.py` 源码仍含 `OVER BUDGET`
+  （`test_rerank_latency_verdict_literal_still_present`）、以及**两份文件**的共现与改写标记
+  （`test_docs_keep_the_over_budget_default_off_qualitative`）。该用例的 `DOC_QUALITATIVE_FILES`
+  现只列 `README.md` 与 `docs/下一步规划.md`，本条新点名的 `docs/guide/范围与边界.md:168`、
+  `docs/文档地图.md:30` 两处共现行**不在其内**；且其文档侧正半为**存在性**判据（`assert co_lines`），
+  与本条「逐行」判据不符，属待改项。文档匹配一律**字符串共现、不断言行号**；本文件自身的行号引用
+  **无机器核对**（锚点守卫只扫 `docs/**/*.md`，§2.5 既有口径）。时点读数引用须带日期、定性不改的原意不变。
 
 ### 5.2 跨 worker 语义的成立条件不得被改
 
@@ -388,12 +415,19 @@ docx 同步（`docs/fact-baseline.yaml:163-175`：`智能体平台设想.md` 的
    以及 `python evals/replay.py --self-check` 的 `REPLAY DIFF EMPTY`，且为**本轮输出**；
    `bench/` 内不得存在第三套契约套件。——**已可钉住**（两条命令与产生位置见 §4.1；
    其结果由 reviewer 阅读证据，不由本文件代为断言）。
-8. **禁区 1（默认关闭 / flag 化）**：默认配置下 `retrieval_rerank_enabled` 仍为 `False`
-   （`app/core/config.py:70`）、`.env.example:59` 仍为 `false`，
-   `evals/rerank_latency.py:249` 的 verdict 仍为 `OVER BUDGET`，
-   且 `README.md:199` / `README.md:423` / `docs/下一步规划.md:290` 的该定性未被改写。
-   ——**部分可钉住**：配置默认值可由用例钉；「文档定性未被改写」当前**缺口**
-   （`docs/fact-baseline.yaml` 无 OVER BUDGET 事实，`tests/` 内无断言该串的用例）。
+8. **禁区 1（默认关闭 / flag 化）**：默认配置下 `Settings` 的
+   `retrieval_rerank_enabled` **类默认值**仍为 `False`（`app/core/config.py:70`，2026-11-03 现读 `:76`）、
+   `.env.example:59` 仍为整行 `RETRIEVAL_RERANK_ENABLED=false`，`evals/rerank_latency.py` 的 verdict
+   行仍含 `OVER BUDGET`，且 §5.1 那个**封闭清单**（`README.md`、`docs/下一步规划.md`、
+   `docs/guide/范围与边界.md`、`docs/文档地图.md`）里每一处同时含 `OVER BUDGET` 与「默认关闭」的行
+   的该定性未被改写。——**部分补钉（2026-11；2026-11-03 独立审查后由「已补钉」收窄）**：上述四项由
+   `tests/test_rerank_default_off_and_over_budget_qualitative.py` 的 `test_rerank_default_is_off_in_settings`、
+   `test_env_example_pins_rerank_disabled`、`test_rerank_latency_verdict_literal_still_present`、
+   `test_docs_keep_the_over_budget_default_off_qualitative` 分别钉住，但文档侧只覆盖清单四份里的
+   **两份**（`README.md` / `docs/下一步规划.md`），且正半为存在性判据、默认值断言读的是 `Settings()`
+   实例（可被仓根 `.env` 推翻）；这三处差异逐条见 §5.1 的「未钉住的面」与「可钉住的形状」，
+   实现轮改完才算补齐。本条所引行号系撰写时点读数，引用时须带日期核对、不改定性；
+   本文件的行号引用无机器核对（锚点守卫只扫 `docs/**/*.md`，§2.5 既有口径）。
 9. **禁区 2（跨 worker 语义）**：模型用量台账、任务事件流、限流预算三处的事实源仍是数据库/共享存储
    （`app/services/llm_usage.py:1`、`app/models/llm_usage.py:13-20`、
    `app/services/runtime.py:1174-1177`、`app/api/middleware.py:125`）；

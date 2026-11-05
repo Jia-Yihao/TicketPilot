@@ -27,7 +27,7 @@ uvicorn app.asgi:app --reload --port 8000
 ```bash
 ruff check app tests scripts evals alembic
 python -m mypy app                        # strict 模式，零错误（154 个文件）
-python -m pytest                          # 收集 1343 条、88 个测试文件（2026-10-28 实测 1074 passed / 6 skipped / 0 failed；当前读数见 `docs/spec/项目规格.md` §19.1；跳过的 6 条需要 PostgreSQL 或 Redis）
+python -m pytest -q                     # 收集 1382 条、90 个测试文件（2026-10-28 实测 1074 passed / 6 skipped / 0 failed；当前读数见 `docs/spec/项目规格.md` §19.1；跳过的 6 条需要 PostgreSQL 或 Redis）
 python evals/run.py                       # 40/40 任务路径 Golden Set
 python evals/support_run.py               # 62/62 只读路径（含多轮澄清）
 python evals/clarification_candidates.py  # 澄清降级前后对比（同一批 5 段剧本跑旧预算=2 / 新预算=3）
@@ -67,7 +67,7 @@ TICKETPILOT_TEST_POSTGRES_URL=postgresql+psycopg://... TICKETPILOT_TEST_REDIS_UR
 > 当时是 13 条迁移（head `b4e8d2f6a1c9`）；第 14 条 `a1c7e9d4b820`（P4）没在那次手工全量里，
 > 但已在运行中的 PostgreSQL 16 容器上单独验过 `upgrade head` + `check`（见 `docs/guide/证据索引.md` 的 P4 一节）与 CI 的 `postgres-migration` 作业。
 > 当前迁移链 **16 条**（head `ea6c2b48d701`），本地 `alembic check` → `No new upgrade operations detected.`；
-> 默认 `pytest` 当前收集 1343 条（2026-10-28 实测：1074 passed / 6 skipped / 0 failed；当前读数见 `docs/spec/项目规格.md` §19.1），它与 PG 历史读数不要混写；
+> 默认 `pytest` 当前收集 1382 条（2026-10-28 实测：1074 passed / 6 skipped / 0 failed；当前读数见 `docs/spec/项目规格.md` §19.1），它与 PG 历史读数不要混写；
 > **查询改写、分层检索集、意图语料评测、意图缺口闭环、P2/P3/P6、预取式统计、P4 规则治理、P11 澄清候选降级与 P8 意图候选化新增的 347 条，加渠道可用性轮 19 条，再加 B-1/B-3 落地与后续各轮（收尾返工轮、R1/R3 端到端能力、R4 指标基线、R5 答案层、R7 采纳面收口）新增的 194 条（未逐轮拆分归因），共 560 条目前只有 SQLite 证据**，尚未在 PG 上复跑。
 > **检索指标脚本本身也在 PG 上跑过**（`retrieval_metrics.py --channels bm25,dense,hybrid,gated,rerank`
 > 在 `tp_eval` 库上跑出五行读数，与 SQLite 逐位一致）。
@@ -77,6 +77,24 @@ TICKETPILOT_TEST_POSTGRES_URL=postgresql+psycopg://... TICKETPILOT_TEST_REDIS_UR
 
 CI 会跑 ruff、mypy、后端测试、Golden Set、Alembic 迁移与 `alembic check`、以及控制台构建，
 见 [.github/workflows/ci.yml](.github/workflows/ci.yml)。
+
+### 门禁口径对照（命令 × 出现在哪几处）
+
+口径的权威定义是仓库根 `agents.md` 的「提交前必须跑」三条；本地 Makefile、CI 与本文件三处只向它对齐
+「说法」，不合并命令。三处之间的差异全部点名：**本地必跑 = 三条 / CI 额外 = evals 家族 /
+显式命令 = `lint-bench`、双库 diff**——不存在第四套说法。
+
+| 命令 | 本地 Makefile | CI（`.github/workflows/ci.yml` 主 job） | 文档（本文件） | 差异与一句话理由 |
+|---|---|---|---|---|
+| `python -m pytest -q` | `make test` | `- run: python -m pytest -q` | 「提交前必须通过」清单 | 本轮把 CI 与本文件原先的裸 `python -m pytest` 对齐到权威串：`-q` 只改输出详略，不改通过/失败判定，也不改收集/passed 读数 |
+| `ruff check app tests scripts evals alembic` | `make lint` | 同串步骤 | 同串清单行 | 三处原本就逐字相同、保持不动；`bench` 面的 lint 走下方显式命令 `lint-bench`，不改这串主命令行（`.qoder/rules/benchmark-harness.md` §2.2） |
+| `python -m mypy app` | `make mypy`（本轮补上的等价目标） | 同串步骤 | 同串清单行 | 原先三处缺 Makefile 一环，本轮补目标使三处逐字相同；范围仍只覆盖 `app`、不扩面（同规则 §2.3） |
+| evals 家族：`python evals/run.py`、`python evals/support_run.py`（含 analytics/memory 两个 `--dataset … --partial` 变体）、`python evals/retrieval_metrics.py --channels bm25,hybrid`、`python scripts/build_intent_set.py --check`、`python evals/intent_metrics.py --enforce`、`python evals/replay.py --self-check`、`python evals/answer_metrics.py --enforce` | 拆在 `eval`、`eval-support`、`eval-dimension`、`eval-memory`、`eval-intent`、`eval-retrieval`、`eval-replay`、`eval-answer` 各目标，按需单跑 | 主 job 在三条之外额外执行这几步 | 上方门禁清单内逐条列出（本地附加检查） | **CI 额外**：权威三条不含 evals；CI 多跑这几步是额外门禁，本轮既不并入三条、也不从 CI 删除 |
+| `lint-bench`（`ruff check bench`） | **缺目标——缺口登记**，本轮不自行新增 | 不跑 | 不列 | **显式命令**：`bench/` 建立时按 `.qoder/rules/benchmark-harness.md` §2.2 走独立 Makefile 目标 + CI 独立步骤；三处目前都没有这条命令的说法，属已登记待落地项 |
+| 双库 diff 与回放自检：`python evals/retrieval_metrics.py --database-url <PG>` 与默认 SQLite 各跑一遍对照同读数；`python evals/replay.py --self-check`（通过读数 `REPLAY DIFF EMPTY`） | `make eval-replay` 覆盖回放自检；双库对照无目标（手工显式命令） | 主 job 只跑 `python evals/replay.py --self-check`，不跑双库对照 | 上方清单含 `python evals/replay.py --self-check` 一行 | **显式命令**：这是 `.qoder/rules/benchmark-harness.md` §4.1 点名的两条回归判据，不是提交前必跑的第四条常驻命令，故不并入三条 |
+| 涉及迁移时：`python -m alembic check` | `make migrate`（只 `alembic upgrade head`，不含 `check`） | 主 job 收尾两步 `upgrade head` + `check`（SQLite），另有 `postgres-migration` job 只验 PG 迁移 | 清单含 `python -m alembic check` 一行 | 权威口径写的是「涉及迁移时加」，属条件性附加而非三条常驻，差异点名保留、不强行拉平 |
+
+> 说明：表内「本轮」指门禁口径归一这一轮；除标注「本轮补/对齐」的两行外，各命令串此前已逐字一致。
 
 ## 两个守卫：架构与文档
 
@@ -130,6 +148,7 @@ docs/guide/        使用与实现：架构、接口、边界、评测怎么跑
 docs/spec/         契约：项目规格与它渲染出的说明书
 docs/records/      历史记录：逐轮交付、时间点读数、平台化设想
 docs/下一步规划.md 唯一的规划文档：待办登记处（§0.2）+ 为什么这么排（§15）
+docs/文档地图.md    文档入口：四卷职责、每份文档读法、唯一事实源表
 docs/adr/          架构决策记录
 docs/*.yaml        三份守卫清单：事实基线、代码锚点、架构依赖
 tests/             单元 / 集成 / 端到端 / 安全用例
