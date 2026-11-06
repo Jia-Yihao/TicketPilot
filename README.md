@@ -62,7 +62,7 @@ POST /api/v1/support/messages
         └─ 写操作 ─► TaskRuntime ──► 资格 → 审批 → 执行 → 对账
 ```
 
-`app/agent` 与 `app/services` 不按渠道分支，新增渠道只加适配器。分层与控制流见 [架构说明](docs/guide/架构说明.md)。
+渠道差异收敛在 `app/channels/` 的适配器与注册入口，尽量不让 `app/agent/` 和 `app/services/` 出现渠道分支。模块职责与请求流见 [架构说明](docs/guide/架构说明.md)。
 
 ## 配置
 
@@ -85,7 +85,7 @@ cp .env.example .env
 | 文档 | 内容 |
 |---|---|
 | [快速开始](docs/guide/快速开始.md) | 安装、环境变量、Docker |
-| [架构说明](docs/guide/架构说明.md) | 分层、控制流、状态机 |
+| [架构说明](docs/guide/架构说明.md) | 模块职责、请求流、依赖边界、状态机 |
 | [接口说明](docs/guide/接口说明.md) | API 契约与错误码 |
 | [范围与边界](docs/guide/范围与边界.md) | 明确不做的事 |
 | [安全说明](docs/guide/安全说明.md) | 信任边界与 fail-closed |
@@ -93,29 +93,36 @@ cp .env.example .env
 ## 项目结构
 
 ```text
-app/
-  main.py        FastAPI 应用装配与依赖组合根
-  asgi.py        ASGI 服务入口
-  agent/         意图目录、规则路由、受限模型、上下文卡片
-  api/           FastAPI 路由与依赖注入
-  channels/      渠道适配器、验签、入站幂等、出站传输
-  core/          配置、策略引擎、身份、错误信封、护栏
-  db/            会话与引擎装配
-  models/        SQLAlchemy 模型
-  observability/ 链路追踪与脱敏
-  repositories/  数据访问
-  resources/     随包分发的演示政策与商品目录
-  retrieval/     BM25 / 稠密 / RRF / 重排 / 查询改写
-  schemas/       请求与响应模型
-  services/      任务运行时、退款、审批、对账、转人工、记忆、主动服务
-  sql/           受控 Text-to-SQL
-  tools/         工具注册、Gateway、执行器
-alembic/         数据库迁移
-evals/           Golden Set、支持集、检索与意图评测
-scripts/         种子数据、演示与评测脚本
-web/             React 控制台
-docs/            指南、接口契约与资源
+TicketPilot/
+├─ app/                    FastAPI 后端（模块化单体）
+│  ├─ asgi.py / main.py    ASGI 入口 / 应用组合根
+│  ├─ seed.py              演示数据装载
+│  ├─ api/v1/              HTTP 接口与依赖装配
+│  ├─ channels/            渠道适配、验签、入站幂等与出站
+│  ├─ agent/               意图路由、对话 Agent、受限模型抽取
+│  ├─ services/            任务运行时及审批、退款、工单、记忆等业务流程
+│  ├─ tools/               工具注册、Gateway 与执行器
+│  ├─ models/              SQLAlchemy 数据模型
+│  ├─ repositories/        按租户访问数据
+│  ├─ db/                  数据库引擎与会话
+│  ├─ schemas/             API 请求与响应模型
+│  ├─ core/                配置、策略、身份、错误与护栏
+│  ├─ retrieval/           政策检索与重排
+│  ├─ sql/                 受控 Text-to-SQL
+│  ├─ observability/       Trace 与脱敏
+│  └─ resources/           随包分发的演示政策与商品目录
+├─ alembic/                数据库迁移
+├─ evals/                  Golden Set、支持集、检索与意图评测
+├─ scripts/                种子数据、演示、Worker 与评测工具
+├─ web/                    React 控制台
+├─ docs/                   guide/ 文档与 assets/ 截图等资源
+├─ .github/workflows/      持续集成
+└─ pyproject.toml 等       Python 配置、依赖锁定、Docker 与 Make 入口
 ```
+
+上图按实际目录整理，省略了初始化文件和未逐一列出的子模块；它不代表严格的单向分层。
+后端是共享进程与数据库的模块化单体。
+各模块之间的职责边界、请求流和当前依赖关系见 [架构说明](docs/guide/架构说明.md)。
 
 ## 开发
 
