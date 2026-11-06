@@ -28,7 +28,10 @@ TicketPilot 是一个可运行的售后客服 Agent。只读问题（商品、�
 
 ```bash
 python -m venv .venv
-source .venv/Scripts/activate        # Windows；macOS/Linux 用 source .venv/bin/activate
+# Windows PowerShell:
+.venv\Scripts\Activate.ps1
+# macOS/Linux:
+source .venv/bin/activate
 pip install -e ".[dev]"
 
 python scripts/seed.py               # 建表 + 演示数据
@@ -91,6 +94,8 @@ cp .env.example .env
 
 ```text
 app/
+  main.py        FastAPI 应用装配与依赖组合根
+  asgi.py        ASGI 服务入口
   agent/         意图目录、规则路由、受限模型、上下文卡片
   api/           FastAPI 路由与依赖注入
   channels/      渠道适配器、验签、入站幂等、出站传输
@@ -109,7 +114,7 @@ alembic/         数据库迁移
 evals/           Golden Set、支持集、检索与意图评测
 scripts/         种子数据、演示与评测脚本
 web/             React 控制台
-docs/            指南、契约、ADR
+docs/            指南、接口契约与资源
 ```
 
 ## 开发
