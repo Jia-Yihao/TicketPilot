@@ -23,8 +23,7 @@ def ruleset_fingerprint() -> str:
     Hashing the source means a code change invalidates the record without
     anyone remembering to bump a version. The write-intent cues that now live
     in app/agent/intents.yaml are not covered here, so editing that data leaves
-    cached decisions valid -- registered as a gap in section 9 of
-    docs/adr/ADR-037-写意图判定迁到意图目录.md.
+    cached decisions valid -- a known, registered gap.
     """
     digest = hashlib.sha256()
     root = Path(__file__).resolve().parents[1]
@@ -273,9 +272,8 @@ _WRITE_INTENT_IDS = frozenset({Intent.REFUND_REQUEST, Intent.TICKET_CREATE})
 # Catalog rows that are write_path but have no Intent member, so classify()
 # never judged them and still cannot: DELIVERY_ISSUE is decided by the catalog
 # alone, in classify_support().
-# This set is also a registration surface, not just a skip list: the subset
-# assertion in tests/test_intent_catalog.py compares it against
-# _WRITE_INTENT_IDS, so adding an id here on its own turns that assertion green.
+# This set is also a registration surface, not just a skip list: it must stay
+# a subset of _WRITE_INTENT_IDS, so adding an id here on its own is not enough.
 # That is why every entry must spell out its reason (DELIVERY_ISSUE: no Intent
 # member, which is what the three lines above say).
 _WRITE_INTENT_EXEMPT = frozenset({"DELIVERY_ISSUE"})

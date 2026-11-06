@@ -26,8 +26,7 @@ Two boundaries to keep in view while reading the output:
   answer, ``--chat-model`` the same turns with the gate on, ``--chat-task`` the
   end-to-end refund (slots filled, task in ``WAITING_APPROVAL``), and
   ``--live-task`` the task API, where the model was always reachable. With
-  ``AGENT_MODE=rules`` nothing calls a model; ``tests/test_llm_gap.py`` pins all
-  of it.
+  ``AGENT_MODE=rules`` nothing calls a model.
 
 The fabrication check is not decoration: ``INSTRUCTIONS`` tells the extractor to
 copy an order id verbatim and never invent one, so an order id in the merged plan

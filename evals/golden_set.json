@@ -18,7 +18,7 @@
       "SELF_ANALYTICS",
       "PRODUCT_QUERY"
     ],
-    "note": "UNKNOWN 没有 normal 形态：无法归类的问题本身就是失败形态。12 个意图的并集由 tests/test_eval_datasets.py 校验。"
+    "note": "UNKNOWN 没有 normal 形态：无法归类的问题本身就是失败形态。12 个意图的并集是评测集的契约。"
   },
   "cases": [
     {

@@ -351,7 +351,6 @@ intents:
 # listed in routing._WRITE_INTENT_IDS. A write row with no enum member must be
 # named in routing._WRITE_INTENT_EXEMPT -- DELIVERY_ISSUE is one, because the
 # catalog decides it on its own, in classify_support(), and Intent has no such
-# member. Add a write row that is in neither set and
-# tests/test_intent_catalog.py::test_every_enum_label_has_a_catalog_row fails,
-# naming what to extend. The point is that a write row is never skipped in
-# silence: silence is how "add a row, no code change" stops being true twice.
+# member. Add a write row that is in neither set and the catalog and routing
+# disagree. The point is that a write row is never skipped in silence: silence
+# is how "add a row, no code change" stops being true twice.

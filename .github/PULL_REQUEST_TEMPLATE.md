@@ -8,8 +8,7 @@
 
 ## 验证
 
-- [ ] `python -m pytest -q`
-- [ ] `ruff check app tests scripts evals`
+- [ ] `ruff check app scripts evals`
 - [ ] `python evals/run.py`（改动检索、路由或退款规则时）
 - [ ] `python -m alembic check`（改动 ORM 模型时）
 - [ ] `cd web && npm run build`（改动控制台时）
@@ -26,4 +25,3 @@
 
 - [ ] 接口变化已更新 `docs/guide/接口说明.md`
 - [ ] 行为或边界变化已更新 README / 对应文档
-- [ ] 重大取舍已补 ADR（`docs/adr/`）

@@ -1,4 +1,4 @@
-# F-1 单轮反问的数据载体。口径见 docs/adr/ADR-039-单轮反问.md。
+# 单轮反问的数据载体。改这里的键之前先读 app/agent/counter_question.py 的 loader。
 # 顶层键是封闭集合：version / prompt_template / labels / max_options。
 # loader 在 app/agent/counter_question.py，拒绝任何未知键。
 # 这是数据不是提示词：兜底句「你也可以直接说…」复用 _clarify 尾句，

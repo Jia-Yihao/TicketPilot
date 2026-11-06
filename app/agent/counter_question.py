@@ -12,8 +12,8 @@ the F-1 wiring (a later task) three read-only values:
 
 Like the intent catalog, unknown keys are refused instead of silently read:
 a typo here would change what the customer is asked. Whether ``labels``
-covers the intent catalog is *not* checked here — that cross-file coupling
-is pinned by ``tests/test_counter_question_catalog.py`` instead.
+covers the intent catalog is *not* checked here — the two files are kept in
+sync by hand.
 """
 
 from __future__ import annotations

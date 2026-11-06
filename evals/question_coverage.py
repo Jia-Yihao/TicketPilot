@@ -1,13 +1,9 @@
 """R10 T5：问句门覆盖率的纯离线分列报告（口径 §3，入口 ``python evals/question_coverage.py``）。
 
 本模块是 ``CoverageReading`` 与 ``coverage_from_ledger`` 这套算术的**唯一住所**
-（T5 前置裁定：不得出现第二套真相）；读数测试
-``tests/test_question_coverage_reading.py`` 与本报告共用同一份，方向照仓内先例
-``tests/test_trace.py:21``（tests → evals，12 个文件 / 14 处命中；evals → tests 为 0 处）。
+（T5 前置裁定：不得出现第二套真相）。
 
-只读纪律（口径 §3，仓内**没有**机器守护——``python -m mypy app`` 与
-``docs/architecture-guard.yaml`` 都不覆盖 ``evals/``——由
-``tests/test_question_coverage_report.py`` 的源码扫描断言机械化）：
+只读纪律（口径 §3；``python -m mypy app`` 不覆盖 ``evals/``）：
 本模块不写库、不调模型；import 只有 ``app.models.*`` / ``app.db.session`` /
 ``app.core.config`` 与标准库、SQLAlchemy 查询构造；gap 只从库里已落盘的
 ``trace_spans.attributes["model_gap"]`` JSON 读取。

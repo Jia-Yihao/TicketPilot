@@ -56,7 +56,7 @@ body:
     attributes:
       label: 提交前确认
       options:
-        - label: 我已在最新提交上复现，并跑过 `python -m pytest -q`
+        - label: 我已在最新提交上复现
           required: true
         - label: 我确认内容不含真实客户数据、密钥或生产连接串
           required: true

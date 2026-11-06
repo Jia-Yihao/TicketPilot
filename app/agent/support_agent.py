@@ -497,7 +497,7 @@ class SupportAgent:
                 latency_ms=tracing.elapsed_ms(classify_started),
             )
             if resealed_keys:
-                # The marker the re-seal owes the reader (ADR-030 决策 6): this
+                # The marker the re-seal owes the reader: this
                 # turn's digest was recomputed over keys that entered the
                 # context *after* the model answered, so the record must not
                 # claim the model saw them. Key names only — no values, no

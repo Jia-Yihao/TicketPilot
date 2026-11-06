@@ -8,7 +8,7 @@
 `traces.py` 纪律同向）。
 
 出口层 `app/api/v1/monitor.py` 只调用本模块的公开函数，不直接触碰审计模型或
-仓储（由 `tests/test_monitor_api.py` 的 `inspect.getsource` 用例钉住）。
+仓储。
 写入沿用 `AuditRepository.record` 的「只 flush 不 commit」契约——事务提交归
 API 层（`handoffs.py`/`analytics.py` 先例）。零模型调用、不写任何配置文件。
 """

@@ -6,8 +6,6 @@
 # other_cues 是「显式其他」的独立识别表，优先于 rules：客户自己说的「其他 /
 # 说不清」是最强的分类信号，不该被顺带命中的关键词改写成系统的猜测。
 # OTHER 只来自 other_cues 与调用方显式提交，不是 rules 的一行。
-#
-# 口径来源：docs/adr/ADR-035-退款原因与类型分类.md
 
 version: "2026-10-26"
 slot: refund_reason

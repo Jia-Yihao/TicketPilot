@@ -14,8 +14,8 @@ __all__ = ["INBOUND_IMPLEMENTED", "WEBHOOK_INBOUND", "build_adapters"]
 # it is the single source of truth for both the availability predicate
 # (``app/channels/availability.py``) and the signed webhook allowlist
 # (``app/channels/gateway.py``). Adding a channel here without building its
-# adapter in ``build_adapters`` below — or the other way round — is caught by
-# the guard in ``tests/test_channel_availability.py``.
+# adapter in ``build_adapters`` below — or the other way round — breaks the
+# inbound availability contract.
 INBOUND_IMPLEMENTED: frozenset[Channel] = frozenset(
     {Channel.WEB, Channel.EMAIL, Channel.WECHAT, Channel.WECOM}
 )

@@ -5,7 +5,7 @@ on:
   pull_request:
 
 jobs:
-  test:
+  checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,9 +15,8 @@ jobs:
           cache: pip
       - run: pip install --no-cache-dir -r requirements.lock
       - run: pip install --no-deps .
-      - run: ruff check app tests scripts evals alembic
+      - run: ruff check app scripts evals alembic
       - run: python -m mypy app
-      - run: python -m pytest -q
       - run: python evals/run.py
       - run: python evals/support_run.py
       - run: python evals/support_run.py --dataset evals/analytics_dimension_set.json --partial

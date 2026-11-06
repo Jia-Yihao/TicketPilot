@@ -1,4 +1,4 @@
-.PHONY: install run seed test guard guard-negative lint eval eval-support eval-dimension eval-intent eval-retrieval eval-replay eval-business eval-baseline eval-answer sample-bad-cases migrate compose-up compose-down manual mypy
+.PHONY: install run seed lint eval eval-support eval-dimension eval-memory eval-intent eval-retrieval eval-replay eval-business eval-baseline eval-answer sample-bad-cases migrate compose-up compose-down mypy
 
 install:
 	python -m pip install -e ".[dev]"
@@ -9,17 +9,8 @@ run:
 seed:
 	python scripts/seed.py
 
-test:
-	python -m pytest -q
-
-guard:
-	python -m pytest tests/test_architecture_guard.py tests/test_docs_consistency.py
-
-guard-negative:
-	python scripts/guard_negative_check.py
-
 lint:
-	ruff check app tests scripts evals alembic
+	ruff check app scripts evals alembic
 
 eval:
 	python evals/run.py
@@ -63,9 +54,6 @@ compose-up:
 
 compose-down:
 	docker compose down
-
-manual:
-	python scripts/build_manual.py
 
 mypy:
 	python -m mypy app

@@ -1,6 +1,6 @@
 """The only place customer memory touches an answer.
 
-ADR-014 kept this module out of the project on purpose: an answer that reads a
+The project keeps this module narrow on purpose: an answer that reads a
 table the customer can rewrite at any moment makes the reply wording
 undebuggable. This is the narrow version of that door. Everything here is an
 *overlay* — a server-owned template or a change of shape — so the evidence

@@ -80,7 +80,7 @@ class ProactiveRuleView(BaseModel):
 class ProactiveRuleUpdateRequest(BaseModel):
     """The three fields a seat may change; ``requires_confirmation`` is not one.
 
-    That flag is how ADR-014 keeps its promise — a notification waits for the
+    That flag is how the consent gate keeps its promise — a notification waits for the
     customer before anything is queued. Making it a checkbox on this request
     would let the operations side remove the consent gate, so the field is
     rejected here rather than silently ignored.

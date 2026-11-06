@@ -26,7 +26,7 @@ from app.services.handoff import HandoffMetrics
 SIGNAL_IDS: tuple[str, ...] = ("no_evidence_rate", "handoff_rate", "tool_failure_rate")
 
 # no_evidence 意图集合的代码内抄本，抄自 app/agent/escalation.yaml::no_evidence.intents；
-# 一致性由 tests/test_signal_readings.py 现读 YAML 比对钉死（口径 §9-3）。
+# 改 YAML 时须同步这里（口径 §9-3）。
 NO_EVIDENCE_INTENTS: tuple[str, ...] = ("POLICY_QA", "SELF_ANALYTICS")
 
 # 信号 C 分母：已落定的执行态。排除 PENDING（尚未执行，不计入任何一侧）。
