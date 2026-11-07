@@ -1,6 +1,6 @@
 # 贡献指南
 
-改动前请先读 [docs/guide/范围与边界.md](docs/guide/范围与边界.md) 与 [docs/guide/架构说明.md](docs/guide/架构说明.md)，先弄清项目边界和模块划分。
+改动前请先弄清项目边界和模块划分。详细设计、接口与边界文档只保留在本地，不随仓库分发。
 
 ## 行为准则
 
@@ -68,7 +68,7 @@ app/retrieval/     政策摄取、切块、BM25 检索与引用
 app/observability/ 链路追踪与脱敏
 app/resources/     随包分发的演示数据（政策 md、商品 catalog.json）
 web/src/           React 控制台；设计令牌集中在 styles.css 的 :root
-docs/guide/        使用与实现：架构、接口、边界
+docs/assets/       界面截图
 evals/             Golden Set、只读评测集、检索指标与回放脚本
 ```
 
@@ -91,7 +91,7 @@ evals/             Golden Set、只读评测集、检索指标与回放脚本
 
 ## 加一个接口
 
-1. 先在 `docs/guide/接口说明.md` 写契约：方法、路径、身份要求、错误码、是否跨租户可读。
+1. 先在本地接口文档写契约：方法、路径、身份要求、错误码、是否跨租户可读。
 2. 在 `app/schemas/` 定义响应模型，在 `app/api/v1/` 装配；业务规则放 `app/services/`。
 3. 跨租户访问一律 `404`，不要 `403`。
 4. 自测三类路径：正常、越权/跨租户、并发或重复提交（若涉及写）。
@@ -100,27 +100,19 @@ evals/             Golden Set、只读评测集、检索指标与回放脚本
 ## 截图与文档
 
 控制台视觉有变化时请重拍受影响截图（`docs/assets/screenshots/`），
-README 只引用该目录下的图片。文档里的端点数量必须与实际命令输出一致。
+README 只引用该目录下的图片。
 
-改动会影响回复文本的生成路径（个性化效果、输出护栏、模板措辞）时，除了
-`docs/guide/接口说明.md` 的响应示例，还要同步前端 `web/src/pages/ConversationPage.tsx` 里的原因码标签表：
-新增一种会让回复变化的效果，等于让已有档案客户的历史 trace 不再逐字可回放。
+详细设计、接口与边界文档只保留在本地，不进仓库。改动行为时同步更新这些本地文档，
+并检查 `README.md` 的描述与实际行为一致。
+
+改动会影响回复文本的生成路径（个性化效果、输出护栏、模板措辞）时，同步更新前端
+`web/src/pages/ConversationPage.tsx` 里的原因码标签表。新增一种会让回复变化的效果，
+等于让已有档案客户的历史 trace 不再逐字可回放。
 
 改动会打开或改变主动规则的写面（`PUT /api/v1/memory/rules/{event_type}`）时，
-这条同步清单更长，漏一条就会出现「文档说只能改种子数据，代码却能改」的漂移：
-
-1. `docs/guide/接口说明.md`：提交（202）与批准（200）两段契约、每个错误码的形状、`details` 回显内容。
-2. `docs/guide/架构说明.md` 的「主动规则的治理面」一节：提交 → 复核 → 生效的写路径、版本快照、回滚、诚实边界。
-3. `docs/guide/安全说明.md` 的「规则文案的信任边界」一节：`requires_confirmation` 不可写、
-   事件类型由代码定、发起人不能批准自己的提案、审计只存摘要、改动不回溯。
-4. `docs/guide/范围与边界.md` 的「明确不做」一节：写路径进不了评测集，要写清楚原因。
-5. `README.md` 与本文件的门禁命令清单。
-6. 前端 `web/src/pages/ProactiveRules.tsx` + `web/src/api.ts` + `web/src/types.ts`，
-   以及 `web/src/App.tsx` 的路由与角色门禁（`/rules` 只对 `support` / `admin` 可见；
-   批准 / 驳回按钮只对 `approver` 且非提交人显示）。
-7. 规则文案现在需要另一位审批人（四眼）、有不可变版本表与一键回滚；仍然没有
-   删除规则、按租户灰度、定时生效或对已生成通知的回溯改写，这些是刻意不做的，
-   任何文档都不能把它们写成已具备。
+同步更新前端 `web/src/pages/ProactiveRules.tsx`、`web/src/api.ts`、`web/src/types.ts`，
+以及 `web/src/App.tsx` 的路由与角色门禁（`/rules` 只对 `support` / `admin` 可见；
+批准 / 驳回按钮只对 `approver` 且非提交人显示）。
 
 ## 提交与 PR
 

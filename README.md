@@ -48,8 +48,6 @@ uvicorn app.asgi:app --port 8000
 python scripts/refund_flow.py
 ```
 
-完整安装、环境变量、Docker Compose 与常见问题见 [快速开始](docs/guide/快速开始.md)。
-
 ## 架构
 
 ```text
@@ -62,7 +60,7 @@ POST /api/v1/support/messages
         └─ 写操作 ─► TaskRuntime ──► 资格 → 审批 → 执行 → 对账
 ```
 
-渠道差异收敛在 `app/channels/` 的适配器与注册入口，渠道分支不进 `app/agent/` 和 `app/services/`。模块职责与请求流见 [架构说明](docs/guide/架构说明.md)。
+渠道差异收敛在 `app/channels/` 的适配器与注册入口，渠道分支不进 `app/agent/` 和 `app/services/`。
 
 ## 配置
 
@@ -78,17 +76,7 @@ cp .env.example .env
 | `DATABASE_URL` | `sqlite+pysqlite:///./ticketpilot.db` | 生产使用 PostgreSQL |
 | `ENVIRONMENT` | `dev` | `prod` 触发 fail-closed 校验 |
 
-更多变量见 [快速开始](docs/guide/快速开始.md#关键环境变量)，完整清单在 `app/core/config.py`。
-
-## 文档
-
-| 文档 | 内容 |
-|---|---|
-| [快速开始](docs/guide/快速开始.md) | 安装、环境变量、Docker |
-| [架构说明](docs/guide/架构说明.md) | 模块职责、请求流、依赖边界、状态机 |
-| [接口说明](docs/guide/接口说明.md) | API 契约与错误码 |
-| [范围与边界](docs/guide/范围与边界.md) | 明确不做的事 |
-| [安全说明](docs/guide/安全说明.md) | 信任边界与 fail-closed |
+完整变量清单见 `app/core/config.py`。
 
 ## 项目结构
 
@@ -115,12 +103,12 @@ TicketPilot/
 ├─ evals/                  Golden Set、支持集、检索与意图评测
 ├─ scripts/                种子数据、演示、Worker 与评测工具
 ├─ web/                    React 控制台
-├─ docs/                   guide/ 文档与 assets/ 截图等资源
+├─ docs/assets/            界面截图
 ├─ .github/workflows/      持续集成
 └─ pyproject.toml 等       Python 配置、依赖锁定、Docker 与 Make 入口
 ```
 
-上图按实际目录整理，省略了初始化文件和未逐一列出的子模块，不代表严格的单向分层；各模块之间的职责边界、请求流和当前依赖关系见 [架构说明](docs/guide/架构说明.md)。
+上图按实际目录整理，省略了初始化文件和未逐一列出的子模块，不代表严格的单向分层。
 
 ## 开发
 
@@ -140,7 +128,7 @@ make eval        # Golden Set
 
 ## 安全
 
-部署前读 [安全说明](docs/guide/安全说明.md)。项目默认拒绝以 `prod` 模式启动，Header 身份、mock 退款与公开文档都不被接受。未实现的 OIDC 与 HTTP 适配器会让应用直接起不来。
+部署前读 [SECURITY.md](SECURITY.md)。项目默认拒绝以 `prod` 模式启动，Header 身份、mock 退款与公开文档都不被接受。未实现的 OIDC 与 HTTP 适配器会让应用直接起不来。
 
 ## 许可
 

@@ -18,6 +18,6 @@ node_modules/
 .tmp/
 .review/
 .workbuddy/
-# 说明书与构建记录是本地派生产物，不入库
-docs/spec/*.docx
-docs/spec/manual-build.json
+# 详细设计与实现文档只保留在本地，不纳入版本控制
+docs/guide/
+docs/spec/
