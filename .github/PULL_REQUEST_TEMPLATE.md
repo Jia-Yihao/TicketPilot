@@ -8,7 +8,7 @@
 
 ## 验证
 
-- [ ] `ruff check app scripts evals`
+- [ ] `ruff check app scripts evals alembic`
 - [ ] `python evals/run.py`（改动检索、路由或退款规则时）
 - [ ] `python -m alembic check`（改动 ORM 模型时）
 - [ ] `cd web && npm run build`（改动控制台时）

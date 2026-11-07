@@ -1,13 +1,12 @@
 # 贡献指南
 
-感谢有兴趣改进 TicketPilot。这个项目是**工程作品集与教学向演示**，
-它的价值在于把“Agent 系统里哪些部分必须是确定性代码”讲清楚，
-所以改动前请先读 [docs/guide/范围与边界.md](docs/guide/范围与边界.md) 与 [docs/guide/架构说明.md](docs/guide/架构说明.md)。
+改动前请先读 [docs/guide/范围与边界.md](docs/guide/范围与边界.md) 与 [docs/guide/架构说明.md](docs/guide/架构说明.md)，先弄清项目边界和模块划分。
 
 ## 行为准则
 
-就三条：评论针对代码不针对人；不确定就写“我不确定”，不要编；
-文档里的每个数字都要能跑出来。
+- 评论针对代码，不针对人。
+- 不确定就写「我不确定」，不要编造。
+- 文档里的每个数字都要能跑出来。
 
 ## 开发环境
 
@@ -51,9 +50,6 @@ Postgres job 只验迁移链。
 
 检索指标的双库一致性由 `PolicySearchService.visible_chunks()` 按块 ID 排序保证（`app/retrieval/search.py`）。
 
-CI 会跑 ruff、mypy、Golden Set、Alembic 迁移与 `alembic check`、以及控制台构建，
-见 [.github/workflows/ci.yml](.github/workflows/ci.yml)。
-
 ## 目录约定
 
 ```text
@@ -78,7 +74,7 @@ evals/             Golden Set、只读评测集、检索指标与回放脚本
 
 ### 代码注释与 docstring
 
-模块级 docstring 与公开函数的 docstring 写**简体中文**，讲「这个模块负责什么、边界在哪、谁不该依赖它」；
+模块级 docstring 与公开函数的 docstring 写简体中文，讲「这个模块负责什么、边界在哪、谁不该依赖它」；
 标识符、日志文案、span 名、事件类型、错误码一律保持英文原样。行内注释只在解释「为什么」时写，
 不复述代码在做什么。
 
@@ -106,31 +102,30 @@ evals/             Golden Set、只读评测集、检索指标与回放脚本
 控制台视觉有变化时请重拍受影响截图（`docs/assets/screenshots/`），
 README 只引用该目录下的图片。文档里的端点数量必须与实际命令输出一致。
 
-改动**会影响回复文本的生成路径**（个性化效果、输出护栏、模板措辞）时，除了
-`docs/guide/接口说明.md` 的响应示例，还要同步 `README.md` 的对照段
-与前端 `web/src/pages/ConversationPage.tsx` 里的原因码标签表：新增一种会让回复变化的效果，
-等于让已有档案客户的历史 trace 不再逐字可回放。
+改动会影响回复文本的生成路径（个性化效果、输出护栏、模板措辞）时，除了
+`docs/guide/接口说明.md` 的响应示例，还要同步前端 `web/src/pages/ConversationPage.tsx` 里的原因码标签表：
+新增一种会让回复变化的效果，等于让已有档案客户的历史 trace 不再逐字可回放。
 
-改动**会打开或改变主动规则的写面**（`PUT /api/v1/memory/rules/{event_type}`）时，
+改动会打开或改变主动规则的写面（`PUT /api/v1/memory/rules/{event_type}`）时，
 这条同步清单更长，漏一条就会出现「文档说只能改种子数据，代码却能改」的漂移：
 
-1. `docs/guide/接口说明.md`——提交（202）与批准（200）两段契约、每个错误码的形状、`details` 回显内容。
-2. `docs/guide/架构说明.md`——「主动规则的治理面」一节：提交 → 复核 → 生效的写路径、版本快照、回滚、诚实边界。
-3. `docs/guide/安全说明.md`——**可写字段与审批的信任边界**：`requires_confirmation` 不可写、
+1. `docs/guide/接口说明.md`：提交（202）与批准（200）两段契约、每个错误码的形状、`details` 回显内容。
+2. `docs/guide/架构说明.md` 的「主动规则的治理面」一节：提交 → 复核 → 生效的写路径、版本快照、回滚、诚实边界。
+3. `docs/guide/安全说明.md` 的「规则文案的信任边界」一节：`requires_confirmation` 不可写、
    事件类型由代码定、发起人不能批准自己的提案、审计只存摘要、改动不回溯。
-4. `docs/guide/范围与边界.md` 的「不做」侧——写路径进不了评测集，要写清楚原因。
+4. `docs/guide/范围与边界.md` 的「明确不做」一节：写路径进不了评测集，要写清楚原因。
 5. `README.md` 与本文件的门禁命令清单。
 6. 前端 `web/src/pages/ProactiveRules.tsx` + `web/src/api.ts` + `web/src/types.ts`，
    以及 `web/src/App.tsx` 的路由与角色门禁（`/rules` 只对 `support` / `admin` 可见；
    批准 / 驳回按钮只对 `approver` 且非提交人显示）。
-7. 规则文案现在**需要另一位审批人**（四眼）、有不可变版本表与一键回滚；仍然**没有**
-   删除规则、按租户灰度、定时生效或对已生成通知的回溯改写——这些是刻意不做的，
+7. 规则文案现在需要另一位审批人（四眼）、有不可变版本表与一键回滚；仍然没有
+   删除规则、按租户灰度、定时生效或对已生成通知的回溯改写，这些是刻意不做的，
    任何文档都不能把它们写成已具备。
 
 ## 提交与 PR
 
 - 分支名 `feat/…`、`fix/…`、`docs/…`。
-- Commit message 用祈使句说明“为什么”，一次提交只做一件事。
+- Commit message 用祈使句说明「为什么」，一次提交只做一件事。
 - PR 模板会要求填写：验证方式（跑了哪些命令、看了哪个页面）与未验证边界。
-  **不清楚是否真的可行的写法，请写进“未验证”，不要删。**
+  不清楚是否真的可行的写法，请写进「未验证」，不要删。
 - 不要提交 `.env`、数据库文件、`web/dist`、`.tmp/`。

@@ -62,7 +62,7 @@ POST /api/v1/support/messages
         └─ 写操作 ─► TaskRuntime ──► 资格 → 审批 → 执行 → 对账
 ```
 
-渠道差异收敛在 `app/channels/` 的适配器与注册入口，尽量不让 `app/agent/` 和 `app/services/` 出现渠道分支。模块职责与请求流见 [架构说明](docs/guide/架构说明.md)。
+渠道差异收敛在 `app/channels/` 的适配器与注册入口，渠道分支不进 `app/agent/` 和 `app/services/`。模块职责与请求流见 [架构说明](docs/guide/架构说明.md)。
 
 ## 配置
 
@@ -120,9 +120,7 @@ TicketPilot/
 └─ pyproject.toml 等       Python 配置、依赖锁定、Docker 与 Make 入口
 ```
 
-上图按实际目录整理，省略了初始化文件和未逐一列出的子模块；它不代表严格的单向分层。
-后端是共享进程与数据库的模块化单体。
-各模块之间的职责边界、请求流和当前依赖关系见 [架构说明](docs/guide/架构说明.md)。
+上图按实际目录整理，省略了初始化文件和未逐一列出的子模块，不代表严格的单向分层；各模块之间的职责边界、请求流和当前依赖关系见 [架构说明](docs/guide/架构说明.md)。
 
 ## 开发
 
@@ -142,7 +140,7 @@ make eval        # Golden Set
 
 ## 安全
 
-部署前读 [安全说明](docs/guide/安全说明.md)。项目默认拒绝以 `prod` 模式启动：Header 身份、mock 退款与公开文档在 `prod` 下都不被接受；未实现的 OIDC 与 HTTP 适配器会让应用直接起不来。
+部署前读 [安全说明](docs/guide/安全说明.md)。项目默认拒绝以 `prod` 模式启动，Header 身份、mock 退款与公开文档都不被接受。未实现的 OIDC 与 HTTP 适配器会让应用直接起不来。
 
 ## 许可
 
