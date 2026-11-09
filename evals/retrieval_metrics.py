@@ -678,15 +678,16 @@ def _sweep(
     seed_all(session_factory)
     try:
         provider, provider_label = _dense_provider(settings, local_model)
-        if provider is None:
+        if provider is not None:
+            with session_factory() as session:
+                store_embeddings(session, provider)
+                session.commit()
+        elif any(channel != "bm25" for channel in channels):
             raise SystemExit(
-                "a depth sweep needs an embedding model; pass "
+                "a dense depth sweep needs an embedding model; pass "
                 "--local-embedding <path> or set EMBEDDING_BASE_URL and "
                 "EMBEDDING_MODEL"
             )
-        with session_factory() as session:
-            store_embeddings(session, provider)
-            session.commit()
         short = provider_label.split(":")[-1][:16]
         # One pass per (channel, depth); every k and every layer is read from
         # the same ranking, so a sweep costs one evaluation per row group.
@@ -701,6 +702,8 @@ def _sweep(
                     search_factory = _sparse_factory(depth, rewriter)
                     name = "bm25"
                 elif channel == "hybrid":
+                    if provider is None:
+                        continue
                     search_factory = _hybrid_factory(
                         settings,
                         provider,
