@@ -27,6 +27,14 @@ dependencies = [
 redis = [
     "redis>=5,<6",
 ]
+# Retrieval fine-tuning only (scripts/finetune_embedder.py). Kept out of the
+# default install and out of requirements.lock: the service and the CI gate
+# never embed locally, so neither needs torch.
+finetune = [
+    "torch>=2.4",
+    "transformers>=4.44",
+    "sentence-transformers>=3.0",
+]
 dev = [
     "ruff>=0.6,<1",
     "mypy>=1.11,<2",

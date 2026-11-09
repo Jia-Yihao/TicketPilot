@@ -30,8 +30,10 @@ __all__ = [
 # this module is tier 0 and ``app/retrieval`` is tier 2, so importing
 # ``SCORE_KINDS`` from there would be an upward dependency the architecture
 # guard rejects. ``app/retrieval/search.py`` still owns the retrieval half of
-# the vocabulary; a test pins the two against each other.
-EVIDENCE_KINDS: tuple[str, ...] = ("sparse", "dense", "fusion", "rerank", "verdict")
+# the vocabulary. The two sets are not equal on purpose: ``fusion`` is a
+# ranking kind and never reaches this module, because ``RetrievedChunk.evidence()``
+# reports the channel score a fused row came from.
+EVIDENCE_KINDS: tuple[str, ...] = ("sparse", "dense", "rerank", "verdict")
 
 # A verdict score is the action layer's own 0-or-1 answer, not a retrieval
 # score. 0.5 is the only meaningful line through it, so it takes no setting.
@@ -64,7 +66,6 @@ class EscalationThresholds:
     after_failed_attempts: int
     no_evidence_score: float
     no_evidence_score_dense: float
-    no_evidence_score_fusion: float
     no_evidence_score_rerank: float
     session_idle_minutes: int
     claim_timeout_seconds: int
@@ -96,7 +97,6 @@ class EscalationThresholds:
         thresholds = {
             "sparse": self.no_evidence_score,
             "dense": self.no_evidence_score_dense,
-            "fusion": self.no_evidence_score_fusion,
             "rerank": self.no_evidence_score_rerank,
             "verdict": _VERDICT_NO_EVIDENCE_THRESHOLD,
         }
@@ -128,7 +128,6 @@ class PolicyEngine:
                 after_failed_attempts=settings.handoff_after_failed_attempts,
                 no_evidence_score=settings.escalation_no_evidence_score,
                 no_evidence_score_dense=settings.escalation_no_evidence_score_dense,
-                no_evidence_score_fusion=settings.escalation_no_evidence_score_fusion,
                 no_evidence_score_rerank=settings.escalation_no_evidence_score_rerank,
                 session_idle_minutes=settings.session_idle_minutes,
                 claim_timeout_seconds=settings.handoff_claim_timeout_seconds,

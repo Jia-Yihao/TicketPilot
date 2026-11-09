@@ -21,7 +21,7 @@ jobs:
       - run: python evals/support_run.py
       - run: python evals/support_run.py --dataset evals/analytics_dimension_set.json --partial
       - run: python evals/support_run.py --dataset evals/memory_personalization_set.json --partial
-      - run: python evals/retrieval_metrics.py --channels bm25,hybrid
+      - run: python evals/retrieval_metrics.py --channels bm25
       - run: python scripts/build_intent_set.py --check
       - run: python evals/intent_metrics.py --enforce
       - run: python evals/replay.py --self-check

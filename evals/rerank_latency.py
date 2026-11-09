@@ -94,13 +94,11 @@ def _queries(dataset: dict[str, Any]) -> list[tuple[str, str, str]]:
 
 def _dense_provider(settings: Settings) -> EmbeddingProvider | None:
     """The dense provider, or ``None`` when there is no endpoint."""
-    from app.retrieval.dense import HashingEmbedder, OpenAICompatibleEmbedder
+    from app.retrieval.dense import OpenAICompatibleEmbedder
 
     if settings.embedding_base_url and settings.embedding_model:
         api_key = (
-            settings.embedding_api_key.get_secret_value()
-            if settings.embedding_api_key
-            else None
+            settings.embedding_api_key.get_secret_value() if settings.embedding_api_key else None
         )
         return OpenAICompatibleEmbedder(
             settings.embedding_base_url,
@@ -108,15 +106,11 @@ def _dense_provider(settings: Settings) -> EmbeddingProvider | None:
             api_key=api_key,
             timeout=settings.embedding_timeout_seconds,
         )
-    if settings.retrieval_dense_enabled:
-        return HashingEmbedder(settings.embedding_dimensions)
     return None
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Measure rerank latency against a budget."
-    )
+    parser = argparse.ArgumentParser(description="Measure rerank latency against a budget.")
     parser.add_argument("--dataset", type=Path, default=DATASET_PATH)
     parser.add_argument(
         "--database-url",
@@ -184,14 +178,19 @@ def main() -> int:
     latencies: list[float] = []
     empty_candidates = 0
     try:
-        if provider is not None:
-            with session_factory() as session:
-                try:
-                    store_embeddings(session, provider)
-                    session.commit()
-                except ValueError:
-                    session.rollback()
-                    provider = None
+        if provider is None:
+            # Rerank sits on top of the fused chain; measuring it over a
+            # sparse-only candidate list would report the wrong latency budget.
+            raise SystemExit(
+                "rerank latency needs the fused chain: set EMBEDDING_BASE_URL and EMBEDDING_MODEL"
+            )
+        with session_factory() as session:
+            try:
+                store_embeddings(session, provider)
+                session.commit()
+            except ValueError as exc:
+                session.rollback()
+                raise SystemExit(f"dense index refused: {exc}") from exc
 
         with session_factory() as session:
             search = HybridPolicySearch(
@@ -201,15 +200,12 @@ def main() -> int:
                 ),
                 embedder=provider,
                 reranker=timed,
-                rrf_k=settings.retrieval_rrf_k,
                 max_results=settings.policy_max_results,
                 candidate_pool=settings.retrieval_candidate_pool,
                 dense_min_score=settings.retrieval_dense_min_score,
             )
             for index, (_case_id, query, tenant) in enumerate(queries):
-                identity = Identity(
-                    tenant_id=tenant, user_id="alice", roles=frozenset()
-                )
+                identity = Identity(tenant_id=tenant, user_id="alice", roles=frozenset())
                 before = len(timed.latencies_ms)
                 search.search(identity, query, limit=settings.policy_max_results)
                 if len(timed.latencies_ms) == before:
@@ -237,8 +233,10 @@ def main() -> int:
 
     print(f"endpoint            {settings.rerank_url}")
     print(f"model               {settings.rerank_model}")
-    print(f"queries             {len(latencies)} timed, {timed.failures} failed, "
-          f"{empty_candidates} without candidates")
+    print(
+        f"queries             {len(latencies)} timed, {timed.failures} failed, "
+        f"{empty_candidates} without candidates"
+    )
     print(f"candidates          min {min(candidates)} / max {max(candidates)}")
     print(f"mean_ms             {mean_ms:.0f}")
     print(f"p50_ms              {p50_ms:.0f}")

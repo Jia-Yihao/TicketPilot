@@ -29,8 +29,8 @@ THRESHOLDS_PATH = SOURCE_DIR / "thresholds.json"
 OUT_PATH = ROOT / "evals" / "retrieval_set.json"
 POLICY_DIR = ROOT / "app" / "resources" / "policies"
 
-GOLD_TOTAL = 200
-SILVER_TOTAL = 800
+GOLD_TOTAL = 600
+SILVER_TOTAL = 1600
 K_VALUES = (1, 3, 5)
 
 
@@ -189,11 +189,11 @@ def build() -> dict[str, Any]:
         raise DatasetError(f"duplicate query: {duplicates[:3]}")
 
     return {
-        "version": 1,
+        "version": 2,
         "description": (
-            "分层检索评测集：200 条手写金标（逐条对照政策原文）+ 800 条模板银标"
-            "（标签由构造决定）。金银分开报告，银标不设门槛。生成器："
-            "scripts/build_retrieval_set.py。"
+            "分层检索评测集：600 条手写金标（逐条对照政策原文）+ 1600 条模板银标"
+            "（标签由构造决定），dev/test 各半，test 分片 1100 条。金银分开报告，"
+            "银标不设门槛。生成器：scripts/build_retrieval_set.py。"
         ),
         "k_values": list(K_VALUES),
         "gold_counts": _counts(gold),

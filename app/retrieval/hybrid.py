@@ -1,20 +1,28 @@
 """Hybrid policy search: sparse BM25 plus an optional dense channel.
 
-The two channels are fused with RRF (reciprocal rank fusion) so a chunk that
-only one channel found can still reach the top. The optional reranker runs on
-the fused candidates and fails open, so the retrieval chain keeps working when
-the reranker is unreachable.
+The two channels are fused with per-channel z-scores, so a chunk that only one
+channel found can still reach the top and the sharp head of the BM25 list
+survives the merge. The optional reranker runs on the fused candidates and
+fails open, so the retrieval chain keeps working when the reranker is
+unreachable.
 
-The dense channel is opt-in and, once enabled, gated per query: a confident
-BM25 top-1 skips the embedding call, while a blind or poorly covered top-1
-opens it. ``DenseGate`` documents the thresholds and why a score cutoff alone
-is not enough on this corpus.
+Fusion and evidence are deliberately two different numbers. A z-score is
+normalized inside one query, which makes it a good ranking signal and a bad
+"is there anything here at all" signal: on the layered set 44% of off-domain
+messages scored above the weakest answerable query. Every hit therefore
+carries its channel score next to the fused one, and the escalation gate reads
+that channel score.
+
+The dense channel runs on every query whenever an embedder is configured.
+A gate that skipped it on confident BM25 hits was measured at 0.710 recall@1
+against 0.730 always-on, so the cost saving was buying a worse answer and the
+gate was removed rather than kept as a knob.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from datetime import date
 
 from sqlalchemy.orm import Session
@@ -26,51 +34,18 @@ from app.retrieval.dense import (
     chunk_text,
     cosine_similarity,
 )
-from app.retrieval.fusion import rrf_fuse
+from app.retrieval.fusion import zscore_fuse
 from app.retrieval.rerank import RerankClient
 from app.retrieval.search import (
     PolicySearchService,
     RetrievedChunk,
     ScoredChunk,
-    tokenize,
 )
 
-
-@dataclass(frozen=True, slots=True)
-class DenseGate:
-    """Whether this query needs the dense channel, decided before embedding.
-
-    A BM25 top-1 score cutoff was the first candidate, but on
-    ``evals/support_set.json`` the three rank-1 misses all scored >= 12.9:
-    BM25 was *confidently* wrong, so a low-score rule would never fire on the
-    cases dense can fix. The three misses were instead the three queries with
-    the lowest share of their terms present in the top-1 chunk (0.26-0.35),
-    which is what this gate measures. Both thresholds were calibrated on that
-    17-case labelled set and should be re-tuned when the corpus changes.
-    """
-
-    min_top1_score: float = 5.0
-    min_coverage: float = 0.35
-
-    def reason(self, query: str, sparse_hits: Sequence[ScoredChunk]) -> str | None:
-        """Return why dense should run, or ``None`` when BM25 is confident."""
-        if not sparse_hits:
-            return "no_sparse_hits"
-        top = sparse_hits[0]
-        if top.score < self.min_top1_score:
-            return "weak_sparse"
-        if self.coverage(query, top.chunk) <= self.min_coverage:
-            return "low_coverage"
-        return None
-
-    @staticmethod
-    def coverage(query: str, chunk: DocumentChunk) -> float:
-        """Share of the query's tokens that appear in the top-1 chunk."""
-        query_terms = set(tokenize(query))
-        if not query_terms:
-            return 0.0
-        chunk_terms = set(tokenize(f"{chunk.section}\n{chunk.content}"))
-        return len(query_terms & chunk_terms) / len(query_terms)
+# The sparse channel's weight when both channels answer. Measured on the
+# layered set: 0.3 beat 0.5 by 2.0 points of recall@1 and 1.0 point of MRR,
+# because the dense channel is the tie-breaker here, not the primary reader.
+FUSION_ALPHA = 0.3
 
 
 class HybridPolicySearch:
@@ -83,24 +58,17 @@ class HybridPolicySearch:
         sparse: PolicySearchService,
         embedder: EmbeddingProvider | None = None,
         reranker: RerankClient | None = None,
-        rrf_k: int = 60,
         max_results: int = 3,
         candidate_pool: int = 20,
         dense_min_score: float = 0.0,
-        dense_gate: DenseGate | None = None,
     ) -> None:
         self.session = session
         self.sparse = sparse
         self.embedder = embedder
         self.reranker = reranker
-        self.rrf_k = rrf_k
         self.max_results = max_results
         self.candidate_pool = max(max_results, candidate_pool)
         self.dense_min_score = dense_min_score
-        self.dense_gate = dense_gate
-        # Diagnostics for one request: the search instance is built per call.
-        # "always_on" means no gate; "sparse_confident" means the gate skipped.
-        self.last_dense_decision = "not_called"
 
     def search(
         self,
@@ -115,62 +83,83 @@ class HybridPolicySearch:
         sparse_hits = self.sparse.ranked(
             identity, query, today=today, limit=self.candidate_pool
         )
-        if self.embedder is None:
-            self.last_dense_decision = "no_embedder"
-            dense_hits: list[ScoredChunk] = []
-        else:
-            reason = (
-                "always_on"
-                if self.dense_gate is None
-                else self.dense_gate.reason(query, sparse_hits)
-            )
-            self.last_dense_decision = reason or "sparse_confident"
-            dense_hits = (
-                []
-                if reason is None
-                else self._dense_ranked(identity, query, today=today)
-            )
+        dense_hits: list[ScoredChunk] = (
+            [] if self.embedder is None else self._dense_ranked(identity, query, today=today)
+        )
         if not sparse_hits and not dense_hits:
             return []
 
         by_id = {hit.chunk.id: hit for hit in sparse_hits}
-        channels: list[list[str]] = []
+        sparse_scores = {hit.chunk.id: hit.score for hit in sparse_hits}
+        channels: list[list[tuple[str, float]]] = []
         if sparse_hits:
-            channels.append([hit.chunk.id for hit in sparse_hits])
+            channels.append([(hit.chunk.id, hit.score) for hit in sparse_hits])
         for hit in dense_hits:
             by_id.setdefault(hit.chunk.id, hit)
         if dense_hits:
-            channels.append([hit.chunk.id for hit in dense_hits])
+            channels.append([(hit.chunk.id, hit.score) for hit in dense_hits])
 
-        fused = rrf_fuse(channels, k=self.rrf_k)
+        if len(channels) == 1:
+            # One channel answered: keep its own score. Re-normalizing a lone
+            # list would change the number the caller sees without changing
+            # the order, and the score would stop being readable.
+            fused = channels[0]
+            fused_kind = "sparse" if sparse_hits else "dense"
+        else:
+            fused = zscore_fuse(channels, alpha=FUSION_ALPHA)
+            fused_kind = "fusion"
         candidate_order = [chunk_id for chunk_id, _ in fused]
         reranked: list[tuple[str, float]] = []
         if self.reranker is not None:
             reranked = self._rerank(query, candidate_order, by_id)
-        top = self._scored_order(fused, reranked)[: (limit or self.max_results)]
+        top = self._scored_order(fused, reranked, fused_kind)[
+            : (limit or self.max_results)
+        ]
         return [
-            replace(by_id[chunk_id].to_retrieved(), score=score, score_kind=kind)
+            self._to_retrieved(chunk_id, score, kind, by_id, sparse_scores)
             for chunk_id, score, kind in top
             if chunk_id in by_id
         ]
 
     @staticmethod
+    def _to_retrieved(
+        chunk_id: str,
+        score: float,
+        kind: str,
+        by_id: dict[str, ScoredChunk],
+        sparse_scores: dict[str, float],
+    ) -> RetrievedChunk:
+        """One hit with the ranking score and the evidence score side by side."""
+        evidence_score, evidence_kind = HybridPolicySearch._evidence(
+            chunk_id, by_id, sparse_scores
+        )
+        return replace(
+            by_id[chunk_id].to_retrieved(),
+            score=score,
+            score_kind=kind,
+            evidence_score=evidence_score,
+            evidence_kind=evidence_kind,
+        )
+
+    @staticmethod
     def _scored_order(
         fused: list[tuple[str, float]],
         reranked: Sequence[tuple[str, float]],
+        fused_kind: str,
     ) -> list[tuple[str, float, str]]:
         """Return ``(chunk_id, score, score_kind)`` in one scale per list.
 
         The order comes from the fusion (or the reranker), so the number next to
         it has to come from the same place: reporting a raw per-channel score
         here would let the score and the rank disagree. Without a rerank answer
-        every row carries its RRF score. With one, the answered ids carry the
-        endpoint score and the tail — the candidates the endpoint did not answer
-        for — keeps its fusion score clamped below the weakest endpoint score,
-        so the list stays sorted and never mixes two rulers.
+        every row carries the fused score, tagged with the ruler that produced
+        it. With one, the answered ids carry the endpoint score and the tail —
+        the candidates the endpoint did not answer for — keeps its fused score
+        clamped below the weakest endpoint score, so the list stays sorted and
+        never mixes two rulers.
         """
         if not reranked:
-            return [(chunk_id, score, "fusion") for chunk_id, score in fused]
+            return [(chunk_id, score, fused_kind) for chunk_id, score in fused]
         floor = min(score for _, score in reranked)
         answered = {chunk_id for chunk_id, _ in reranked}
         # The endpoint's order is not guaranteed to follow its own scores, so
@@ -185,6 +174,25 @@ class HybridPolicySearch:
             if chunk_id not in answered
         )
         return scored
+
+    @staticmethod
+    def _evidence(
+        chunk_id: str,
+        by_id: dict[str, ScoredChunk],
+        sparse_scores: dict[str, float],
+    ) -> tuple[float, str]:
+        """The channel score the escalation gate reads for this chunk.
+
+        Prefers the sparse score whenever BM25 saw the chunk: it is the only
+        absolute scale in the chain, and on the layered set it separated
+        off-domain messages from answerable ones far better than the fused
+        z-score did. A chunk the dense channel alone found falls back to the
+        cosine, which has its own threshold.
+        """
+        if chunk_id in sparse_scores:
+            return sparse_scores[chunk_id], "sparse"
+        hit = by_id[chunk_id]
+        return hit.score, hit.score_kind
 
     # ------------------------------------------------------------- channels
     def _dense_ranked(

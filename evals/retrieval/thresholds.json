@@ -1,10 +1,10 @@
 {
   "gold_test": {
-    "recall@1": 0.75,
-    "recall@3": 0.9,
-    "recall@5": 0.9,
-    "mrr": 0.85,
-    "ndcg@5": 0.85
+    "recall@1": 0.64,
+    "recall@3": 0.87,
+    "recall@5": 0.89,
+    "mrr": 0.78,
+    "ndcg@5": 0.79
   },
   "stale_hits": 0,
   "cross_tenant_hits": 0

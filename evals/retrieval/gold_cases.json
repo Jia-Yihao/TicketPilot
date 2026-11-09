@@ -1,28 +1,204 @@
 {
-  "version": 1,
-  "description": "200 条手写金标：逐条对照 app/resources/policies/ 下的 ACTIVE 政策写定，章节标签唯一，不逐字抄政策句子。split 由生成器按每节前后半分配。",
+  "version": 2,
+  "description": "600 条手写金标：逐条对照 app/resources/policies/ 下的 ACTIVE 政策写定，章节标签唯一，不逐字抄政策句子。每节按 WHAT/WHY/HOW/WHEN/WHERE/WHO 六面铺开，split 由生成器按每节前后半分配。",
   "sections": [
     {
       "policy_id": "POLICY-REFUND",
       "section": "适用范围",
       "slug": "refund-scope",
       "cases": [
-        {"query": "退款政策管哪些订单", "facet": "WHAT"},
-        {"query": "刚付款还没出库可以退款吗", "facet": "WHEN"},
-        {"query": "谁来决定订单适不适用退款政策", "facet": "WHO"},
-        {"query": "为什么未发货订单不能走退款流程", "facet": "WHY"},
-        {"query": "怎么判断一个订单在不在退款范围内", "facet": "HOW"},
-        {"query": "退款政策的适用范围写在哪里", "facet": "WHERE"},
-        {"query": "已取消的订单在退款范围内吗", "facet": "WHAT"},
-        {"query": "已发货但没签收的订单适用退款政策吗", "facet": "WHEN"},
-        {"query": "哪些状态的订单才受退款政策约束", "facet": "WHAT"},
-        {"query": "签收后的订单还适用这份退款政策吗", "facet": "WHEN"},
-        {"query": "为什么已取消订单不在退款范围内", "facet": "WHY"},
-        {"query": "怎么区分已发货和已签收的适用情况", "facet": "HOW"},
-        {"query": "退款范围由谁认定", "facet": "WHO"},
-        {"query": "在哪一节能看到退款政策的适用对象", "facet": "WHERE"},
-        {"query": "未发货订单是不是不在退款流程里", "facet": "WHAT"},
-        {"query": "已支付但仓库没发货，能申请退款吗", "facet": "WHEN"}
+        {
+          "query": "退款政策管哪些订单",
+          "facet": "WHAT"
+        },
+        {
+          "query": "刚付款还没出库可以退款吗",
+          "facet": "WHEN"
+        },
+        {
+          "query": "谁来决定订单适不适用退款政策",
+          "facet": "WHO"
+        },
+        {
+          "query": "为什么未发货订单不能走退款流程",
+          "facet": "WHY"
+        },
+        {
+          "query": "怎么判断一个订单在不在退款范围内",
+          "facet": "HOW"
+        },
+        {
+          "query": "退款政策的适用范围写在哪里",
+          "facet": "WHERE"
+        },
+        {
+          "query": "已取消的订单在退款范围内吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "已发货但没签收的订单适用退款政策吗",
+          "facet": "WHEN"
+        },
+        {
+          "query": "哪些状态的订单才受退款政策约束",
+          "facet": "WHAT"
+        },
+        {
+          "query": "签收后的订单还适用这份退款政策吗",
+          "facet": "WHEN"
+        },
+        {
+          "query": "为什么已取消订单不在退款范围内",
+          "facet": "WHY"
+        },
+        {
+          "query": "怎么区分已发货和已签收的适用情况",
+          "facet": "HOW"
+        },
+        {
+          "query": "退款范围由谁认定",
+          "facet": "WHO"
+        },
+        {
+          "query": "在哪一节能看到退款政策的适用对象",
+          "facet": "WHERE"
+        },
+        {
+          "query": "未发货订单是不是不在退款流程里",
+          "facet": "WHAT"
+        },
+        {
+          "query": "已支付但仓库没发货，能申请退款吗",
+          "facet": "WHEN"
+        },
+        {
+          "query": "退款政策对订单状态有要求吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "未发货的订单算在退款政策里吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "已取消订单还能走退款政策吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "退款政策适用的订单范围包括哪些",
+          "facet": "WHAT"
+        },
+        {
+          "query": "预售订单适用退款政策吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "部分发货的订单适用退款政策吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "订单发货之后才适用退款政策吗",
+          "facet": "WHEN"
+        },
+        {
+          "query": "订单签收以后还能用退款政策吗",
+          "facet": "WHEN"
+        },
+        {
+          "query": "下单后多久内属于退款政策范围",
+          "facet": "WHEN"
+        },
+        {
+          "query": "订单还在仓库没发出去，算退款范围吗",
+          "facet": "WHEN"
+        },
+        {
+          "query": "已支付未发货的订单要不要走退款流程",
+          "facet": "WHEN"
+        },
+        {
+          "query": "退款政策从哪个订单状态开始生效",
+          "facet": "WHEN"
+        },
+        {
+          "query": "订单适不适用退款政策由谁判定",
+          "facet": "WHO"
+        },
+        {
+          "query": "客服能不能自己判断订单是否在退款范围",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁来确认这笔订单适用哪版退款政策",
+          "facet": "WHO"
+        },
+        {
+          "query": "退款范围的认定是谁的职责",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁负责解释退款政策的适用对象",
+          "facet": "WHO"
+        },
+        {
+          "query": "适用范围的解释权在谁那里",
+          "facet": "WHO"
+        },
+        {
+          "query": "为什么未发货订单不适用退款流程",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么取消掉的订单不在退款范围",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么退款政策要限定订单状态",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么预售订单要走别的流程",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么没发货的订单不算退款申请",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么订单状态会影响退款政策适用",
+          "facet": "WHY"
+        },
+        {
+          "query": "怎么看订单是否在退款政策范围内",
+          "facet": "HOW"
+        },
+        {
+          "query": "判断订单适用退款政策要查什么",
+          "facet": "HOW"
+        },
+        {
+          "query": "订单状态不符合时应该怎么引导用户",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么区分适用和不适用退款政策的订单",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么确认这笔订单能不能走退款流程",
+          "facet": "HOW"
+        },
+        {
+          "query": "遇到状态不明的订单怎么判断适用范围",
+          "facet": "HOW"
+        },
+        {
+          "query": "退款政策的适用条件写在哪",
+          "facet": "WHERE"
+        },
+        {
+          "query": "哪里能看到退款政策覆盖哪些订单",
+          "facet": "WHERE"
+        }
       ]
     },
     {
@@ -30,22 +206,198 @@
       "section": "退款条件",
       "slug": "refund-window",
       "cases": [
-        {"query": "签收后多少天内还能申请退款", "facet": "WHEN"},
-        {"query": "申请退款对订单状态有什么条件", "facet": "WHAT"},
-        {"query": "谁负责判断订单符不符合退款条件", "facet": "WHO"},
-        {"query": "为什么已取消订单不能申请退款", "facet": "WHY"},
-        {"query": "怎么确认订单是否满足退款条件", "facet": "HOW"},
-        {"query": "退款条件的完整说明在哪一节", "facet": "WHERE"},
-        {"query": "同一订单有审批中的退款还能再申请吗", "facet": "WHAT"},
-        {"query": "超过三十天还可以退钱吗", "facet": "WHEN"},
-        {"query": "可退余额为零还能提交退款申请吗", "facet": "WHAT"},
-        {"query": "退款条件的时限是从下单算还是签收算", "facet": "WHEN"},
-        {"query": "为什么有未完成退款记录时不能再申请", "facet": "WHY"},
-        {"query": "订单状态未知时还能重新申请退款吗", "facet": "HOW"},
-        {"query": "订单已签收且退过一次，还能再申请退款吗", "facet": "WHAT"},
-        {"query": "退款时限的规定在哪里看", "facet": "WHERE"},
-        {"query": "退款申请需要满足哪些前提", "facet": "WHAT"},
-        {"query": "签收后第三十一天还能退吗", "facet": "WHEN"}
+        {
+          "query": "签收后多少天内还能申请退款",
+          "facet": "WHEN"
+        },
+        {
+          "query": "申请退款对订单状态有什么条件",
+          "facet": "WHAT"
+        },
+        {
+          "query": "谁负责判断订单符不符合退款条件",
+          "facet": "WHO"
+        },
+        {
+          "query": "为什么已取消订单不能申请退款",
+          "facet": "WHY"
+        },
+        {
+          "query": "怎么确认订单是否满足退款条件",
+          "facet": "HOW"
+        },
+        {
+          "query": "退款条件的完整说明在哪一节",
+          "facet": "WHERE"
+        },
+        {
+          "query": "同一订单有审批中的退款还能再申请吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "超过三十天还可以退钱吗",
+          "facet": "WHEN"
+        },
+        {
+          "query": "可退余额为零还能提交退款申请吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "退款条件的时限是从下单算还是签收算",
+          "facet": "WHEN"
+        },
+        {
+          "query": "为什么有未完成退款记录时不能再申请",
+          "facet": "WHY"
+        },
+        {
+          "query": "订单状态未知时还能重新申请退款吗",
+          "facet": "HOW"
+        },
+        {
+          "query": "订单已签收且退过一次，还能再申请退款吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "退款时限的规定在哪里看",
+          "facet": "WHERE"
+        },
+        {
+          "query": "退款申请需要满足哪些前提",
+          "facet": "WHAT"
+        },
+        {
+          "query": "签收后第三十一天还能退吗",
+          "facet": "WHEN"
+        },
+        {
+          "query": "申请退款要满足哪些条件",
+          "facet": "WHAT"
+        },
+        {
+          "query": "退款条件里对订单状态怎么要求",
+          "facet": "WHAT"
+        },
+        {
+          "query": "有未完成退款的订单还能申请吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "可退余额不足时能申请退款吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "退款申请有没有次数限制",
+          "facet": "WHAT"
+        },
+        {
+          "query": "订单必须签收才能退款吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "签收后多久之内必须提交退款",
+          "facet": "WHEN"
+        },
+        {
+          "query": "超过三十天还能申请退款吗",
+          "facet": "WHEN"
+        },
+        {
+          "query": "退款时限从签收日算起吗",
+          "facet": "WHEN"
+        },
+        {
+          "query": "订单发货后多久内可以申请退款",
+          "facet": "WHEN"
+        },
+        {
+          "query": "签收当天算不算在三十天里",
+          "facet": "WHEN"
+        },
+        {
+          "query": "退款申请的时间窗口是几天",
+          "facet": "WHEN"
+        },
+        {
+          "query": "退款条件由谁来核对",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁来判断订单是否还有可退余额",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁负责确认退款申请是否合规",
+          "facet": "WHO"
+        },
+        {
+          "query": "退款资格审核是谁做的",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁来核实订单有没有重复退款",
+          "facet": "WHO"
+        },
+        {
+          "query": "条件不符时由谁驳回申请",
+          "facet": "WHO"
+        },
+        {
+          "query": "为什么要限制签收后三十天",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么可退余额为零不能退",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么重复退款记录会挡住新申请",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么订单状态不符就不能提交",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么退款要先确认订单状态",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么取消的订单不给退款",
+          "facet": "WHY"
+        },
+        {
+          "query": "怎么核查订单还符不符合退款条件",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么判断是否已经超过退款时限",
+          "facet": "HOW"
+        },
+        {
+          "query": "退款条件不满足时怎么回复用户",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么查这笔订单的可退余额",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么处理部分退款后的再次申请",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么确认订单没有在途的退款",
+          "facet": "HOW"
+        },
+        {
+          "query": "退款条件的细则在哪一节",
+          "facet": "WHERE"
+        },
+        {
+          "query": "哪里能查到退款申请的时间限制",
+          "facet": "WHERE"
+        }
       ]
     },
     {
@@ -53,22 +405,198 @@
       "section": "退款金额",
       "slug": "refund-amount",
       "cases": [
-        {"query": "这笔订单最多能退多少钱", "facet": "WHAT"},
-        {"query": "退款金额什么时候确定", "facet": "WHEN"},
-        {"query": "谁来核算可退金额", "facet": "WHO"},
-        {"query": "为什么退款金额不等于订单总额", "facet": "WHY"},
-        {"query": "退款金额是怎么算出来的", "facet": "HOW"},
-        {"query": "退款金额在哪里查看", "facet": "WHERE"},
-        {"query": "退款金额按什么单位计算", "facet": "WHAT"},
-        {"query": "部分退款后余额什么时候更新", "facet": "WHEN"},
-        {"query": "申请金额能超过可退余额吗", "facet": "WHAT"},
-        {"query": "退款金额到账前会变化吗", "facet": "WHEN"},
-        {"query": "为什么运费不自动退", "facet": "WHY"},
-        {"query": "优惠券和税费怎么分摊", "facet": "HOW"},
-        {"query": "可退余额由谁维护", "facet": "WHO"},
-        {"query": "可退余额在哪里查", "facet": "WHERE"},
-        {"query": "零元退款申请会被受理吗", "facet": "WHAT"},
-        {"query": "一百二十九元的订单能全退吗", "facet": "WHAT"}
+        {
+          "query": "这笔订单最多能退多少钱",
+          "facet": "WHAT"
+        },
+        {
+          "query": "退款金额什么时候确定",
+          "facet": "WHEN"
+        },
+        {
+          "query": "谁来核算可退金额",
+          "facet": "WHO"
+        },
+        {
+          "query": "为什么退款金额不等于订单总额",
+          "facet": "WHY"
+        },
+        {
+          "query": "退款金额是怎么算出来的",
+          "facet": "HOW"
+        },
+        {
+          "query": "退款金额在哪里查看",
+          "facet": "WHERE"
+        },
+        {
+          "query": "退款金额按什么单位计算",
+          "facet": "WHAT"
+        },
+        {
+          "query": "部分退款后余额什么时候更新",
+          "facet": "WHEN"
+        },
+        {
+          "query": "申请金额能超过可退余额吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "退款金额到账前会变化吗",
+          "facet": "WHEN"
+        },
+        {
+          "query": "为什么运费不自动退",
+          "facet": "WHY"
+        },
+        {
+          "query": "优惠券和税费怎么分摊",
+          "facet": "HOW"
+        },
+        {
+          "query": "可退余额由谁维护",
+          "facet": "WHO"
+        },
+        {
+          "query": "可退余额在哪里查",
+          "facet": "WHERE"
+        },
+        {
+          "query": "零元退款申请会被受理吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "一百二十九元的订单能全退吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "退款金额的上限是多少",
+          "facet": "WHAT"
+        },
+        {
+          "query": "单次退款最多能退多少",
+          "facet": "WHAT"
+        },
+        {
+          "query": "退款金额包含运费吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "优惠券金额会退吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "税费算在退款金额里吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "退款金额以什么为单位",
+          "facet": "WHAT"
+        },
+        {
+          "query": "可退余额什么时候会变",
+          "facet": "WHEN"
+        },
+        {
+          "query": "部分退款后金额多久更新",
+          "facet": "WHEN"
+        },
+        {
+          "query": "退款金额在审批后还会变吗",
+          "facet": "WHEN"
+        },
+        {
+          "query": "什么时候能算出准确的退款金额",
+          "facet": "WHEN"
+        },
+        {
+          "query": "退款到账后余额还会调整吗",
+          "facet": "WHEN"
+        },
+        {
+          "query": "订单改价后退款金额怎么算",
+          "facet": "WHEN"
+        },
+        {
+          "query": "退款金额由谁来算",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁负责维护可退余额",
+          "facet": "WHO"
+        },
+        {
+          "query": "金额有争议时找谁核对",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁来确认申请金额没有超额",
+          "facet": "WHO"
+        },
+        {
+          "query": "退款金额的核算责任在谁",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁来决定运费退不退",
+          "facet": "WHO"
+        },
+        {
+          "query": "为什么退款金额比订单金额少",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么运费不参与退款",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么申请金额不能超过余额",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么零元退款不予受理",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么优惠券不折算成现金",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么退款金额要按分计算",
+          "facet": "WHY"
+        },
+        {
+          "query": "退款金额是怎么核算的",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么查这笔订单还剩多少可退",
+          "facet": "HOW"
+        },
+        {
+          "query": "部分退款后怎么算剩余金额",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么处理金额超过余额的申请",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么向用户解释退款金额的构成",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么确认退款金额没有被重复计算",
+          "facet": "HOW"
+        },
+        {
+          "query": "退款金额的规则写在哪里",
+          "facet": "WHERE"
+        },
+        {
+          "query": "哪里能看到可退余额的数字",
+          "facet": "WHERE"
+        }
       ]
     },
     {
@@ -76,22 +604,198 @@
       "section": "审批要求",
       "slug": "refund-approval",
       "cases": [
-        {"query": "退款申请需要谁审批", "facet": "WHO"},
-        {"query": "所有退款都必须人工审核吗", "facet": "WHAT"},
-        {"query": "审批为什么要绑定订单版本", "facet": "WHY"},
-        {"query": "旧审批什么时候失效", "facet": "WHEN"},
-        {"query": "怎么发起人工审批", "facet": "HOW"},
-        {"query": "审批在哪里提交", "facet": "WHERE"},
-        {"query": "审批必须绑定哪些信息", "facet": "WHAT"},
-        {"query": "审批等待期间订单变了怎么办", "facet": "WHEN"},
-        {"query": "审批中的退款可以改金额吗", "facet": "WHAT"},
-        {"query": "审批要等多久", "facet": "WHEN"},
-        {"query": "为什么订单版本变化后要重新申请", "facet": "WHY"},
-        {"query": "审批被拒后怎么重新走流程", "facet": "HOW"},
-        {"query": "谁有权批准退款", "facet": "WHO"},
-        {"query": "审批要求的说明在哪一节", "facet": "WHERE"},
-        {"query": "自动审批可以吗", "facet": "WHAT"},
-        {"query": "审批通过后还需要再确认吗", "facet": "HOW"}
+        {
+          "query": "退款申请需要谁审批",
+          "facet": "WHO"
+        },
+        {
+          "query": "所有退款都必须人工审核吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "审批为什么要绑定订单版本",
+          "facet": "WHY"
+        },
+        {
+          "query": "旧审批什么时候失效",
+          "facet": "WHEN"
+        },
+        {
+          "query": "怎么发起人工审批",
+          "facet": "HOW"
+        },
+        {
+          "query": "审批在哪里提交",
+          "facet": "WHERE"
+        },
+        {
+          "query": "审批必须绑定哪些信息",
+          "facet": "WHAT"
+        },
+        {
+          "query": "审批等待期间订单变了怎么办",
+          "facet": "WHEN"
+        },
+        {
+          "query": "审批中的退款可以改金额吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "审批要等多久",
+          "facet": "WHEN"
+        },
+        {
+          "query": "为什么订单版本变化后要重新申请",
+          "facet": "WHY"
+        },
+        {
+          "query": "审批被拒后怎么重新走流程",
+          "facet": "HOW"
+        },
+        {
+          "query": "谁有权批准退款",
+          "facet": "WHO"
+        },
+        {
+          "query": "审批要求的说明在哪一节",
+          "facet": "WHERE"
+        },
+        {
+          "query": "自动审批可以吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "审批通过后还需要再确认吗",
+          "facet": "HOW"
+        },
+        {
+          "query": "退款审批需要哪些材料",
+          "facet": "WHAT"
+        },
+        {
+          "query": "所有退款都要走审批吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "审批单要绑定哪些字段",
+          "facet": "WHAT"
+        },
+        {
+          "query": "小额退款可以免审批吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "审批记录要保留吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "审批人和申请人可以是同一个人吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "审批在什么时候失效",
+          "facet": "WHEN"
+        },
+        {
+          "query": "订单改版后旧审批还能用吗",
+          "facet": "WHEN"
+        },
+        {
+          "query": "审批要多久才能出结果",
+          "facet": "WHEN"
+        },
+        {
+          "query": "审批期间订单变更怎么办",
+          "facet": "WHEN"
+        },
+        {
+          "query": "审批通过后多久内必须执行",
+          "facet": "WHEN"
+        },
+        {
+          "query": "什么情况下需要重新提交审批",
+          "facet": "WHEN"
+        },
+        {
+          "query": "谁有权限审批退款",
+          "facet": "WHO"
+        },
+        {
+          "query": "审批人由谁指定",
+          "facet": "WHO"
+        },
+        {
+          "query": "金额较大时谁来批",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁负责复核审批结论",
+          "facet": "WHO"
+        },
+        {
+          "query": "审批被驳回后由谁处理",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁可以撤销已提交的审批",
+          "facet": "WHO"
+        },
+        {
+          "query": "为什么退款必须人工审批",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么审批要和订单版本绑定",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么订单变了审批就作废",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么不能让系统自动放款",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么审批要记录金额",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么审批不能跨订单复用",
+          "facet": "WHY"
+        },
+        {
+          "query": "怎么提交退款审批",
+          "facet": "HOW"
+        },
+        {
+          "query": "审批失效后怎么重新发起",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么查审批当前的状态",
+          "facet": "HOW"
+        },
+        {
+          "query": "审批被拒后怎么补充材料",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么保证审批和订单是同一版本",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么处理审批中的金额修改",
+          "facet": "HOW"
+        },
+        {
+          "query": "审批要求的条款在哪",
+          "facet": "WHERE"
+        },
+        {
+          "query": "哪里能看审批流转记录",
+          "facet": "WHERE"
+        }
       ]
     },
     {
@@ -99,22 +803,198 @@
       "section": "结果确认",
       "slug": "refund-confirmation",
       "cases": [
-        {"query": "退款接口返回成功就算到账了吗", "facet": "WHAT"},
-        {"query": "什么时候才能告诉用户退款成功", "facet": "WHEN"},
-        {"query": "谁负责确认退款最终状态", "facet": "WHO"},
-        {"query": "为什么成功响应不等于最终成功", "facet": "WHY"},
-        {"query": "外部接口超时应该怎么处理", "facet": "HOW"},
-        {"query": "退款结果要查哪个权威记录", "facet": "WHERE"},
-        {"query": "退款状态在确认前应该是什么", "facet": "WHAT"},
-        {"query": "对账要在什么时候做", "facet": "WHEN"},
-        {"query": "退款成功的最终依据是什么", "facet": "WHAT"},
-        {"query": "已受理但没确认的退款要等多久", "facet": "WHEN"},
-        {"query": "为什么不能向用户宣称退款成功", "facet": "WHY"},
-        {"query": "怎么对账确认退款结果", "facet": "HOW"},
-        {"query": "对账由谁发起", "facet": "WHO"},
-        {"query": "结果确认这一节在哪里", "facet": "WHERE"},
-        {"query": "调用超时后能直接重试吗", "facet": "WHAT"},
-        {"query": "重复提交退款应该怎么补救", "facet": "HOW"}
+        {
+          "query": "退款接口返回成功就算到账了吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "什么时候才能告诉用户退款成功",
+          "facet": "WHEN"
+        },
+        {
+          "query": "谁负责确认退款最终状态",
+          "facet": "WHO"
+        },
+        {
+          "query": "为什么成功响应不等于最终成功",
+          "facet": "WHY"
+        },
+        {
+          "query": "外部接口超时应该怎么处理",
+          "facet": "HOW"
+        },
+        {
+          "query": "退款结果要查哪个权威记录",
+          "facet": "WHERE"
+        },
+        {
+          "query": "退款状态在确认前应该是什么",
+          "facet": "WHAT"
+        },
+        {
+          "query": "对账要在什么时候做",
+          "facet": "WHEN"
+        },
+        {
+          "query": "退款成功的最终依据是什么",
+          "facet": "WHAT"
+        },
+        {
+          "query": "已受理但没确认的退款要等多久",
+          "facet": "WHEN"
+        },
+        {
+          "query": "为什么不能向用户宣称退款成功",
+          "facet": "WHY"
+        },
+        {
+          "query": "怎么对账确认退款结果",
+          "facet": "HOW"
+        },
+        {
+          "query": "对账由谁发起",
+          "facet": "WHO"
+        },
+        {
+          "query": "结果确认这一节在哪里",
+          "facet": "WHERE"
+        },
+        {
+          "query": "调用超时后能直接重试吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "重复提交退款应该怎么补救",
+          "facet": "HOW"
+        },
+        {
+          "query": "退款成功以什么为准",
+          "facet": "WHAT"
+        },
+        {
+          "query": "受理成功和退款成功有什么区别",
+          "facet": "WHAT"
+        },
+        {
+          "query": "确认前退款状态应该显示什么",
+          "facet": "WHAT"
+        },
+        {
+          "query": "超时未返回的退款算成功吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "对账要核对哪些字段",
+          "facet": "WHAT"
+        },
+        {
+          "query": "退款失败后状态怎么标",
+          "facet": "WHAT"
+        },
+        {
+          "query": "什么时候可以做退款对账",
+          "facet": "WHEN"
+        },
+        {
+          "query": "接口超时后多久要核对",
+          "facet": "WHEN"
+        },
+        {
+          "query": "退款确认前能先回复用户吗",
+          "facet": "WHEN"
+        },
+        {
+          "query": "对账发现问题后什么时候处理",
+          "facet": "WHEN"
+        },
+        {
+          "query": "退款到账后还要再确认一次吗",
+          "facet": "WHEN"
+        },
+        {
+          "query": "什么时候可以把状态改成已退款",
+          "facet": "WHEN"
+        },
+        {
+          "query": "谁负责做退款对账",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁有权把状态改成成功",
+          "facet": "WHO"
+        },
+        {
+          "query": "对账异常由谁跟进",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁来核对权威退款记录",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁来决定是否需要重试",
+          "facet": "WHO"
+        },
+        {
+          "query": "确认失败的退款由谁处理",
+          "facet": "WHO"
+        },
+        {
+          "query": "为什么接口成功还要再查一次",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么超时不能直接重试",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么不能提前告诉用户退款成功",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么要以权威记录为准",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么重复提交会造成重复退款",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么状态要停在待确认",
+          "facet": "WHY"
+        },
+        {
+          "query": "怎么查询权威退款记录",
+          "facet": "HOW"
+        },
+        {
+          "query": "对账不一致时怎么处理",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么避免重复提交退款",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么向用户解释待确认状态",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么确认退款最终有没有到账",
+          "facet": "HOW"
+        },
+        {
+          "query": "超时后怎么安全地重试",
+          "facet": "HOW"
+        },
+        {
+          "query": "结果确认的规则在哪里",
+          "facet": "WHERE"
+        },
+        {
+          "query": "哪里能查退款对账结果",
+          "facet": "WHERE"
+        }
       ]
     },
     {
@@ -122,22 +1002,166 @@
       "section": "延迟判定",
       "slug": "delay-detection",
       "cases": [
-        {"query": "超过预计送达几天算严重延迟", "facet": "WHEN"},
-        {"query": "已发货但一直没签收算延迟吗", "facet": "WHAT"},
-        {"query": "谁来判断延迟等级", "facet": "WHO"},
-        {"query": "为什么不能直接判定丢件", "facet": "WHY"},
-        {"query": "怎么判断是不是严重延迟", "facet": "HOW"},
-        {"query": "延迟判定的标准在哪里看", "facet": "WHERE"},
-        {"query": "物流轨迹停在同一个节点多久要核实", "facet": "WHEN"},
-        {"query": "轨迹不动就能算丢件吗", "facet": "WHAT"},
-        {"query": "超过七天没收到算严重延迟吗", "facet": "WHEN"},
-        {"query": "物流信息长期不更新算不算延迟", "facet": "WHAT"},
-        {"query": "为什么轨迹停滞不能当丢件处理", "facet": "WHY"},
-        {"query": "怎么区分延迟和丢件", "facet": "HOW"},
-        {"query": "超过几天没有承运商反馈算延迟", "facet": "WHEN"},
-        {"query": "预计送达时间在哪里查", "facet": "WHERE"},
-        {"query": "四十八小时没有物流更新怎么办", "facet": "WHEN"},
-        {"query": "怎么根据轨迹判断严重程度", "facet": "HOW"}
+        {
+          "query": "超过预计送达几天算严重延迟",
+          "facet": "WHEN"
+        },
+        {
+          "query": "已发货但一直没签收算延迟吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "谁来判断延迟等级",
+          "facet": "WHO"
+        },
+        {
+          "query": "为什么不能直接判定丢件",
+          "facet": "WHY"
+        },
+        {
+          "query": "怎么判断是不是严重延迟",
+          "facet": "HOW"
+        },
+        {
+          "query": "延迟判定的标准在哪里看",
+          "facet": "WHERE"
+        },
+        {
+          "query": "物流轨迹停在同一个节点多久要核实",
+          "facet": "WHEN"
+        },
+        {
+          "query": "轨迹不动就能算丢件吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "超过七天没收到算严重延迟吗",
+          "facet": "WHEN"
+        },
+        {
+          "query": "物流信息长期不更新算不算延迟",
+          "facet": "WHAT"
+        },
+        {
+          "query": "为什么轨迹停滞不能当丢件处理",
+          "facet": "WHY"
+        },
+        {
+          "query": "怎么区分延迟和丢件",
+          "facet": "HOW"
+        },
+        {
+          "query": "超过几天没有承运商反馈算延迟",
+          "facet": "WHEN"
+        },
+        {
+          "query": "预计送达时间在哪里查",
+          "facet": "WHERE"
+        },
+        {
+          "query": "四十八小时没有物流更新怎么办",
+          "facet": "WHEN"
+        },
+        {
+          "query": "怎么根据轨迹判断严重程度",
+          "facet": "HOW"
+        },
+        {
+          "query": "什么情况才算严重延迟",
+          "facet": "WHAT"
+        },
+        {
+          "query": "物流停滞多久算异常",
+          "facet": "WHAT"
+        },
+        {
+          "query": "包裹停在途中不动算丢件吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "延迟判定的具体标准是什么",
+          "facet": "WHAT"
+        },
+        {
+          "query": "超过预计送达几天才算严重延迟",
+          "facet": "WHEN"
+        },
+        {
+          "query": "物流四十八小时不更新要处理吗",
+          "facet": "WHEN"
+        },
+        {
+          "query": "什么时候才能认定订单已经延迟",
+          "facet": "WHEN"
+        },
+        {
+          "query": "签收超期多久要按延迟处理",
+          "facet": "WHEN"
+        },
+        {
+          "query": "延迟由谁来判定",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁负责向承运商核实情况",
+          "facet": "WHO"
+        },
+        {
+          "query": "丢件结论由谁下",
+          "facet": "WHO"
+        },
+        {
+          "query": "延迟判定出错由谁复核",
+          "facet": "WHO"
+        },
+        {
+          "query": "为什么不能直接按丢件处理",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么物流停滞要先核实",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么延迟不等于可以退款",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么轨迹长时间不动要预警",
+          "facet": "WHY"
+        },
+        {
+          "query": "怎么判断订单是不是严重延迟",
+          "facet": "HOW"
+        },
+        {
+          "query": "物流轨迹不动时怎么核实",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么查订单的预计送达时间",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么记录延迟判定的依据",
+          "facet": "HOW"
+        },
+        {
+          "query": "延迟判定的标准在哪一节",
+          "facet": "WHERE"
+        },
+        {
+          "query": "哪里能看物流轨迹的更新时间",
+          "facet": "WHERE"
+        },
+        {
+          "query": "承运商查不到信息时怎么处理",
+          "facet": "HOW"
+        },
+        {
+          "query": "为什么延迟判定要看签收状态",
+          "facet": "WHY"
+        }
       ]
     },
     {
@@ -145,22 +1169,166 @@
       "section": "处理方式",
       "slug": "delay-handling",
       "cases": [
-        {"query": "严重延迟应该怎么处理", "facet": "HOW"},
-        {"query": "什么时候该给延迟订单开高优先级工单", "facet": "WHEN"},
-        {"query": "谁来联系承运商", "facet": "WHO"},
-        {"query": "为什么延迟本身不产生退款资格", "facet": "WHY"},
-        {"query": "延迟订单可以创建什么优先级的工单", "facet": "WHAT"},
-        {"query": "处理方式写在哪一节", "facet": "WHERE"},
-        {"query": "延迟会自动退款吗", "facet": "WHAT"},
-        {"query": "延迟多久后才按严重延迟处理", "facet": "WHEN"},
-        {"query": "可以向用户承诺赔偿金额吗", "facet": "WHAT"},
-        {"query": "延迟订单用户申请退款时怎么转到退款流程", "facet": "WHEN"},
-        {"query": "为什么不能直接答应赔偿", "facet": "WHY"},
-        {"query": "用户申请退款时按什么流程处理", "facet": "HOW"},
-        {"query": "高优先级工单由谁跟进", "facet": "WHO"},
-        {"query": "处理延迟的流程在哪里能查到", "facet": "WHERE"},
-        {"query": "没有补偿政策时可以赔钱吗", "facet": "WHAT"},
-        {"query": "延迟订单怎么转人工", "facet": "HOW"}
+        {
+          "query": "严重延迟应该怎么处理",
+          "facet": "HOW"
+        },
+        {
+          "query": "什么时候该给延迟订单开高优先级工单",
+          "facet": "WHEN"
+        },
+        {
+          "query": "谁来联系承运商",
+          "facet": "WHO"
+        },
+        {
+          "query": "为什么延迟本身不产生退款资格",
+          "facet": "WHY"
+        },
+        {
+          "query": "延迟订单可以创建什么优先级的工单",
+          "facet": "WHAT"
+        },
+        {
+          "query": "处理方式写在哪一节",
+          "facet": "WHERE"
+        },
+        {
+          "query": "延迟会自动退款吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "延迟多久后才按严重延迟处理",
+          "facet": "WHEN"
+        },
+        {
+          "query": "可以向用户承诺赔偿金额吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "延迟订单用户申请退款时怎么转到退款流程",
+          "facet": "WHEN"
+        },
+        {
+          "query": "为什么不能直接答应赔偿",
+          "facet": "WHY"
+        },
+        {
+          "query": "用户申请退款时按什么流程处理",
+          "facet": "HOW"
+        },
+        {
+          "query": "高优先级工单由谁跟进",
+          "facet": "WHO"
+        },
+        {
+          "query": "处理延迟的流程在哪里能查到",
+          "facet": "WHERE"
+        },
+        {
+          "query": "没有补偿政策时可以赔钱吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "延迟订单怎么转人工",
+          "facet": "HOW"
+        },
+        {
+          "query": "严重延迟有哪些处理动作",
+          "facet": "WHAT"
+        },
+        {
+          "query": "延迟订单需要建工单吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "延迟订单可以给补偿吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "处理延迟要联系谁",
+          "facet": "WHAT"
+        },
+        {
+          "query": "什么时候该把延迟订单升级",
+          "facet": "WHEN"
+        },
+        {
+          "query": "延迟确认后多久回复用户",
+          "facet": "WHEN"
+        },
+        {
+          "query": "用户催单时先做什么",
+          "facet": "WHEN"
+        },
+        {
+          "query": "什么时候把延迟订单转人工",
+          "facet": "WHEN"
+        },
+        {
+          "query": "谁联系承运商处理延迟",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁批准高优先级工单",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁跟进延迟订单的处理结果",
+          "facet": "WHO"
+        },
+        {
+          "query": "用户要赔偿时由谁回应",
+          "facet": "WHO"
+        },
+        {
+          "query": "为什么延迟不自动产生退款",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么不承诺具体赔偿金额",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么要人工联系承运商",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么延迟要建高优先级工单",
+          "facet": "WHY"
+        },
+        {
+          "query": "怎么给延迟订单建工单",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么联系承运商核实延迟",
+          "facet": "HOW"
+        },
+        {
+          "query": "用户要求赔偿时怎么回应",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么把延迟订单交给人工",
+          "facet": "HOW"
+        },
+        {
+          "query": "延迟处理流程在哪一节",
+          "facet": "WHERE"
+        },
+        {
+          "query": "哪里能看工单优先级设置",
+          "facet": "WHERE"
+        },
+        {
+          "query": "延迟订单用户要退款时怎么转流程",
+          "facet": "HOW"
+        },
+        {
+          "query": "延迟处理要留下什么记录",
+          "facet": "WHAT"
+        }
       ]
     },
     {
@@ -168,22 +1336,166 @@
       "section": "证据要求",
       "slug": "delay-evidence",
       "cases": [
-        {"query": "回答物流问题需要哪些证据", "facet": "WHAT"},
-        {"query": "什么时候需要补充证据", "facet": "WHEN"},
-        {"query": "谁负责核实物流记录", "facet": "WHO"},
-        {"query": "为什么必须引用物流记录", "facet": "WHY"},
-        {"query": "证据不足时怎么处理", "facet": "HOW"},
-        {"query": "物流证据在哪里查", "facet": "WHERE"},
-        {"query": "可以只凭用户描述判断丢件吗", "facet": "WHAT"},
-        {"query": "多久内的物流记录才算有效证据", "facet": "WHEN"},
-        {"query": "需要引用哪个政策版本", "facet": "WHAT"},
-        {"query": "回答物流问题前什么时候核对订单", "facet": "WHEN"},
-        {"query": "为什么要核对当前订单的物流", "facet": "WHY"},
-        {"query": "怎么核实用户提供的物流信息", "facet": "HOW"},
-        {"query": "证据不足时由谁决定转人工", "facet": "WHO"},
-        {"query": "证据要求这一节在哪里", "facet": "WHERE"},
-        {"query": "没有物流记录还能回答吗", "facet": "WHAT"},
-        {"query": "用户说包裹丢了应该怎么核实", "facet": "HOW"}
+        {
+          "query": "回答物流问题需要哪些证据",
+          "facet": "WHAT"
+        },
+        {
+          "query": "什么时候需要补充证据",
+          "facet": "WHEN"
+        },
+        {
+          "query": "谁负责核实物流记录",
+          "facet": "WHO"
+        },
+        {
+          "query": "为什么必须引用物流记录",
+          "facet": "WHY"
+        },
+        {
+          "query": "证据不足时怎么处理",
+          "facet": "HOW"
+        },
+        {
+          "query": "物流证据在哪里查",
+          "facet": "WHERE"
+        },
+        {
+          "query": "可以只凭用户描述判断丢件吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "多久内的物流记录才算有效证据",
+          "facet": "WHEN"
+        },
+        {
+          "query": "需要引用哪个政策版本",
+          "facet": "WHAT"
+        },
+        {
+          "query": "回答物流问题前什么时候核对订单",
+          "facet": "WHEN"
+        },
+        {
+          "query": "为什么要核对当前订单的物流",
+          "facet": "WHY"
+        },
+        {
+          "query": "怎么核实用户提供的物流信息",
+          "facet": "HOW"
+        },
+        {
+          "query": "证据不足时由谁决定转人工",
+          "facet": "WHO"
+        },
+        {
+          "query": "证据要求这一节在哪里",
+          "facet": "WHERE"
+        },
+        {
+          "query": "没有物流记录还能回答吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "用户说包裹丢了应该怎么核实",
+          "facet": "HOW"
+        },
+        {
+          "query": "回答物流问题要准备哪些证据",
+          "facet": "WHAT"
+        },
+        {
+          "query": "需要引用哪些物流记录",
+          "facet": "WHAT"
+        },
+        {
+          "query": "回复时要不要带政策版本",
+          "facet": "WHAT"
+        },
+        {
+          "query": "用户描述能当作证据吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "什么时候必须调取物流记录",
+          "facet": "WHEN"
+        },
+        {
+          "query": "核实之前要先取轨迹吗",
+          "facet": "WHEN"
+        },
+        {
+          "query": "证据不足的时候怎么办",
+          "facet": "WHEN"
+        },
+        {
+          "query": "什么时候要核对政策版本是否有效",
+          "facet": "WHEN"
+        },
+        {
+          "query": "谁提供订单的物流记录",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁核对证据是否充分",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁负责引用政策版本",
+          "facet": "WHO"
+        },
+        {
+          "query": "证据互相冲突由谁裁定",
+          "facet": "WHO"
+        },
+        {
+          "query": "为什么不能只凭用户描述断定丢件",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么回答要引用政策版本",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么没有物流证据不能直接答复",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么要保留物流轨迹记录",
+          "facet": "WHY"
+        },
+        {
+          "query": "怎么调取订单的物流记录",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么核对政策版本还在有效期",
+          "facet": "HOW"
+        },
+        {
+          "query": "证据不足时怎么回复用户",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么把证据附在回复里",
+          "facet": "HOW"
+        },
+        {
+          "query": "证据要求写在哪一节",
+          "facet": "WHERE"
+        },
+        {
+          "query": "哪里能查订单物流记录",
+          "facet": "WHERE"
+        },
+        {
+          "query": "物流记录的有效期是多久",
+          "facet": "WHAT"
+        },
+        {
+          "query": "怎么核实用户发来的物流截图",
+          "facet": "HOW"
+        }
       ]
     },
     {
@@ -191,18 +1503,150 @@
       "section": "七天无理由退货",
       "slug": "return-window",
       "cases": [
-        {"query": "无理由退货的时间是多久", "facet": "WHEN"},
-        {"query": "拆封后还能七天无理由吗", "facet": "WHAT"},
-        {"query": "谁来判断商品是否完好", "facet": "WHO"},
-        {"query": "为什么无理由退货要求商品完好", "facet": "WHY"},
-        {"query": "怎么申请七天无理由退货", "facet": "HOW"},
-        {"query": "无理由退货的规则在哪里", "facet": "WHERE"},
-        {"query": "签收后七天内都可以无理由退货吗", "facet": "WHEN"},
-        {"query": "赠品要一起寄回吗", "facet": "WHAT"},
-        {"query": "超过七天还能无理由退吗", "facet": "WHEN"},
-        {"query": "商品没拆封但超过期限怎么办", "facet": "WHAT"},
-        {"query": "为什么包装也要寄回", "facet": "WHY"},
-        {"query": "退回时包装和赠品怎么处理", "facet": "HOW"}
+        {
+          "query": "无理由退货的时间是多久",
+          "facet": "WHEN"
+        },
+        {
+          "query": "拆封后还能七天无理由吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "谁来判断商品是否完好",
+          "facet": "WHO"
+        },
+        {
+          "query": "为什么无理由退货要求商品完好",
+          "facet": "WHY"
+        },
+        {
+          "query": "怎么申请七天无理由退货",
+          "facet": "HOW"
+        },
+        {
+          "query": "无理由退货的规则在哪里",
+          "facet": "WHERE"
+        },
+        {
+          "query": "签收后七天内都可以无理由退货吗",
+          "facet": "WHEN"
+        },
+        {
+          "query": "赠品要一起寄回吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "超过七天还能无理由退吗",
+          "facet": "WHEN"
+        },
+        {
+          "query": "商品没拆封但超过期限怎么办",
+          "facet": "WHAT"
+        },
+        {
+          "query": "为什么包装也要寄回",
+          "facet": "WHY"
+        },
+        {
+          "query": "退回时包装和赠品怎么处理",
+          "facet": "HOW"
+        },
+        {
+          "query": "无理由退货要满足什么条件",
+          "facet": "WHAT"
+        },
+        {
+          "query": "拆封之后还能无理由退吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "赠品必须一起寄回吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "七天无理由从哪天开始算",
+          "facet": "WHAT"
+        },
+        {
+          "query": "签收后几天内可以无理由退货",
+          "facet": "WHEN"
+        },
+        {
+          "query": "第七天提交申请还算吗",
+          "facet": "WHEN"
+        },
+        {
+          "query": "无理由退货超期一天还能申请吗",
+          "facet": "WHEN"
+        },
+        {
+          "query": "退货申请什么时候截止",
+          "facet": "WHEN"
+        },
+        {
+          "query": "谁确认商品是否保持完好",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁审核无理由退货申请",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁判断包装是否齐全",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁负责验收退回的商品",
+          "facet": "WHO"
+        },
+        {
+          "query": "为什么要求商品保持完好",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么赠品也要一起寄回",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么超过七天不能无理由退",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么拆封会影响无理由退货",
+          "facet": "WHY"
+        },
+        {
+          "query": "无理由退货要在哪个入口提交",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么判断商品是否影响二次销售",
+          "facet": "HOW"
+        },
+        {
+          "query": "退货时包装要怎么处理",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么告知用户寄回要求",
+          "facet": "HOW"
+        },
+        {
+          "query": "七天无理由的规定在哪一节",
+          "facet": "WHERE"
+        },
+        {
+          "query": "哪里能看退货的时限",
+          "facet": "WHERE"
+        },
+        {
+          "query": "节假日会不会顺延退货期限",
+          "facet": "WHEN"
+        },
+        {
+          "query": "未拆封商品退回要保留什么",
+          "facet": "WHAT"
+        }
       ]
     },
     {
@@ -210,18 +1654,150 @@
       "section": "退货与退款的区别",
       "slug": "return-vs-refund",
       "cases": [
-        {"query": "退货和退款到底有什么区别", "facet": "WHAT"},
-        {"query": "退货验收通过后多久退款", "facet": "WHEN"},
-        {"query": "谁负责退货验收", "facet": "WHO"},
-        {"query": "为什么退货后还要重新检查退款资格", "facet": "WHY"},
-        {"query": "怎么从退货流程走到退款", "facet": "HOW"},
-        {"query": "退货状态和退款状态在哪里看", "facet": "WHERE"},
-        {"query": "申请退货是不是等于退款", "facet": "WHAT"},
-        {"query": "退款必须在退货验收后吗", "facet": "WHEN"},
-        {"query": "为什么两个状态不能混着说", "facet": "WHY"},
-        {"query": "已同意退货是不是已经退款了", "facet": "WHAT"},
-        {"query": "先退款还是先寄回商品", "facet": "HOW"},
-        {"query": "退货与退款的区别写在哪一节", "facet": "WHERE"}
+        {
+          "query": "退货和退款到底有什么区别",
+          "facet": "WHAT"
+        },
+        {
+          "query": "退货验收通过后多久退款",
+          "facet": "WHEN"
+        },
+        {
+          "query": "谁负责退货验收",
+          "facet": "WHO"
+        },
+        {
+          "query": "为什么退货后还要重新检查退款资格",
+          "facet": "WHY"
+        },
+        {
+          "query": "怎么从退货流程走到退款",
+          "facet": "HOW"
+        },
+        {
+          "query": "退货状态和退款状态在哪里看",
+          "facet": "WHERE"
+        },
+        {
+          "query": "申请退货是不是等于退款",
+          "facet": "WHAT"
+        },
+        {
+          "query": "退款必须在退货验收后吗",
+          "facet": "WHEN"
+        },
+        {
+          "query": "为什么两个状态不能混着说",
+          "facet": "WHY"
+        },
+        {
+          "query": "已同意退货是不是已经退款了",
+          "facet": "WHAT"
+        },
+        {
+          "query": "先退款还是先寄回商品",
+          "facet": "HOW"
+        },
+        {
+          "query": "退货与退款的区别写在哪一节",
+          "facet": "WHERE"
+        },
+        {
+          "query": "退货和退款有什么不同",
+          "facet": "WHAT"
+        },
+        {
+          "query": "同意退货等于已经退款吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "退货之后钱什么时候退",
+          "facet": "WHAT"
+        },
+        {
+          "query": "退货验收和退款是什么关系",
+          "facet": "WHAT"
+        },
+        {
+          "query": "什么时候才算真正完成退款",
+          "facet": "WHEN"
+        },
+        {
+          "query": "验收通过后多久发起退款",
+          "facet": "WHEN"
+        },
+        {
+          "query": "退货过程中能先退款吗",
+          "facet": "WHEN"
+        },
+        {
+          "query": "退款要在退货后重新审核吗",
+          "facet": "WHEN"
+        },
+        {
+          "query": "退货验收环节由哪个岗位把关",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁发起退货后的退款",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁向用户解释两者的区别",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁确认退货已经完成",
+          "facet": "WHO"
+        },
+        {
+          "query": "为什么退货不等于退款",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么要先验收再退款",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么退款要重新走审批",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么不能把同意退货说成已退款",
+          "facet": "WHY"
+        },
+        {
+          "query": "怎么向用户说明退货和退款的区别",
+          "facet": "HOW"
+        },
+        {
+          "query": "退货验收后怎么发起退款",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么同时跟踪退货和退款状态",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么避免把退货说成退款",
+          "facet": "HOW"
+        },
+        {
+          "query": "退货和退款的区别在哪条政策里",
+          "facet": "WHERE"
+        },
+        {
+          "query": "哪里能看退货进度",
+          "facet": "WHERE"
+        },
+        {
+          "query": "退货验收不通过会怎样",
+          "facet": "WHAT"
+        },
+        {
+          "query": "退货完成后退款状态怎么更新",
+          "facet": "WHEN"
+        }
       ]
     },
     {
@@ -229,18 +1805,150 @@
       "section": "不予退货的情形",
       "slug": "return-exclusions",
       "cases": [
-        {"query": "哪些商品不可以退货", "facet": "WHAT"},
-        {"query": "超过七天且没有质量问题还能退吗", "facet": "WHEN"},
-        {"query": "谁认定商品不能退", "facet": "WHO"},
-        {"query": "为什么影响二次销售就不能退", "facet": "WHY"},
-        {"query": "怎么判断商品是否属于不予退货", "facet": "HOW"},
-        {"query": "不予退货的情形在哪里查", "facet": "WHERE"},
-        {"query": "拆封的贴身用品能退吗", "facet": "WHAT"},
-        {"query": "质量问题的商品超过七天还能退吗", "facet": "WHEN"},
-        {"query": "为什么缺少配件会影响退货", "facet": "WHY"},
-        {"query": "食品拆了还能退吗", "facet": "WHAT"},
-        {"query": "定制商品支持退货吗", "facet": "WHAT"},
-        {"query": "为什么赠品缺失也算影响二次销售", "facet": "WHY"}
+        {
+          "query": "哪些商品不可以退货",
+          "facet": "WHAT"
+        },
+        {
+          "query": "超过七天且没有质量问题还能退吗",
+          "facet": "WHEN"
+        },
+        {
+          "query": "谁认定商品不能退",
+          "facet": "WHO"
+        },
+        {
+          "query": "为什么影响二次销售就不能退",
+          "facet": "WHY"
+        },
+        {
+          "query": "怎么判断商品是否属于不予退货",
+          "facet": "HOW"
+        },
+        {
+          "query": "不予退货的情形在哪里查",
+          "facet": "WHERE"
+        },
+        {
+          "query": "拆封的贴身用品能退吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "质量问题的商品超过七天还能退吗",
+          "facet": "WHEN"
+        },
+        {
+          "query": "为什么缺少配件会影响退货",
+          "facet": "WHY"
+        },
+        {
+          "query": "食品拆了还能退吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "定制商品支持退货吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "为什么赠品缺失也算影响二次销售",
+          "facet": "WHY"
+        },
+        {
+          "query": "哪些商品不能退货",
+          "facet": "WHAT"
+        },
+        {
+          "query": "食品打开包装后还能退吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "定制商品可以退吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "缺配件还能退货吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "超过七天还能退吗",
+          "facet": "WHEN"
+        },
+        {
+          "query": "什么情况下超期也能退",
+          "facet": "WHEN"
+        },
+        {
+          "query": "拆封后什么时候不能退",
+          "facet": "WHEN"
+        },
+        {
+          "query": "质量问题超期还能退吗",
+          "facet": "WHEN"
+        },
+        {
+          "query": "谁判定商品属于不予退货",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁核实商品是否已拆封",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁决定例外情形怎么处理",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁向用户解释拒退理由",
+          "facet": "WHO"
+        },
+        {
+          "query": "为什么食品拆封不能退",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么定制商品不支持退货",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么缺配件会影响退货",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么超七天不给无理由退",
+          "facet": "WHY"
+        },
+        {
+          "query": "怎么判断商品是否不予退货",
+          "facet": "HOW"
+        },
+        {
+          "query": "用户坚持要退怎么办",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么说明拒退的依据",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么处理拆封争议",
+          "facet": "HOW"
+        },
+        {
+          "query": "不予退货的情形在哪一节",
+          "facet": "WHERE"
+        },
+        {
+          "query": "哪里能查例外条款",
+          "facet": "WHERE"
+        },
+        {
+          "query": "贴身用品拆封后还能退吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "怎么判断是否影响二次销售",
+          "facet": "HOW"
+        }
       ]
     },
     {
@@ -248,18 +1956,150 @@
       "section": "操作要求",
       "slug": "return-wording",
       "cases": [
-        {"query": "回答退货问题要引用哪个政策版本", "facet": "WHAT"},
-        {"query": "什么时候要提醒用户退货不等于退款", "facet": "WHEN"},
-        {"query": "谁需要遵守退货回答规范", "facet": "WHO"},
-        {"query": "为什么不能把退货和退款混为一谈", "facet": "WHY"},
-        {"query": "怎么向用户解释退货状态", "facet": "HOW"},
-        {"query": "操作要求这一节在哪里", "facet": "WHERE"},
-        {"query": "可以把已同意退货说成已退款吗", "facet": "WHAT"},
-        {"query": "用户误解退货状态时怎么纠正", "facet": "HOW"},
-        {"query": "为什么回复里必须带政策版本", "facet": "WHY"},
-        {"query": "客服回答退货问题时要提醒什么", "facet": "WHAT"},
-        {"query": "已经同意退货后应该怎么表述", "facet": "HOW"},
-        {"query": "用户误解退款状态时怎么纠正", "facet": "HOW"}
+        {
+          "query": "回答退货问题要引用哪个政策版本",
+          "facet": "WHAT"
+        },
+        {
+          "query": "什么时候要提醒用户退货不等于退款",
+          "facet": "WHEN"
+        },
+        {
+          "query": "谁需要遵守退货回答规范",
+          "facet": "WHO"
+        },
+        {
+          "query": "为什么不能把退货和退款混为一谈",
+          "facet": "WHY"
+        },
+        {
+          "query": "怎么向用户解释退货状态",
+          "facet": "HOW"
+        },
+        {
+          "query": "操作要求这一节在哪里",
+          "facet": "WHERE"
+        },
+        {
+          "query": "可以把已同意退货说成已退款吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "用户误解退货状态时怎么纠正",
+          "facet": "HOW"
+        },
+        {
+          "query": "为什么回复里必须带政策版本",
+          "facet": "WHY"
+        },
+        {
+          "query": "客服回答退货问题时要提醒什么",
+          "facet": "WHAT"
+        },
+        {
+          "query": "已经同意退货后应该怎么表述",
+          "facet": "HOW"
+        },
+        {
+          "query": "用户误解退款状态时怎么纠正",
+          "facet": "HOW"
+        },
+        {
+          "query": "回答退货问题要引用什么",
+          "facet": "WHAT"
+        },
+        {
+          "query": "回复里要提醒哪些状态",
+          "facet": "WHAT"
+        },
+        {
+          "query": "能不能直接说已经退款",
+          "facet": "WHAT"
+        },
+        {
+          "query": "退货回复要包含哪些要点",
+          "facet": "WHAT"
+        },
+        {
+          "query": "什么时候要引用政策版本",
+          "facet": "WHEN"
+        },
+        {
+          "query": "什么时候必须说明退货未退款",
+          "facet": "WHEN"
+        },
+        {
+          "query": "状态变化时怎么更新说法",
+          "facet": "WHEN"
+        },
+        {
+          "query": "转人工前要不要先说明",
+          "facet": "WHEN"
+        },
+        {
+          "query": "谁负责措辞合规",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁审核客服话术",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁纠正错误表述",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁对误导性回复负责",
+          "facet": "WHO"
+        },
+        {
+          "query": "为什么要引用政策版本",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么回复里要区分同意退货和已退款",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么要提示两个状态",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么措辞要统一",
+          "facet": "WHY"
+        },
+        {
+          "query": "怎么在回复里引用政策版本",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么表述同意退货但未退款",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么避免误导用户",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么把退货状态同步给用户",
+          "facet": "HOW"
+        },
+        {
+          "query": "操作要求写在哪一节",
+          "facet": "WHERE"
+        },
+        {
+          "query": "哪里能查话术规范",
+          "facet": "WHERE"
+        },
+        {
+          "query": "回复退货问题要带哪些要素",
+          "facet": "WHAT"
+        },
+        {
+          "query": "用户追问退款进度时怎么说",
+          "facet": "HOW"
+        }
       ]
     },
     {
@@ -267,14 +2107,134 @@
       "section": "优先级定义",
       "slug": "ticket-priority",
       "cases": [
-        {"query": "工单优先级分哪几级", "facet": "WHAT"},
-        {"query": "什么时候要把工单升到 HIGH", "facet": "WHEN"},
-        {"query": "优先级由谁决定", "facet": "WHO"},
-        {"query": "为什么资金安全要放最高优先级", "facet": "WHY"},
-        {"query": "怎么判断一个工单的优先级", "facet": "HOW"},
-        {"query": "优先级定义在哪里看", "facet": "WHERE"},
-        {"query": "什么情况算 URGENT", "facet": "WHAT"},
-        {"query": "严重延迟应该是什么优先级", "facet": "WHAT"}
+        {
+          "query": "工单优先级分哪几级",
+          "facet": "WHAT"
+        },
+        {
+          "query": "什么时候要把工单升到 HIGH",
+          "facet": "WHEN"
+        },
+        {
+          "query": "优先级由谁决定",
+          "facet": "WHO"
+        },
+        {
+          "query": "为什么资金安全要放最高优先级",
+          "facet": "WHY"
+        },
+        {
+          "query": "怎么判断一个工单的优先级",
+          "facet": "HOW"
+        },
+        {
+          "query": "优先级定义在哪里看",
+          "facet": "WHERE"
+        },
+        {
+          "query": "什么情况算 URGENT",
+          "facet": "WHAT"
+        },
+        {
+          "query": "严重延迟应该是什么优先级",
+          "facet": "WHAT"
+        },
+        {
+          "query": "工单优先级分几个等级",
+          "facet": "WHAT"
+        },
+        {
+          "query": "什么情况算紧急工单",
+          "facet": "WHAT"
+        },
+        {
+          "query": "严重延迟属于哪个优先级",
+          "facet": "WHAT"
+        },
+        {
+          "query": "一般咨询是什么优先级",
+          "facet": "WHAT"
+        },
+        {
+          "query": "什么时候定为 URGENT",
+          "facet": "WHEN"
+        },
+        {
+          "query": "资金安全类工单多久要处理",
+          "facet": "WHEN"
+        },
+        {
+          "query": "投诉升级后优先级怎么变",
+          "facet": "WHEN"
+        },
+        {
+          "query": "大促期间优先级会调整吗",
+          "facet": "WHEN"
+        },
+        {
+          "query": "谁定工单的优先级",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁能修改优先级",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁处理紧急工单",
+          "facet": "WHO"
+        },
+        {
+          "query": "优先级有争议找谁",
+          "facet": "WHO"
+        },
+        {
+          "query": "为什么资金安全是最高优先级",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么严重延迟算高优先级",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么功能建议是低优先级",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么工单要分级",
+          "facet": "WHY"
+        },
+        {
+          "query": "怎么判断工单优先级",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么升级工单优先级",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么给投诉单定级",
+          "facet": "HOW"
+        },
+        {
+          "query": "定级错误怎么纠正",
+          "facet": "HOW"
+        },
+        {
+          "query": "优先级定义在哪一节",
+          "facet": "WHERE"
+        },
+        {
+          "query": "哪里能看工单等级",
+          "facet": "WHERE"
+        },
+        {
+          "query": "重复扣款应该定什么优先级",
+          "facet": "WHAT"
+        },
+        {
+          "query": "信息补充属于什么优先级",
+          "facet": "WHAT"
+        }
       ]
     },
     {
@@ -282,14 +2242,134 @@
       "section": "创建规则",
       "slug": "ticket-creation",
       "cases": [
-        {"query": "创建工单有什么规则", "facet": "WHAT"},
-        {"query": "什么时候必须用幂等键", "facet": "WHEN"},
-        {"query": "谁可以创建工单", "facet": "WHO"},
-        {"query": "幂等键是做什么的", "facet": "WHY"},
-        {"query": "怎么避免创建重复工单", "facet": "HOW"},
-        {"query": "创建规则写在哪一节", "facet": "WHERE"},
-        {"query": "重复提交会生成多张工单吗", "facet": "WHAT"},
-        {"query": "只凭订单号能建别人的工单吗", "facet": "WHAT"}
+        {
+          "query": "创建工单有什么规则",
+          "facet": "WHAT"
+        },
+        {
+          "query": "什么时候必须用幂等键",
+          "facet": "WHEN"
+        },
+        {
+          "query": "谁可以创建工单",
+          "facet": "WHO"
+        },
+        {
+          "query": "幂等键是做什么的",
+          "facet": "WHY"
+        },
+        {
+          "query": "怎么避免创建重复工单",
+          "facet": "HOW"
+        },
+        {
+          "query": "创建规则写在哪一节",
+          "facet": "WHERE"
+        },
+        {
+          "query": "重复提交会生成多张工单吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "只凭订单号能建别人的工单吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "建工单要绑定哪些信息",
+          "facet": "WHAT"
+        },
+        {
+          "query": "只给订单号能建单吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "重复提交会生成几张工单",
+          "facet": "WHAT"
+        },
+        {
+          "query": "工单必须绑定用户吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "什么时候必须创建工单",
+          "facet": "WHEN"
+        },
+        {
+          "query": "重试时怎么保证幂等",
+          "facet": "WHEN"
+        },
+        {
+          "query": "重复提交什么时候返回原单",
+          "facet": "WHEN"
+        },
+        {
+          "query": "什么情况下不能建单",
+          "facet": "WHEN"
+        },
+        {
+          "query": "谁有权创建工单",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁核实工单归属",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁处理重复工单",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁能关闭工单",
+          "facet": "WHO"
+        },
+        {
+          "query": "为什么要绑定租户",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么要用幂等键",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么不能替别人建单",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么重复提交只出一张单",
+          "facet": "WHY"
+        },
+        {
+          "query": "怎么创建工单",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么避免重复建单",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么查已经存在的工单",
+          "facet": "HOW"
+        },
+        {
+          "query": "建单失败怎么处理",
+          "facet": "HOW"
+        },
+        {
+          "query": "创建规则在哪一节",
+          "facet": "WHERE"
+        },
+        {
+          "query": "哪里能看工单归属",
+          "facet": "WHERE"
+        },
+        {
+          "query": "幂等键要怎么写",
+          "facet": "WHAT"
+        },
+        {
+          "query": "工单必须绑定订单吗",
+          "facet": "WHAT"
+        }
       ]
     },
     {
@@ -297,14 +2377,134 @@
       "section": "转人工",
       "slug": "ticket-handoff",
       "cases": [
-        {"query": "什么时候应该转人工", "facet": "WHEN"},
-        {"query": "转人工后任务就算成功了吗", "facet": "WHAT"},
-        {"query": "谁来决定转人工", "facet": "WHO"},
-        {"query": "为什么证据不足要转人工", "facet": "WHY"},
-        {"query": "政策冲突时怎么处理", "facet": "HOW"},
-        {"query": "转人工的规则在哪里", "facet": "WHERE"},
-        {"query": "重试超过上限怎么办", "facet": "WHEN"},
-        {"query": "转人工的状态应该怎么说明", "facet": "HOW"}
+        {
+          "query": "什么时候应该转人工",
+          "facet": "WHEN"
+        },
+        {
+          "query": "转人工后任务就算成功了吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "谁来决定转人工",
+          "facet": "WHO"
+        },
+        {
+          "query": "为什么证据不足要转人工",
+          "facet": "WHY"
+        },
+        {
+          "query": "政策冲突时怎么处理",
+          "facet": "HOW"
+        },
+        {
+          "query": "转人工的规则在哪里",
+          "facet": "WHERE"
+        },
+        {
+          "query": "重试超过上限怎么办",
+          "facet": "WHEN"
+        },
+        {
+          "query": "转人工的状态应该怎么说明",
+          "facet": "HOW"
+        },
+        {
+          "query": "什么情况要转人工",
+          "facet": "WHAT"
+        },
+        {
+          "query": "转人工算问题解决了吗",
+          "facet": "WHAT"
+        },
+        {
+          "query": "转人工要带哪些信息",
+          "facet": "WHAT"
+        },
+        {
+          "query": "哪些问题必须人工处理",
+          "facet": "WHAT"
+        },
+        {
+          "query": "什么时候该升级人工",
+          "facet": "WHEN"
+        },
+        {
+          "query": "重试超限之后怎么办",
+          "facet": "WHEN"
+        },
+        {
+          "query": "两条政策说法冲突时找谁定",
+          "facet": "WHEN"
+        },
+        {
+          "query": "用户要求人工时怎么办",
+          "facet": "WHEN"
+        },
+        {
+          "query": "谁接转来的人工工单",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁判断证据是否足够",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁决定是否升级",
+          "facet": "WHO"
+        },
+        {
+          "query": "谁跟进人工处理结果",
+          "facet": "WHO"
+        },
+        {
+          "query": "为什么缺证据不能自己下结论",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么转人工不代表成功",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么要说明当前状态",
+          "facet": "WHY"
+        },
+        {
+          "query": "为什么不能一直重试",
+          "facet": "WHY"
+        },
+        {
+          "query": "怎么转人工",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么把上下文带给坐席",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么告知用户已转人工",
+          "facet": "HOW"
+        },
+        {
+          "query": "怎么跟踪人工处理进度",
+          "facet": "HOW"
+        },
+        {
+          "query": "转人工规则在哪一节",
+          "facet": "WHERE"
+        },
+        {
+          "query": "哪里能看人工队列",
+          "facet": "WHERE"
+        },
+        {
+          "query": "转人工后要说明什么状态",
+          "facet": "WHAT"
+        },
+        {
+          "query": "自动流程失败几次要转人工",
+          "facet": "WHEN"
+        }
       ]
     }
   ]

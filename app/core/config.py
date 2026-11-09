@@ -27,7 +27,11 @@ class Settings(BaseSettings):
     refund_provider: Literal["mock", "http"] = "mock"
 
     approval_ttl_minutes: int = 30
-    policy_max_results: int = 3
+    # Chunks the retriever returns per policy question. Six is the knee: the
+    # answer only shows the first two distinct documents, so a deeper list
+    # changes nothing (k=7/9 measured identical), while k=3 occasionally fails
+    # to fill the second card. See docs/guide/证据索引.md.
+    policy_max_results: int = 6
     policy_min_score: float = 0.01
     # How many rows one self-service question may pull back.
     analytics_max_limit: int = 200
@@ -57,11 +61,11 @@ class Settings(BaseSettings):
     escalation_clarification_rounds: int = 3
     handoff_after_failed_attempts: int = 2
     escalation_no_evidence_score: float = 5.0
-    # The same "no evidence" line on the other scales: a cosine score, an RRF
-    # score and a reranker score are not BM25 numbers, so each ruler carries
-    # its own limit.
+    # The same "no evidence" line on the other scales: a cosine score and a
+    # reranker score are not BM25 numbers, so each ruler carries its own limit.
+    # A fused row reports the channel score it came from, never the fused
+    # z-score, so there is no third line to keep in sync.
     escalation_no_evidence_score_dense: float = 0.35
-    escalation_no_evidence_score_fusion: float = 0.0164
     escalation_no_evidence_score_rerank: float = 0.35
     session_idle_minutes: int = 20
     handoff_claim_timeout_seconds: int = 120
@@ -69,24 +73,20 @@ class Settings(BaseSettings):
     abandon_idle_minutes: int = 30
     handoff_digest_max_chars: int = 400
 
-    # Retrieval channels. The sparse BM25 channel is always on; the dense and
-    # rerank channels are opt-in and fail open, so a broken endpoint degrades
-    # the ranking instead of breaking the answer.
-    retrieval_dense_enabled: bool = False
+    # Retrieval. The shipped chain is sparse BM25 plus a dense channel fused
+    # with per-channel z-scores; there is no second scheme to switch to. The
+    # dense half needs EMBEDDING_BASE_URL / EMBEDDING_MODEL -- without them the
+    # chain degrades to sparse only, which is the offline/dev path, not a
+    # deployment choice. The reranker is orthogonal and still opt-in.
     retrieval_rerank_enabled: bool = False
-    retrieval_rrf_k: int = 60
+    # How far each channel looks before the cut. The corpus is 15 chunks, so
+    # the fused list saturates at 20; going deeper only buys latency.
     retrieval_candidate_pool: int = 20
     retrieval_dense_min_score: float = 0.0
-    # Once dense is on, ask it only where BM25 is blind or poorly covered.
-    # Set the flag to false to restore the always-on channel.
-    retrieval_dense_gate_enabled: bool = True
-    retrieval_dense_gate_min_top1_score: float = 5.0
-    retrieval_dense_gate_min_coverage: float = 0.35
     embedding_base_url: str = ""
     embedding_model: str = ""
     embedding_api_key: SecretStr | None = None
     embedding_timeout_seconds: float = 10.0
-    embedding_dimensions: int = 256
     rerank_url: str = ""
     rerank_model: str = ""
     rerank_api_key: SecretStr | None = None
@@ -200,13 +200,11 @@ class Settings(BaseSettings):
                 )
             if self.docs_enabled:
                 raise ValueError("production must set DOCS_ENABLED=false")
-            if self.retrieval_dense_enabled and not (
-                self.embedding_base_url and self.embedding_model
-            ):
+            if not (self.embedding_base_url and self.embedding_model):
                 raise ValueError(
-                    "production dense retrieval requires EMBEDDING_BASE_URL and "
-                    "EMBEDDING_MODEL; the offline hashing stand-in is not a "
-                    "production fallback"
+                    "production retrieval requires EMBEDDING_BASE_URL and "
+                    "EMBEDDING_MODEL; the fused policy search is the shipped "
+                    "scheme and the sparse-only path is for local use"
                 )
             if self.retrieval_rerank_enabled and not self.rerank_url:
                 raise ValueError(

@@ -35,20 +35,38 @@ python scripts/manage_intent_gaps.py report --cycle 2026-10-26   # 缺口队列�
 python evals/intent_metrics.py --enforce     # 规则覆盖、误判代价与缺口不变量
 python evals/intent_candidates.py            # 意图候选集离线证据（不调模型；--with-model 才问端点）
 python evals/retrieval_metrics.py         # 检索/路由评测基线，门槛全过
-python evals/retrieval_metrics.py --dataset evals/retrieval_set.json   # 分层 1k 集（200 金 + 800 银）
+python evals/retrieval_metrics.py --dataset evals/retrieval_set.json   # 分层集：600 金 + 1600 银，test 分片 1100 条
+python evals/retrieval_metrics.py --sweep --channels bm25 --sweep-k 1,2,3,5,8,10,15   # top-k 曲线
+python evals/retrieval_metrics.py --sweep --channels hybrid --local-embedding <模型目录> --sweep-k 1,3,5,8 --sweep-pools 10,20,30   # top-n × top-k 曲线
 python scripts/build_retrieval_set.py --check   # 分层集可复现性
 python evals/replay.py --self-check       # 回放自检：diff 为空
-python evals/metrics_baseline.py --check  # 基线门禁：五个离线评测源的 395 条确定性读数与 evals/baseline/ 逐键相等（默认零容差）
+python evals/metrics_baseline.py --check  # 基线门禁：五个离线评测源的 426 条确定性读数与 evals/baseline/ 逐键相等（默认零容差）
 python -m alembic check                   # 模型与迁移无漂移
 cd web && npm run build                   # 控制台类型检查 + 构建
 ```
 
 这份清单覆盖 `.github/workflows/ci.yml` 主 job 的检查项；CI 另有 `alembic upgrade head`
-建库步骤，并把检索指标显式限定为 `--channels bm25,hybrid`。分层集指标、分层集复现、
+建库步骤，检索指标只跑 `--channels bm25`——CI 里没有 embedding 端点，融合通道在缺模型时会被跳过而不是用替身凑数。分层集指标、分层集复现、
 澄清降级剧本对比、指标基线门禁与控制台构建是本地附加检查（CI 的 web job 单独跑构建）；
 Postgres job 只验迁移链。
 
 检索指标的双库一致性由 `PolicySearchService.visible_chunks()` 按块 ID 排序保证（`app/retrieval/search.py`）。
+
+### 检索侧微调
+
+`scripts/finetune_embedder.py` 用公开客服语料微调中文 bi-encoder。训练前先跑泄漏审计：
+训练问句与 test 分片必须零重合，字符 3-gram Jaccard 低于 0.8，审计结果写进模型目录的
+`audit.json`；`--holdout-policy` 再留出一整份政策做泛化对照，证明涨点不是背下了测试问句。
+
+```bash
+pip install -e ".[finetune]"          # torch / transformers / sentence-transformers
+python scripts/finetune_embedder.py --out .tmp/models/bge-cs --pairs gold-dev --dry-run   # 只看配对与审计
+python scripts/finetune_embedder.py --out .tmp/models/bge-cs --pairs gold-dev+external \
+    --corpus <train_clean_v2_small.jsonl>                                                  # 训练
+python evals/retrieval_metrics.py --channels bm25,hybrid --local-embedding .tmp/models/bge-cs
+```
+
+训练依赖是可选组，不进 `requirements.lock`：CI 与镜像只跑稀疏通道，不需要 torch。
 
 ## 目录约定
 

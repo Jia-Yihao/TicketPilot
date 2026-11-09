@@ -2,13 +2,11 @@
 
 Embeds every policy chunk and stores the vectors in ``document_chunks.embedding``.
 
-The provider follows the deployment settings: with ``EMBEDDING_BASE_URL`` and
-``EMBEDDING_MODEL`` set it calls that OpenAI-compatible endpoint, otherwise it
-falls back to the offline hashing stand-in so the index can be built without
-any external service.
-
-The stand-in carries no semantics, so a production database refuses it here
-just as the app refuses to start with dense retrieval enabled and no endpoint.
+The provider is the one the deployment configures: ``EMBEDDING_BASE_URL`` and
+``EMBEDDING_MODEL`` name an OpenAI-compatible ``/embeddings`` endpoint. Without
+them there is nothing to build — the fused search has no meaning without a real
+model, and writing vectors from a stand-in would only poison the index, so the
+script refuses instead.
 """
 
 from __future__ import annotations
@@ -17,46 +15,38 @@ import argparse
 
 from sqlalchemy import select
 
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 from app.db.session import build_engine, build_session_factory, create_all
 from app.models.document import DocumentChunk
 from app.retrieval.dense import (
     EmbeddingProvider,
-    HashingEmbedder,
     OpenAICompatibleEmbedder,
     store_embeddings,
 )
 
 
-def _provider(settings, *, offline: bool) -> tuple[EmbeddingProvider, str]:
-    """The configured endpoint, or the offline stand-in when there is none.
-
-    The stand-in writes character-hash vectors with no semantics, so a
-    production deployment must not build its index with it: production
-    refuses instead, the same way the app refuses to start with dense
-    retrieval enabled and no endpoint.
-    """
-    if not offline and settings.embedding_base_url and settings.embedding_model:
-        api_key = (
-            settings.embedding_api_key.get_secret_value()
-            if settings.embedding_api_key
-            else None
-        )
-        return (
-            OpenAICompatibleEmbedder(
-                settings.embedding_base_url,
-                settings.embedding_model,
-                api_key=api_key,
-                timeout=settings.embedding_timeout_seconds,
-            ),
-            f"endpoint:{settings.embedding_model}",
-        )
-    if settings.environment == "prod":
+def _provider(settings: Settings) -> tuple[EmbeddingProvider, str]:
+    """The configured embedding endpoint, or a refusal."""
+    if not (settings.embedding_base_url and settings.embedding_model):
         raise SystemExit(
-            "refusing to build the dense index with the offline hashing "
-            "stand-in in production; set EMBEDDING_BASE_URL and EMBEDDING_MODEL"
+            "no embedding endpoint configured; set EMBEDDING_BASE_URL and "
+            "EMBEDDING_MODEL (the index has to be built by the same model the "
+            "search queries with)"
         )
-    return HashingEmbedder(settings.embedding_dimensions), "hashing(offline stand-in)"
+    api_key = (
+        settings.embedding_api_key.get_secret_value()
+        if settings.embedding_api_key
+        else None
+    )
+    return (
+        OpenAICompatibleEmbedder(
+            settings.embedding_base_url,
+            settings.embedding_model,
+            api_key=api_key,
+            timeout=settings.embedding_timeout_seconds,
+        ),
+        f"endpoint:{settings.embedding_model}",
+    )
 
 
 def main() -> None:
@@ -70,11 +60,6 @@ def main() -> None:
         action="store_true",
         help="Re-embed the chunks that already carry a vector.",
     )
-    parser.add_argument(
-        "--offline",
-        action="store_true",
-        help="Force the offline hashing stand-in instead of the configured endpoint.",
-    )
     args = parser.parse_args()
 
     settings = get_settings()
@@ -83,7 +68,7 @@ def main() -> None:
     if settings.auto_create_tables:
         create_all(engine)
     session_factory = build_session_factory(engine)
-    provider, label = _provider(settings, offline=args.offline)
+    provider, label = _provider(settings)
 
     written = 0
     try:

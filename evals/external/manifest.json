@@ -2,12 +2,28 @@
   "dataset": "modelscope_mp_677764216/E_commerce_Customer_Service",
   "dataset_url": "https://www.modelscope.cn/datasets/modelscope_mp_677764216/E_commerce_Customer_Service",
   "license": "Apache-2.0",
-  "source_file": "dev_clean_v2.jsonl",
-  "source_sha256": "202e45eed3e53e0f8bfcca8283e5183e3b7119bdd433a9b2158f25eaac3d427c",
-  "source_rows": 16205,
-  "sample_file": "ecommerce_customer_service_queries.jsonl",
-  "sample_rows": 200,
-  "sample_sha256": "bc0a3769f87ee57d58122906ed467e7263cae434dd01224d174859de2be0c0f3",
-  "selection": "first 200 unique user messages in file order, 4-40 characters, containing a policy topic word; no answer or label is copied",
-  "used_for": "phrasing source only; not a labelled retrieval case"
+  "task": "single-turn e-commerce customer service dialogues (system, user, assistant)",
+  "splits": [
+    {
+      "file": "train_clean_v2_small.jsonl",
+      "rows": 226600,
+      "sha256": "a0ce1e41393ec574034fbe3a0b3f1d853252e19adf0abd07d814040ca4a378bb"
+    },
+    {
+      "file": "dev_clean_v2.jsonl",
+      "rows": 16205,
+      "sha256": "202e45eed3e53e0f8bfcca8283e5183e3b7119bdd433a9b2158f25eaac3d427c"
+    },
+    {
+      "file": "test_clean_v2.jsonl",
+      "rows": 3320,
+      "sha256": "638a12ee5b09822386cdd5618c3f0cad4f2908d3f642ae7db7dff81d1c41a044"
+    }
+  ],
+  "total_rows": 246125,
+  "vendored": false,
+  "acquire": "download the three splits from dataset_url into a local directory, then pass one split to scripts/finetune_embedder.py --corpus <split>.jsonl; the sha256 above is what that run records",
+  "used_for": "training pairs only: user messages become anchors, policy sections become positives",
+  "not_used_for": "no evaluation case is sampled from this corpus; retrieval and intent labels are authored in evals/retrieval/gold_cases.json and evals/intent/, and the corpus answers and dialogue labels are never imported",
+  "rows_note": "246,125 rows in total; 85,298 distinct user messages of 4-40 characters remain after whitespace normalisation, de-duplication and dropping messages that carry 8+ digit runs or URLs"
 }

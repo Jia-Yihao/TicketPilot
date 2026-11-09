@@ -3,21 +3,16 @@
 Vectors live in the existing ``document_chunks.embedding`` column, so this
 channel needs no extra service and no schema change.
 
-Two providers ship here:
-
-- ``OpenAICompatibleEmbedder`` talks to an OpenAI-compatible ``/embeddings``
-  endpoint. It is only used when the deployment configures one.
-- ``HashingEmbedder`` is an offline stand-in that hashes character bigrams into
-  a fixed-width vector. It adds a character-level view of the text but no
-  semantics, so it is only a wiring and evaluation aid, never a replacement
-  for a real model.
+One provider ships here: ``OpenAICompatibleEmbedder``, which talks to an
+OpenAI-compatible ``/embeddings`` endpoint. The fused search is the shipped
+scheme and it has no meaning without a real model, so a deployment without
+``EMBEDDING_BASE_URL`` runs the sparse channel alone rather than a stand-in
+that would only produce numbers.
 """
 
 from __future__ import annotations
 
-import hashlib
 import math
-import re
 from collections.abc import Sequence
 from typing import Protocol
 
@@ -27,23 +22,11 @@ from sqlalchemy.orm import Session
 
 from app.models.document import DocumentChunk
 
-_CJK = re.compile(r"[\u4e00-\u9fff]+")
-_LATIN = re.compile(r"[a-zA-Z0-9_]+")
-
 
 class EmbeddingProvider(Protocol):
     """Turns text into vectors."""
 
     def embed(self, texts: Sequence[str]) -> list[list[float]]: ...
-
-
-def char_features(text: str) -> list[str]:
-    """Character level features: latin words, CJK unigrams and CJK bigrams."""
-    features: list[str] = [match.lower() for match in _LATIN.findall(text)]
-    for run in _CJK.findall(text):
-        features.extend(run)
-        features.extend(run[index : index + 2] for index in range(len(run) - 1))
-    return features
 
 
 def cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
@@ -56,37 +39,6 @@ def cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
     if left_norm == 0.0 or right_norm == 0.0:
         return 0.0
     return dot / (left_norm * right_norm)
-
-
-class HashingEmbedder:
-    """Deterministic offline stand-in for a semantic embedding model."""
-
-    def __init__(self, dimensions: int = 256) -> None:
-        if dimensions <= 0:
-            raise ValueError("dimensions must be positive")
-        self._dimensions = dimensions
-
-    @property
-    def dimensions(self) -> int:
-        return self._dimensions
-
-    def embed(self, texts: Sequence[str]) -> list[list[float]]:
-        return [self._embed_one(text) for text in texts]
-
-    def _embed_one(self, text: str) -> list[float]:
-        vector = [0.0] * self._dimensions
-        features = char_features(text)
-        if not features:
-            return vector
-        for feature in features:
-            digest = hashlib.blake2b(feature.encode("utf-8"), digest_size=8).digest()
-            index = int.from_bytes(digest[:4], "big") % self._dimensions
-            sign = 1.0 if digest[4] & 1 else -1.0
-            vector[index] += sign
-        norm = math.sqrt(sum(value * value for value in vector))
-        if norm == 0.0:
-            return vector
-        return [value / norm for value in vector]
 
 
 class OpenAICompatibleEmbedder:
@@ -118,9 +70,7 @@ class OpenAICompatibleEmbedder:
             timeout=self._timeout,
         )
         if response.is_error:
-            raise RuntimeError(
-                f"embedding endpoint returned HTTP {response.status_code}"
-            )
+            raise RuntimeError(f"embedding endpoint returned HTTP {response.status_code}")
         payload = response.json()
         data = payload.get("data") or []
         vectors = [[float(value) for value in item["embedding"]] for item in data]
@@ -136,9 +86,7 @@ def chunk_text(chunk: DocumentChunk) -> str:
     return f"{chunk.section}\n{chunk.content}".strip()
 
 
-def index_dimensions(
-    session: Session, *, exclude_ids: Sequence[str] = ()
-) -> set[int]:
+def index_dimensions(session: Session, *, exclude_ids: Sequence[str] = ()) -> set[int]:
     """The vector widths the index already carries, outside the given ids."""
     statement = select(DocumentChunk.id, DocumentChunk.embedding)
     if exclude_ids:
@@ -175,9 +123,7 @@ def store_embeddings(
         )
     widths = {len(vector) for vector in vectors if vector}
     if len(widths) > 1:
-        raise ValueError(
-            f"embedding provider returned mixed dimensions: {sorted(widths)}"
-        )
+        raise ValueError(f"embedding provider returned mixed dimensions: {sorted(widths)}")
     kept = index_dimensions(session, exclude_ids=[chunk.id for chunk in pending])
     if kept and kept != widths:
         raise ValueError(

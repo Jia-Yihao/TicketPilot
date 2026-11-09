@@ -1,8 +1,9 @@
 """Builds the policy search chain from the deployment settings.
 
-The sparse BM25 channel is always present. The dense and rerank channels are
-opt-in: without them the service stays exactly the deterministic BM25 baseline
-that the offline evaluation measures. The query rewriter, when enabled, wraps
+One chain ships: sparse BM25 fused with a dense channel by per-channel
+z-scores. The dense half needs an embedding endpoint; without one the chain
+degrades to sparse only, which is the offline/dev path rather than a second
+scheme. The reranker is orthogonal and still opt-in. The query rewriter wraps
 the finished chain instead of being one of its channels.
 """
 
@@ -11,12 +12,8 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
-from app.retrieval.dense import (
-    EmbeddingProvider,
-    HashingEmbedder,
-    OpenAICompatibleEmbedder,
-)
-from app.retrieval.hybrid import DenseGate, HybridPolicySearch
+from app.retrieval.dense import EmbeddingProvider, OpenAICompatibleEmbedder
+from app.retrieval.hybrid import HybridPolicySearch
 from app.retrieval.rerank import RerankClient
 from app.retrieval.rewrite import QueryRewriter, RewritingPolicySearch
 from app.retrieval.search import PolicySearch, PolicySearchService
@@ -33,17 +30,20 @@ def _secret(value: object) -> str | None:
 
 
 def build_embedder(settings: Settings) -> EmbeddingProvider | None:
-    """The dense provider, or ``None`` when the dense channel is off."""
-    if not settings.retrieval_dense_enabled:
+    """The dense provider, or ``None`` when no endpoint is configured.
+
+    ``None`` means the chain runs sparse only. There is deliberately no hashing
+    stand-in here: on this corpus it ranks worse than BM25, so silently
+    swapping it in would be a quality trap rather than a fallback.
+    """
+    if not (settings.embedding_base_url and settings.embedding_model):
         return None
-    if settings.embedding_base_url and settings.embedding_model:
-        return OpenAICompatibleEmbedder(
-            settings.embedding_base_url,
-            settings.embedding_model,
-            api_key=_secret(settings.embedding_api_key),
-            timeout=settings.embedding_timeout_seconds,
-        )
-    return HashingEmbedder(settings.embedding_dimensions)
+    return OpenAICompatibleEmbedder(
+        settings.embedding_base_url,
+        settings.embedding_model,
+        api_key=_secret(settings.embedding_api_key),
+        timeout=settings.embedding_timeout_seconds,
+    )
 
 
 def build_reranker(settings: Settings) -> RerankClient | None:
@@ -94,26 +94,16 @@ def build_policy_search(
     if embedder is None and reranker is None:
         search = sparse
     else:
-        dense_gate = (
-            DenseGate(
-                min_top1_score=settings.retrieval_dense_gate_min_top1_score,
-                min_coverage=settings.retrieval_dense_gate_min_coverage,
-            )
-            if settings.retrieval_dense_gate_enabled
-            else None
-        )
         search = HybridPolicySearch(
             session,
             sparse=sparse,
             embedder=embedder,
             reranker=reranker,
-            rrf_k=settings.retrieval_rrf_k,
             max_results=results,
             candidate_pool=settings.retrieval_candidate_pool,
             dense_min_score=settings.retrieval_dense_min_score,
-            dense_gate=dense_gate,
         )
-    # The rewriter wraps the finished chain: the dense gate and the reranker
+    # The rewriter wraps the finished chain: the dense channel and the reranker
     # must see the same rewritten text the sparse channel scored.
     rewriter = build_rewriter(settings)
     if rewriter is None:

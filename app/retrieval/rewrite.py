@@ -666,7 +666,6 @@ class RewritingPolicySearch:
         )
 
     def __getattr__(self, name: str) -> object:
-        # Diagnostics such as ``last_dense_decision`` live on the wrapped
-        # search. A missing attribute must still raise, otherwise an eval
-        # would mistake "sparse only" for "dense ran".
+        # Diagnostics live on the wrapped search. A missing attribute must still
+        # raise, otherwise an eval would mistake "sparse only" for "dense ran".
         return cast(object, getattr(self.inner, name))

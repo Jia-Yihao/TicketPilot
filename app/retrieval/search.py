@@ -70,6 +70,21 @@ class RetrievedChunk:
     # Appended last so the fields above keep their required-ness and every
     # existing construction site stays untouched.
     score_kind: str = "sparse"
+    # ``score`` orders the list; ``evidence`` answers "is this real evidence?".
+    # They part ways once two channels are fused, because a fused z-score is
+    # normalized inside one query and therefore carries no absolute strength.
+    # ``None`` means the row never left a single channel, so the two agree.
+    evidence_score: float | None = None
+    evidence_kind: str | None = None
+
+    def evidence(self) -> tuple[float, str]:
+        """The ``(score, kind)`` pair the escalation gate should read.
+
+        Falls back to the ranking pair for rows that never left one channel.
+        """
+        score = self.score if self.evidence_score is None else self.evidence_score
+        kind = self.score_kind if self.evidence_kind is None else self.evidence_kind
+        return score, kind
 
     def citation(self) -> dict[str, Any]:
         return {

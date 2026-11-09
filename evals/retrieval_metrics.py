@@ -15,31 +15,54 @@ Hard constraints
     cross_tenant   hits that belong to another tenant
 
 Channels
-    ``--channels`` compares retrieval channels on the same labelled set:
+    ``--channels`` names the states the deployment can be in:
 
-    bm25      the shipped sparse baseline (sparse BM25 only);
-    dense     the dense channel alone, measured through the same hybrid search
-              with its sparse channel silenced; it is an evaluation view, not a
-              deployment the product offers;
-    hybrid    sparse + dense, fused with RRF. Without ``EMBEDDING_BASE_URL``
-              the dense channel uses the offline hashing stand-in, which adds
-              a character level view but no semantics;
-    gated     the shipped dense deployment: sparse always runs, dense only on
-              a query where ``DenseGate`` says BM25 is blind or poorly covered;
+    bm25      sparse only, which is what a local run without an embedding
+              endpoint falls back to;
+    hybrid    the shipped chain: sparse + dense, fused by per-channel z-scores
+              at ``FUSION_ALPHA``. It needs a real embedding model — a
+              ``--local-embedding`` path or ``EMBEDDING_BASE_URL`` — and is
+              skipped, not faked, when neither is available;
     rerank    hybrid plus the rerank endpoint; it needs ``RERANK_URL`` and is
               skipped when none is configured.
 
-    The gate thresholds are applied to the first channel in the list, which is
-    the one the deployment ships; the other channels are reported as
-    comparison numbers. ``dense_trigger_rate`` says how often the gated channel
-    actually called the embedder.
-
 Rewriting
-    ``--rewrite {on,off}`` (default ``on``) puts every channel — including the
-    dense-only view — behind the query rewriter, so one run reports the same
-    labels with and without the rewrite. ``off`` measures the pre-rewrite
-    ranking. ``--json`` carries a per-case row (recall, mrr, ndcg, retrieved
-    sections, dense decision) so a single labelled case can be compared.
+    ``--rewrite {on,off}`` (default ``on``) puts every channel behind the query
+    rewriter, so one run reports the same labels with and without the rewrite.
+    ``off`` measures the pre-rewrite ranking. ``--json`` carries a per-case row
+    (recall, mrr, ndcg, retrieved sections) so a single labelled case can be
+    compared.
+
+Depth
+    ``--sweep`` scans the two knobs a retriever actually exposes and reports
+    the curve instead of gating one point: ``--sweep-k`` is the answer length
+    (top-k), ``--sweep-pools`` is the retrieval depth (top-n) each channel
+    contributes before the cut. ``--candidate-pool`` sets top-n for a single
+    run; ``--local-embedding`` scores a local sentence-transformers model, so
+    a fine-tuned encoder can be measured without standing up an endpoint.
+
+Measured on the 2,200-case set (gold_test = 300, 2026-11-09)
+    BM25, rewrite on, by answer length::
+
+        k          1      2      3      4      5      6      8     10     15
+        recall  .673   .863   .905   .918   .922   .933   .940   .950   .953
+        mrr     .815
+
+    Recall flattens after k=6: k=5 -> k=8 buys 1.8pp for 60% more context, so
+    the shipped answer length stays at 3-5. Top-n saturates at the corpus size
+    (15 chunks): 15/20/30/50 are identical, which is why the pool is 20.
+
+    Fine-tuned encoder (``scripts/finetune_embedder.py``, 300 authored dev
+    pairs), dense-only, gold_test / silver_test recall@1::
+
+        base bge-small-zh      .687 / .667
+        fine-tuned             .720 / .747     <- silver is a style it never saw
+
+    Fusion at top-n=20, gold_test: rank fusion .695/.912/.937 (r@1/3/5,
+    mrr .836) vs z-score alpha=0.3 .735/.910/.937 (mrr .857). z-score keeps
+    more of the head of the sparse list, so it is the only ruler the product
+    ships. Its score is a ranking score only: the escalation gate reads the
+    channel score on ``RetrievedChunk.evidence()``.
 """
 
 from __future__ import annotations
@@ -49,7 +72,7 @@ import json
 import math
 import sys
 import tempfile
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -68,25 +91,23 @@ from app.models.document import Document, DocumentChunk
 from app.retrieval.build import build_reranker
 from app.retrieval.dense import (
     EmbeddingProvider,
-    HashingEmbedder,
     OpenAICompatibleEmbedder,
     store_embeddings,
 )
-from app.retrieval.hybrid import DenseGate, HybridPolicySearch
+from app.retrieval.hybrid import HybridPolicySearch
 from app.retrieval.rerank import RerankClient
 from app.retrieval.rewrite import QueryRewriter, RewritingPolicySearch
 from app.retrieval.search import (
     PolicySearch,
     PolicySearchService,
     RetrievedChunk,
-    ScoredChunk,
 )
 from app.seed import seed_all
 from app.services.catalog import CatalogService
 
-DATASET_PATH = Path(__file__).with_name("support_set.json")
+DATASET_PATH = Path(__file__).with_name("retrieval_set.json")
 DEFAULT_K = (1, 3, 5)
-CHANNELS = ("bm25", "dense", "hybrid", "gated", "rerank")
+CHANNELS = ("bm25", "hybrid", "rerank")
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,8 +123,11 @@ class CaseResult:
     retrieved: tuple[str, ...]
     stale_hits: int
     cross_tenant_hits: int
-    dense_decision: str | None = None
     layer: str = "legacy_gold"
+    # ``ndcg@k`` for every scanned k, so a top-k sweep can read one run instead
+    # of re-scoring the same ranking once per k. ``ndcg`` stays the value at the
+    # largest k, which is what the gate reads.
+    ndcg_by_k: dict[int, float] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -117,9 +141,7 @@ class Report:
     @property
     def routing_gaps(self) -> list[CaseResult]:
         return [
-            case
-            for case in self.cases
-            if case.intent_expected is not None and not case.intent_ok
+            case for case in self.cases if case.intent_expected is not None and not case.intent_ok
         ]
 
 
@@ -151,9 +173,9 @@ def _dcg(gains: list[int]) -> float:
 def _layer(case: dict[str, Any]) -> str:
     """The reporting layer a labelled case belongs to.
 
-    Legacy cases in ``support_set.json`` carry no ``label_quality`` and stay in
-    their own layer, so the historical 17-case gate is never diluted by the
-    generated set.
+    Layered retrieval cases declare ``label_quality`` (gold / silver) and a
+    ``split``; grouping by both keeps the five thresholds aligned with the
+    population they were written for.
     """
     quality = case.get("label_quality")
     if quality in {"gold", "silver"}:
@@ -163,20 +185,12 @@ def _layer(case: dict[str, Any]) -> str:
 
 def _summarise(cases: list[CaseResult], k_values: tuple[int, ...]) -> dict[str, float]:
     retrieval_cases = [case for case in cases if case.recall]
-    dense_ran = [
-        case
-        for case in retrieval_cases
-        if case.dense_decision
-        and case.dense_decision not in {"sparse_confident", "no_embedder"}
-    ]
     metrics: dict[str, float] = {}
     for k in k_values:
         values = [case.recall[k] for case in retrieval_cases]
         metrics[f"recall@{k}"] = sum(values) / len(values) if values else 0.0
     metrics["mrr"] = (
-        sum(case.mrr for case in retrieval_cases) / len(retrieval_cases)
-        if retrieval_cases
-        else 0.0
+        sum(case.mrr for case in retrieval_cases) / len(retrieval_cases) if retrieval_cases else 0.0
     )
     max_k = max(k_values)
     metrics[f"ndcg@{max_k}"] = (
@@ -184,18 +198,18 @@ def _summarise(cases: list[CaseResult], k_values: tuple[int, ...]) -> dict[str, 
         if retrieval_cases
         else 0.0
     )
+    for k in k_values:
+        if k == max_k:
+            continue
+        values = [case.ndcg_by_k.get(k, 0.0) for case in retrieval_cases]
+        metrics[f"ndcg@{k}"] = sum(values) / len(values) if values else 0.0
     with_intent = [case for case in cases if case.intent_expected is not None]
     if with_intent:
-        metrics["intent_accuracy"] = (
-            sum(1 for case in with_intent if case.intent_ok) / len(with_intent)
+        metrics["intent_accuracy"] = sum(1 for case in with_intent if case.intent_ok) / len(
+            with_intent
         )
     metrics["stale_hits"] = float(sum(case.stale_hits for case in cases))
-    metrics["cross_tenant_hits"] = float(
-        sum(case.cross_tenant_hits for case in cases)
-    )
-    metrics["dense_trigger_rate"] = (
-        len(dense_ran) / len(retrieval_cases) if retrieval_cases else 0.0
-    )
+    metrics["cross_tenant_hits"] = float(sum(case.cross_tenant_hits for case in cases))
     return metrics
 
 
@@ -206,16 +220,19 @@ def evaluate(
     k_values: tuple[int, ...] = DEFAULT_K,
     search_factory: Callable[[Session], PolicySearch] | None = None,
     channel: str = "bm25",
+    depth: int | None = None,
 ) -> Report:
     today = utcnow().date()
     max_k = max(k_values)
+    # ``depth`` (top-n) is how far the retriever looks; ``max_k`` is how many
+    # of those rows the answer may use. Keeping them separate is what lets a
+    # sweep hold the candidate pool fixed while the answer length moves.
+    limit = max(depth or max_k, max_k)
     report = Report(channel=channel)
 
     with session_factory() as session:
         rows = session.execute(
-            select(DocumentChunk, Document).join(
-                Document, Document.id == DocumentChunk.document_id
-            )
+            select(DocumentChunk, Document).join(Document, Document.id == DocumentChunk.document_id)
         ).all()
         chunk_policy = {chunk.id: _policy_id(doc) for chunk, doc in rows}
         chunk_section = {chunk.id: chunk.section for chunk, _ in rows}
@@ -268,10 +285,7 @@ def evaluate(
                 for chunk_id, chunk_policy_id in chunk_policy.items()
                 if chunk_policy_id == policy_id and chunk_section[chunk_id] in sections
             }
-            hits: list[RetrievedChunk] = retriever.search(
-                identity, case["query"], limit=max_k
-            )
-            dense_decision = getattr(retriever, "last_dense_decision", None)
+            hits: list[RetrievedChunk] = retriever.search(identity, case["query"], limit=limit)
             gains = [1 if hit.chunk_id in relevant else 0 for hit in hits]
 
             recall: dict[int, float] = {}
@@ -285,6 +299,10 @@ def evaluate(
                     break
             ideal = [1] * min(len(relevant), max_k)
             ndcg = _dcg(gains[:max_k]) / _dcg(ideal) if ideal else 0.0
+            ndcg_by_k = {
+                k: (_dcg(gains[:k]) / _dcg([1] * min(len(relevant), k)) if relevant else 0.0)
+                for k in k_values
+            }
 
             stale_hits = 0
             cross_tenant_hits = 0
@@ -305,13 +323,11 @@ def evaluate(
                     recall=recall,
                     mrr=mrr,
                     ndcg=ndcg,
-                    retrieved=tuple(
-                        f"{hit.section}@{hit.document_version}" for hit in hits
-                    ),
+                    retrieved=tuple(f"{hit.section}@{hit.document_version}" for hit in hits),
                     stale_hits=stale_hits,
                     cross_tenant_hits=cross_tenant_hits,
-                    dense_decision=dense_decision,
                     layer=layer,
+                    ndcg_by_k=ndcg_by_k,
                 )
             )
 
@@ -320,8 +336,7 @@ def evaluate(
     for case in report.cases:
         by_layer.setdefault(case.layer, []).append(case)
     report.layers = {
-        layer: _summarise(cases, k_values)
-        for layer, cases in sorted(by_layer.items())
+        layer: _summarise(cases, k_values) for layer, cases in sorted(by_layer.items())
     }
     return report
 
@@ -346,11 +361,10 @@ def _check_metrics(
 
 
 def check_thresholds(report: Report, thresholds: dict[str, Any]) -> list[str]:
-    """Check a flat legacy gate, or a per-layer gate when values are mappings.
+    """Check a flat gate, or a per-layer gate when values are mappings.
 
-    ``support_set.json`` keeps the historical flat shape. The layered set names
-    each layer, so a threshold written under ``gold_test`` is never applied to
-    silver cases.
+    The layered retrieval set names each layer, so a threshold written under
+    ``gold_test`` is never applied to silver cases.
     """
     failures: list[str] = []
     for name, limit in thresholds.items():
@@ -363,14 +377,6 @@ def check_thresholds(report: Report, thresholds: dict[str, Any]) -> list[str]:
             continue
         failures.extend(_check_metrics(report.metrics, {name: limit}))
     return failures
-
-
-def _dense_marker(decision: str | None) -> str:
-    if decision is None:
-        return "-"
-    if decision in {"sparse_confident", "no_embedder"}:
-        return "skip"
-    return "run"
 
 
 def _layer_counts(report: Report) -> dict[str, int]:
@@ -407,19 +413,15 @@ def format_report(report: Report, thresholds: dict[str, Any]) -> str:
     lines.append(f"channel: {report.channel}")
     if len(report.cases) <= 60:
         lines.append(
-            "case                          intent          dense  recall@1  recall@3  mrr    ndcg@5"
+            "case                          intent          recall@1  recall@3  mrr    ndcg@5"
         )
-        lines.append("-" * 86)
+        lines.append("-" * 78)
         for case in report.cases:
             if not case.recall:
-                lines.append(
-                    f"{case.case_id:<29} {case.intent_actual:<15} "
-                    f"{'(intent only)':<39}"
-                )
+                lines.append(f"{case.case_id:<29} {case.intent_actual:<15} {'(intent only)':<39}")
                 continue
             lines.append(
                 f"{case.case_id:<29} {case.intent_actual:<15} "
-                f"{_dense_marker(case.dense_decision):<6} "
                 f"{case.recall[1]:<10.2f} {case.recall[3]:<10.2f} "
                 f"{case.mrr:<6.2f} {case.ndcg:<6.2f}"
             )
@@ -447,9 +449,7 @@ def format_report(report: Report, thresholds: dict[str, Any]) -> str:
 
 
 def format_comparison(reports: list[Report]) -> str:
-    lines = [
-        "channel                recall@1  recall@3  recall@5   mrr  ndcg@5 dense  stale  x-tenant"
-    ]
+    lines = ["channel                recall@1  recall@3  recall@5   mrr  ndcg@5  stale  x-tenant"]
     for report in reports:
         metrics = report.metrics
         lines.append(
@@ -459,20 +459,60 @@ def format_comparison(reports: list[Report]) -> str:
             f"{metrics.get('recall@5', 0.0):<10.2f}"
             f"{metrics.get('mrr', 0.0):<6.2f}"
             f"{metrics.get('ndcg@5', 0.0):<6.2f}"
-            f"{metrics.get('dense_trigger_rate', 0.0):<7.2f}"
             f"{metrics.get('stale_hits', 0.0):<7.0f}"
             f"{metrics.get('cross_tenant_hits', 0.0):<9.0f}"
         )
     return "\n".join(lines)
 
 
-def _dense_provider(settings: Settings) -> tuple[EmbeddingProvider, str]:
-    """The dense provider for the evaluation, with a label for the report."""
+class _LocalSentenceTransformerEmbedder:
+    """A local sentence-transformers model, imported only when it is asked for.
+
+    Fine-tuning is not part of the shipped dependency set, so the import stays
+    inside the constructor: a run that only measures the sparse channel never
+    needs torch, and CI keeps working on the plain install.
+    """
+
+    def __init__(self, path: str, *, batch_size: int = 32) -> None:
+        from sentence_transformers import SentenceTransformer  # noqa: PLC0415
+
+        self._model = SentenceTransformer(path)
+        self._batch_size = batch_size
+        # A sweep asks the same query over and over, once per configuration;
+        # the cache keeps that from turning into one forward pass per channel.
+        self._cache: dict[str, list[float]] = {}
+
+    def embed(self, texts: Sequence[str]) -> list[list[float]]:
+        if not texts:
+            return []
+        missing = [text for text in texts if text not in self._cache]
+        if missing:
+            vectors = self._model.encode(
+                missing,
+                batch_size=self._batch_size,
+                normalize_embeddings=True,
+                convert_to_numpy=True,
+            )
+            for text, row in zip(missing, vectors, strict=True):
+                self._cache[text] = [float(value) for value in row]
+        return [self._cache[text] for text in texts]
+
+
+def _dense_provider(
+    settings: Settings, local_model: str | None = None
+) -> tuple[EmbeddingProvider | None, str]:
+    """The dense provider for the evaluation, with a label for the report.
+
+    ``None`` means the run cannot measure a dense channel at all: the shipped
+    fused search needs a real embedding model, and a stand-in with no semantics
+    would only produce a number that means nothing. Pass ``--local-embedding``
+    or configure ``EMBEDDING_BASE_URL``.
+    """
+    if local_model:
+        return _LocalSentenceTransformerEmbedder(local_model), f"local:{Path(local_model).name}"
     if settings.embedding_base_url and settings.embedding_model:
         api_key = (
-            settings.embedding_api_key.get_secret_value()
-            if settings.embedding_api_key
-            else None
+            settings.embedding_api_key.get_secret_value() if settings.embedding_api_key else None
         )
         return (
             OpenAICompatibleEmbedder(
@@ -483,7 +523,7 @@ def _dense_provider(settings: Settings) -> tuple[EmbeddingProvider, str]:
             ),
             "endpoint",
         )
-    return HashingEmbedder(settings.embedding_dimensions), "hashing"
+    return None, "none"
 
 
 def _rewritten(search: PolicySearch, rewriter: QueryRewriter | None) -> PolicySearch:
@@ -497,69 +537,23 @@ def _sparse_factory(
     """The shipped sparse channel."""
 
     def factory(session: Session) -> PolicySearch:
-        return _rewritten(
-            PolicySearchService(session, max_results=max_k, min_score=0.01), rewriter
-        )
-
-    return factory
-
-
-class _SilencedSparse(PolicySearchService):
-    """The sparse channel of the hybrid search, made to find nothing.
-
-    Only ``ranked`` is neutered: ``visible_chunks`` still runs, so the dense
-    channel is measured through exactly the production scoring path instead of
-    a re-implementation of it.
-    """
-
-    def ranked(
-        self,
-        identity: Identity,
-        query: str,
-        *,
-        today: date | None = None,
-        limit: int | None = None,
-    ) -> list[ScoredChunk]:
-        return []
-
-
-def _dense_only_factory(
-    settings: Settings,
-    provider: EmbeddingProvider | None,
-    max_k: int,
-    rewriter: QueryRewriter | None = None,
-) -> Callable[[Session], PolicySearch]:
-    """The dense channel on its own, for a channel comparison."""
-
-    def factory(session: Session) -> PolicySearch:
-        return _rewritten(
-            HybridPolicySearch(
-                session,
-                sparse=_SilencedSparse(session, max_results=max_k, min_score=0.01),
-                embedder=provider,
-                rrf_k=settings.retrieval_rrf_k,
-                max_results=max_k,
-                candidate_pool=settings.retrieval_candidate_pool,
-                dense_min_score=settings.retrieval_dense_min_score,
-            ),
-            rewriter,
-        )
+        return _rewritten(PolicySearchService(session, max_results=max_k, min_score=0.01), rewriter)
 
     return factory
 
 
 def _hybrid_factory(
     settings: Settings,
-    provider: EmbeddingProvider | None,
+    provider: EmbeddingProvider,
     max_k: int,
     reranker: RerankClient | None = None,
-    dense_gate: DenseGate | None = None,
     rewriter: QueryRewriter | None = None,
+    candidate_pool: int | None = None,
 ) -> Callable[[Session], PolicySearch]:
-    """Sparse plus dense, optionally gated and optionally reranked.
+    """Sparse plus dense, fused by per-channel z-score; optionally reranked.
 
-    ``dense_gate=None`` is the always-on comparison channel; the shipped
-    deployment passes the gate from settings.
+    This is the shipped search. ``provider`` is required: the fused channel has
+    no meaning without a real embedding model.
     """
 
     def factory(session: Session) -> PolicySearch:
@@ -569,30 +563,14 @@ def _hybrid_factory(
                 sparse=PolicySearchService(session, max_results=max_k, min_score=0.01),
                 embedder=provider,
                 reranker=reranker,
-                rrf_k=settings.retrieval_rrf_k,
                 max_results=max_k,
-                candidate_pool=settings.retrieval_candidate_pool,
+                candidate_pool=candidate_pool or settings.retrieval_candidate_pool,
                 dense_min_score=settings.retrieval_dense_min_score,
-                dense_gate=dense_gate,
             ),
             rewriter,
         )
 
     return factory
-
-
-def _gated_factory(
-    settings: Settings,
-    provider: EmbeddingProvider | None,
-    max_k: int,
-    rewriter: QueryRewriter | None = None,
-) -> Callable[[Session], PolicySearch]:
-    """The shipped dense deployment: dense only where the gate opens."""
-    gate = DenseGate(
-        min_top1_score=settings.retrieval_dense_gate_min_top1_score,
-        min_coverage=settings.retrieval_dense_gate_min_coverage,
-    )
-    return _hybrid_factory(settings, provider, max_k, dense_gate=gate, rewriter=rewriter)
 
 
 def _run(
@@ -602,6 +580,8 @@ def _run(
     k_values: tuple[int, ...] = DEFAULT_K,
     channels: tuple[str, ...] = ("bm25",),
     rewrite: bool = True,
+    local_model: str | None = None,
+    candidate_pool: int | None = None,
 ) -> tuple[list[Report], list[str]]:
     settings = Settings(
         environment="test",
@@ -619,10 +599,8 @@ def _run(
     reports: list[Report] = []
     try:
         max_k = max(k_values)
-        provider: EmbeddingProvider | None = None
-        provider_label = ""
-        if any(channel in {"dense", "hybrid", "gated", "rerank"} for channel in channels):
-            provider, provider_label = _dense_provider(settings)
+        provider, provider_label = _dense_provider(settings, local_model)
+        if provider is not None:
             with session_factory() as session:
                 try:
                     store_embeddings(session, provider)
@@ -638,20 +616,27 @@ def _run(
             if channel == "bm25":
                 search_factory = _sparse_factory(max_k, rewriter)
                 label = "bm25"
-            elif channel == "dense":
-                search_factory = _dense_only_factory(
-                    settings, provider, max_k, rewriter
-                )
-                label = f"dense({provider_label})"
             elif channel == "hybrid":
+                if provider is None:
+                    # A fused channel without a real model is not a comparison,
+                    # it is a different channel wearing the same name.
+                    skipped.append(
+                        "hybrid: no embedding model; pass --local-embedding "
+                        "or set EMBEDDING_BASE_URL and EMBEDDING_MODEL"
+                    )
+                    continue
                 search_factory = _hybrid_factory(
-                    settings, provider, max_k, rewriter=rewriter
+                    settings,
+                    provider,
+                    max_k,
+                    rewriter=rewriter,
+                    candidate_pool=candidate_pool,
                 )
                 label = f"hybrid({provider_label})"
-            elif channel == "gated":
-                search_factory = _gated_factory(settings, provider, max_k, rewriter)
-                label = f"gated({provider_label})"
             elif channel == "rerank":
+                if provider is None:
+                    skipped.append("rerank: no embedding model (see hybrid)")
+                    continue
                 reranker = build_reranker(settings)
                 if reranker is None:
                     skipped.append("rerank: no RERANK_URL configured")
@@ -677,14 +662,104 @@ def _run(
         engine.dispose()
 
 
-def _decision_counts(report: Report) -> dict[str, int]:
-    counts: dict[str, int] = {}
-    for case in report.cases:
-        if not case.recall:
-            continue
-        key = case.dense_decision or "-"
-        counts[key] = counts.get(key, 0) + 1
-    return counts
+def _sweep(
+    dataset: dict[str, Any],
+    database_url: str,
+    *,
+    channels: tuple[str, ...],
+    k_values: tuple[int, ...],
+    pools: tuple[int, ...],
+    rewrite: bool,
+    local_model: str | None,
+) -> str:
+    """Scan the two depth knobs a retriever actually exposes.
+
+    ``k`` is how many clauses the answer may cite; ``pool`` (top-n) is how many
+    candidates a channel contributes to the fusion before the cut. Both are
+    read from one ranking per configuration: the run retrieves ``max(k)`` and
+    the per-case ``ndcg_by_k`` gives every intermediate cut for free.
+
+    No gate is checked here: the sweep reports the curve, and the thresholds
+    stay attached to the shipped configuration.
+    """
+    settings = Settings(
+        environment="test",
+        database_url=database_url,
+        auto_create_tables=True,
+    )
+    rewriter: QueryRewriter | None = QueryRewriter() if rewrite else None
+    engine = build_engine(settings.database_url)
+    create_all(engine)
+    session_factory = build_session_factory(engine)
+    seed_all(session_factory)
+    try:
+        provider, provider_label = _dense_provider(settings, local_model)
+        if provider is None:
+            raise SystemExit(
+                "a depth sweep needs an embedding model; pass "
+                "--local-embedding <path> or set EMBEDDING_BASE_URL and "
+                "EMBEDDING_MODEL"
+            )
+        with session_factory() as session:
+            store_embeddings(session, provider)
+            session.commit()
+        short = provider_label.split(":")[-1][:16]
+        # One pass per (channel, depth); every k and every layer is read from
+        # the same ranking, so a sweep costs one evaluation per row group.
+        results: list[tuple[str, Report, tuple[int, ...]]] = []
+        for channel in channels:
+            depths: tuple[int, ...] = pools if channel == "hybrid" else (max(k_values),)
+            for depth in depths:
+                k_subset = tuple(k for k in k_values if k <= depth)
+                if not k_subset:
+                    continue
+                if channel == "bm25":
+                    search_factory = _sparse_factory(depth, rewriter)
+                    name = "bm25"
+                elif channel == "hybrid":
+                    search_factory = _hybrid_factory(
+                        settings,
+                        provider,
+                        depth,
+                        rewriter=rewriter,
+                        candidate_pool=depth,
+                    )
+                    name = f"hybrid[{short}]"
+                else:
+                    continue
+                report = evaluate(
+                    dataset,
+                    session_factory,
+                    k_values=k_subset,
+                    search_factory=search_factory,
+                    channel=name,
+                    depth=depth,
+                )
+                label = name if channel == "bm25" else f"{name} n={depth}"
+                results.append((label, report, k_subset))
+        lines: list[str] = []
+        for layer in ("gold_test", "gold_dev", "all"):
+            rows: list[str] = []
+            for label, report, k_subset in results:
+                metrics = report.metrics if layer == "all" else report.layers.get(layer, {})
+                if not metrics:
+                    continue
+                cells = "".join(f"{metrics.get(f'recall@{k}', 0.0):<9.3f}" for k in k_values)
+                ndcg = metrics.get(f"ndcg@{max(k_subset)}", 0.0)
+                rows.append(f"{label:<30}{cells}{metrics.get('mrr', 0.0):<7.3f}{ndcg:<8.3f}")
+            if not rows:
+                continue
+            head = (
+                f"{'layer: ' + layer:<30}"
+                + "".join(f"R@{k:<7}" for k in k_values)
+                + "mrr    ndcg@maxk"
+            )
+            lines.append(head)
+            lines.extend(rows)
+            lines.append("")
+        return chr(10).join(lines)
+    finally:
+        engine.dispose()
 
 
 def main() -> int:
@@ -712,17 +787,70 @@ def main() -> int:
         default="on",
         help="Run every channel through the query rewriter (default: on).",
     )
+    parser.add_argument(
+        "--local-embedding",
+        help="Path to a local sentence-transformers model to embed with.",
+    )
+    parser.add_argument(
+        "--candidate-pool",
+        type=int,
+        help="Top-n candidates each channel contributes before the cut.",
+    )
+    parser.add_argument(
+        "--sweep",
+        action="store_true",
+        help="Scan top-k and top-n instead of gating one configuration.",
+    )
+    parser.add_argument(
+        "--sweep-k",
+        default="1,2,3,5,8,10,15",
+        help="Comma separated k values for --sweep.",
+    )
+    parser.add_argument(
+        "--sweep-pools",
+        default="10,20,30,50",
+        help="Comma separated candidate pools (top-n) for --sweep.",
+    )
     args = parser.parse_args()
 
     dataset = json.loads(args.dataset.read_text(encoding="utf-8"))
     thresholds = dataset.get("thresholds", {})
     k_values = tuple(dataset.get("k_values", DEFAULT_K))
-    channels = tuple(
-        part.strip() for part in args.channels.split(",") if part.strip()
-    )
+    channels = tuple(part.strip() for part in args.channels.split(",") if part.strip())
     if not channels:
         print("no channel selected")
         return 2
+
+    if args.sweep:
+        sweep_k = tuple(int(part) for part in args.sweep_k.split(",") if part.strip())
+        sweep_pools = tuple(int(part) for part in args.sweep_pools.split(",") if part.strip())
+        if args.database_url:
+            print(
+                _sweep(
+                    dataset,
+                    args.database_url,
+                    channels=channels,
+                    k_values=sweep_k,
+                    pools=sweep_pools,
+                    rewrite=args.rewrite == "on",
+                    local_model=args.local_embedding,
+                )
+            )
+        else:
+            with tempfile.TemporaryDirectory() as directory:
+                url = f"sqlite+pysqlite:///{Path(directory) / 'retrieval.db'}"
+                print(
+                    _sweep(
+                        dataset,
+                        url,
+                        channels=channels,
+                        k_values=sweep_k,
+                        pools=sweep_pools,
+                        rewrite=args.rewrite == "on",
+                        local_model=args.local_embedding,
+                    )
+                )
+        return 0
 
     if args.database_url:
         reports, skipped = _run(
@@ -731,6 +859,8 @@ def main() -> int:
             k_values=k_values,
             channels=channels,
             rewrite=args.rewrite == "on",
+            local_model=args.local_embedding,
+            candidate_pool=args.candidate_pool,
         )
     else:
         with tempfile.TemporaryDirectory() as directory:
@@ -741,6 +871,8 @@ def main() -> int:
                 k_values=k_values,
                 channels=channels,
                 rewrite=args.rewrite == "on",
+                local_model=args.local_embedding,
+                candidate_pool=args.candidate_pool,
             )
 
     if not reports:
@@ -757,7 +889,6 @@ def main() -> int:
                             "channel": report.channel,
                             "metrics": report.metrics,
                             "layers": report.layers,
-                            "dense_decisions": _decision_counts(report),
                             "failures": check_thresholds(report, thresholds),
                             "routing_gaps": [
                                 {
@@ -772,13 +903,10 @@ def main() -> int:
                                 {
                                     "id": case.case_id,
                                     "layer": case.layer,
-                                    "recall": {
-                                        str(k): value for k, value in case.recall.items()
-                                    },
+                                    "recall": {str(k): value for k, value in case.recall.items()},
                                     "mrr": case.mrr,
                                     "ndcg": case.ndcg,
                                     "retrieved": list(case.retrieved),
-                                    "dense_decision": case.dense_decision,
                                 }
                                 for case in report.cases
                             ],

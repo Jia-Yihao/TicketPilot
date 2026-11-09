@@ -1975,7 +1975,9 @@ class SupportAgent:
         return max(0, int((utcnow() - moment).total_seconds() // 60))
 
     def _contexts(self, session: Session) -> SupportContextService:
-        results = max(self.settings.policy_max_results, 6)
+        # The depth comes from one place. It used to be ``max(setting, 6)``
+        # here, which made the setting a lie for every value below six.
+        results = self.settings.policy_max_results
         return SupportContextService(
             session,
             self.catalog,

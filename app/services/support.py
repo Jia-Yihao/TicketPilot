@@ -236,9 +236,8 @@ class SupportContextService:
             if len(cards) >= limit:
                 break
         best = max(grouped.values(), key=lambda hit: hit.score)
-        return PolicyEvidence(
-            cards, EvidenceScore(score=best.score, kind=best.score_kind), None
-        )
+        score, kind = best.evidence()
+        return PolicyEvidence(cards, EvidenceScore(score=score, kind=kind), None)
 
     def policy_card(
         self, identity: Identity, document_id: str
