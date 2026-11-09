@@ -41,16 +41,9 @@ Depth
     run; ``--local-embedding`` scores a local sentence-transformers model, so
     a fine-tuned encoder can be measured without standing up an endpoint.
 
-Measured on the 2,200-case set (gold_test = 300, 2026-11-09)
-    BM25, rewrite on, by answer length::
-
-        k          1      2      3      4      5      6      8     10     15
-        recall  .673   .863   .905   .918   .922   .933   .940   .950   .953
-
-    Recall flattens after k=6, which is the shipped answer length. Top-n
-    saturates at the corpus size (15 chunks): 15/20/30/50 are identical, which
-    is why the pool is 20. The fused channel at top-n=20 scores recall@1 .735
-    on the same layer, against .673 for BM25.
+Measured on the 2,200-case set, 2026-11-09
+    recall@3: BM25 .891, fused .923. Top-n saturates at the corpus size
+    (15 chunks): 15/20/30/50 are identical, which is why the pool is 20.
 
     The fused score is a ranking score only: the escalation gate reads the
     channel score on ``RetrievedChunk.evidence()``.

@@ -64,25 +64,23 @@ POST /api/v1/support/messages
 
 ## 检索
 
-政策问答先检索、再回答。链路是 **BM25 + 稠密通道 + z-score 融合 + 可选重排**，只有一条链，没有可切换的分支：
+政策问答先检索、再回答。链路是 **BM25 + 稠密通道 + z-score 融合 + 可选重排**：
 
-| 环节 | 出厂配置 | 依据 |
+| 环节 | 出厂配置 | 说明 |
 |---|---|---|
-| 召回 | BM25，候选池 20 | 语料 15 个政策块，20 之后融合结果不再变化 |
-| 融合 | z-score，稀疏权重 0.3 | 同条件 RRF 的 recall@1 低 4 个点 |
-| 稠密 | 微调 `bge-small-zh`，配端点即开 | 没有 `EMBEDDING_BASE_URL` 就只跑 BM25 |
-| 重排 | 默认关 | 本机 p95 2.6 s，是 300 ms 预算的 8 倍 |
-| 答案 | 取前 6 个块 → 2 张政策卡 | k=6 之后答案可见结果不再变化 |
+| 召回 | BM25，候选池 20 | 语料 15 个政策块，20 就够深 |
+| 融合 | z-score，稀疏权重 0.3 | 稠密通道补覆盖，BM25 保头部 |
+| 稠密 | 微调 `bge-small-zh`，配 `EMBEDDING_BASE_URL` 即开 | 微调命令见 [CONTRIBUTING.md](CONTRIBUTING.md) |
+| 重排 | 默认关 | 本机 p95 2.6 s，超 300 ms 交互预算 |
+| 答案 | 取前 6 个块 → 2 张政策卡 | 卡片带整篇政策，`matched_section` 指路 |
 
-分层检索集 2,200 条：600 条手写金标（300 调参 / 300 出结论）+ 1,600 条模板银标，test 分片 1,100 条，门槛只套金标 test。当前读数：纯 BM25 `recall@1` 0.67 / `@3` 0.91，接上微调编码器后 0.73 / 0.91。
+分层检索集 2,200 条：600 条手写金标（300 调参 / 300 出结论）+ 1,600 条模板银标，test 分片 1,100 条。`recall@3`：BM25 0.891，接上微调编码器 0.923。
 
 ```bash
 python evals/retrieval_metrics.py --dataset evals/retrieval_set.json
 ```
 
-融合分只负责排序；「有没有依据」读的是通道原始分（`RetrievedChunk.evidence()`），也是 `no_evidence` 转人工唯一信任的刻度。
-
-稠密编码器可以用公开客服语料微调，命令见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+融合分只负责排序。转人工判定读通道原始分（`RetrievedChunk.evidence()`）。
 
 ## 配置
 
