@@ -6,17 +6,12 @@ survives the merge. The optional reranker runs on the fused candidates and
 fails open, so the retrieval chain keeps working when the reranker is
 unreachable.
 
-Fusion and evidence are deliberately two different numbers. A z-score is
-normalized inside one query, which makes it a good ranking signal and a bad
-"is there anything here at all" signal: on the layered set 44% of off-domain
-messages scored above the weakest answerable query. Every hit therefore
-carries its channel score next to the fused one, and the escalation gate reads
-that channel score.
+Fusion and evidence are deliberately two different numbers: a z-score is
+normalized inside one query, so it ranks well and cannot say whether anything
+was found at all. Every hit carries its channel score next to the fused one,
+and the escalation gate reads that channel score.
 
 The dense channel runs on every query whenever an embedder is configured.
-A gate that skipped it on confident BM25 hits was measured at 0.710 recall@1
-against 0.730 always-on, so the cost saving was buying a worse answer and the
-gate was removed rather than kept as a knob.
 """
 
 from __future__ import annotations

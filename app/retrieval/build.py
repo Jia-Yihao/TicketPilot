@@ -32,9 +32,7 @@ def _secret(value: object) -> str | None:
 def build_embedder(settings: Settings) -> EmbeddingProvider | None:
     """The dense provider, or ``None`` when no endpoint is configured.
 
-    ``None`` means the chain runs sparse only. There is deliberately no hashing
-    stand-in here: on this corpus it ranks worse than BM25, so silently
-    swapping it in would be a quality trap rather than a fallback.
+    ``None`` means the chain runs sparse only.
     """
     if not (settings.embedding_base_url and settings.embedding_model):
         return None

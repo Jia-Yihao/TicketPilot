@@ -46,7 +46,7 @@ cd web && npm run build                   # 控制台类型检查 + 构建
 ```
 
 这份清单覆盖 `.github/workflows/ci.yml` 主 job 的检查项；CI 另有 `alembic upgrade head`
-建库步骤，检索指标只跑 `--channels bm25`——CI 里没有 embedding 端点，融合通道在缺模型时会被跳过而不是用替身凑数。分层集指标、分层集复现、
+建库步骤，检索指标只跑 `--channels bm25`（CI 里没有 embedding 端点）。分层集指标、分层集复现、
 澄清降级剧本对比、指标基线门禁与控制台构建是本地附加检查（CI 的 web job 单独跑构建）；
 Postgres job 只验迁移链。
 
@@ -56,7 +56,7 @@ Postgres job 只验迁移链。
 
 `scripts/finetune_embedder.py` 用公开客服语料微调中文 bi-encoder。训练前先跑泄漏审计：
 训练问句与 test 分片必须零重合，字符 3-gram Jaccard 低于 0.8，审计结果写进模型目录的
-`audit.json`；`--holdout-policy` 再留出一整份政策做泛化对照，证明涨点不是背下了测试问句。
+`audit.json`；`--holdout-policy` 再留出一整份政策做泛化对照。
 
 ```bash
 pip install -e ".[finetune]"          # torch / transformers / sentence-transformers

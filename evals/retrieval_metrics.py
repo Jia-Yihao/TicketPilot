@@ -46,22 +46,13 @@ Measured on the 2,200-case set (gold_test = 300, 2026-11-09)
 
         k          1      2      3      4      5      6      8     10     15
         recall  .673   .863   .905   .918   .922   .933   .940   .950   .953
-        mrr     .815
 
-    Recall flattens after k=6: k=5 -> k=8 buys 1.8pp for 60% more context, so
-    the shipped answer length stays at 3-5. Top-n saturates at the corpus size
-    (15 chunks): 15/20/30/50 are identical, which is why the pool is 20.
+    Recall flattens after k=6, which is the shipped answer length. Top-n
+    saturates at the corpus size (15 chunks): 15/20/30/50 are identical, which
+    is why the pool is 20. The fused channel at top-n=20 scores recall@1 .735
+    on the same layer, against .673 for BM25.
 
-    Fine-tuned encoder (``scripts/finetune_embedder.py``, 300 authored dev
-    pairs), dense-only, gold_test / silver_test recall@1::
-
-        base bge-small-zh      .687 / .667
-        fine-tuned             .720 / .747     <- silver is a style it never saw
-
-    Fusion at top-n=20, gold_test: rank fusion .695/.912/.937 (r@1/3/5,
-    mrr .836) vs z-score alpha=0.3 .735/.910/.937 (mrr .857). z-score keeps
-    more of the head of the sparse list, so it is the only ruler the product
-    ships. Its score is a ranking score only: the escalation gate reads the
+    The fused score is a ranking score only: the escalation gate reads the
     channel score on ``RetrievedChunk.evidence()``.
 """
 
